@@ -1,0 +1,1007 @@
+import 'dart:typed_data';
+
+import 'package:bidi/bidi.dart' as bidi;
+import 'package:pdf_document/pdf_document.dart';
+import 'package:pdf_graphics/pdf_graphics.dart';
+import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('extracts the fixture page text', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    expect(text.text, 'Hello, world!');
+    expect(text.runs, hasLength(1));
+  });
+
+  test('run bounds sit at the drawn position', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final run = PdfTextExtractor.extract(doc, 0).runs.single;
+    // drawn at 72,720 in 24pt with built-in Helvetica AFM advances
+    expect(run.bounds.left, 72);
+    expect(run.bounds.right,
+        closeTo(72 + measureHelvetica('Hello, world!', 24), 1e-6));
+    expect(run.bounds.bottom, closeTo(720 - 0.25 * 24, 1e-6));
+    expect(run.bounds.top, closeTo(720 + 0.75 * 24, 1e-6));
+  });
+
+  group('CJK selection height', () {
+    test('expands every run on a mixed CJK line', () {
+      final doc = PdfDocument.open(_buildArabicGlyphPdf(
+        const ['A', '中'],
+        embedded: false,
+        splitAt: 1,
+        repeatFirstGlyphOnSecondLine: true,
+      ));
+      final runs = PdfTextExtractor.extract(doc, 0).runs;
+
+      expect(runs, hasLength(3));
+      for (final run in runs.take(2)) {
+        expect(run.descent, -0.25);
+        expect(run.ascent, 1.0);
+        expect(run.bounds.bottom, closeTo(720 - 0.25 * 24, 1e-6));
+        expect(run.bounds.top, closeTo(720 + 1.0 * 24, 1e-6));
+      }
+      expect(runs.last.text, 'A');
+      expect(runs.last.ascent, 0.75,
+          reason: 'CJK expansion must not leak into the next text line');
+    });
+
+    test('keeps Latin-only lines at the conventional height', () {
+      final run = PdfTextExtractor.extract(
+        PdfDocument.open(buildClassicPdf()),
+        0,
+      ).runs.single;
+
+      expect(run.descent, -0.25);
+      expect(run.ascent, 0.75);
+    });
+
+    test('uses the expanded band for partial rotated selection quads', () {
+      final doc = PdfDocument.open(_buildArabicGlyphPdf(
+        const ['A', '中'],
+        embedded: false,
+        splitAt: 1,
+        textMatrix: '0 1 -1 0 300 400',
+      ));
+      final text = PdfTextExtractor.extract(doc, 0);
+      final quad = text.quadsFor(1, 2).single;
+
+      // A 90-degree text matrix maps the 1.25em vertical selection band to
+      // a 30pt page-space width. The old 1em band was only 24pt wide.
+      expect(quad.bounds.width, closeTo(1.25 * 24, 1e-6));
+      expect(quad.bounds.height, closeTo(0.5 * 24, 1e-6));
+    });
+
+    test('decodes astral CJK from its surrogate pair', () {
+      // U+20000 (Extension B) is the pair D840 DC00: the line expands only
+      // when the two halves arrive together and in order.
+      final astral = _pageOfRuns([_glyphRun('A\u{20000}B', 100, 3)]);
+      expect(astral.runs.map((run) => run.ascent), everyElement(1.0));
+      for (final text in ['A\uD840B', 'A\uDC00B', 'A\uDC00\uD840B']) {
+        final lone = _pageOfRuns([_glyphRun(text, 100, 3)]);
+        expect(lone.runs.map((run) => run.ascent), everyElement(0.75),
+            reason: 'unpaired surrogates in '
+                '${text.codeUnits.map((u) => u.toRadixString(16))}');
+      }
+    });
+  });
+
+  test('findAll locates substrings on the actual glyphs', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+
+    final matches = text.findAll('world');
+    expect(matches, hasLength(1));
+    final match = matches.single;
+    expect(text.text.substring(match.start, match.end), 'world');
+    final rect = match.rects.single;
+    // Rects follow the font's own advances, so they sit on the glyphs even
+    // though Helvetica's characters are far from uniform width (issue #647).
+    expect(rect.left, closeTo(72 + measureHelvetica('Hello, ', 24), 1e-6));
+    expect(
+        rect.right, closeTo(72 + measureHelvetica('Hello, world', 24), 1e-6));
+    // The linear-interpolation approximation this replaced was ~3pt out on
+    // both edges - a visible miss at 24pt.
+    final width = measureHelvetica('Hello, world!', 24);
+    expect((rect.left - (72 + width * 7 / 13)).abs(), greaterThan(2));
+    expect((rect.right - (72 + width * 12 / 13)).abs(), greaterThan(2));
+  });
+
+  test('search is case-insensitive by default', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    expect(text.findAll('HELLO'), hasLength(1));
+    expect(text.findAll('HELLO', caseSensitive: true), isEmpty);
+  });
+
+  test('whole-word search needs non-word boundaries', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0); // 'Hello, world!'
+    // bounded by start/',' and by space/'!' - both whole words
+    expect(text.findAll('Hello', wholeWord: true), hasLength(1));
+    expect(text.findAll('world', wholeWord: true), hasLength(1));
+    // a substring of a longer word is not a whole word
+    expect(text.findAll('wor', wholeWord: true), isEmpty);
+    expect(text.findAll('ell', wholeWord: true), isEmpty);
+    // without the flag the substring still matches
+    expect(text.findAll('wor'), hasLength(1));
+  });
+
+  test('regex search matches a pattern; an invalid one yields nothing', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0); // 'Hello, world!'
+    final match = text.findAll(r'w\w+d', regex: true).single;
+    expect(text.text.substring(match.start, match.end), 'world');
+    // case sensitivity flows through to regex
+    expect(text.findAll(r'WORLD', regex: true), hasLength(1));
+    expect(text.findAll(r'WORLD', regex: true, caseSensitive: true), isEmpty);
+    // whole-word combines with regex
+    expect(text.findAll(r'wor', regex: true, wholeWord: true), isEmpty);
+    // an invalid pattern surfaces no matches rather than throwing
+    expect(text.findAll('[', regex: true), isEmpty);
+  });
+
+  test('positionNear maps page points to character offsets', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    // 'Hello, world!' at 72,720 in 24pt; offsets follow the font's advances
+    final beforeW = 72 + measureHelvetica('Hello, ', 24);
+    expect(text.positionNear(72, 720), 0);
+    expect(text.positionNear(beforeW, 720), 7); // before 'w'
+    expect(text.positionNear(228, 720), 13); // past the end
+    // snaps vertically from outside the bounds
+    expect(text.positionNear(beforeW, 750), 7);
+    // but respects a finite tolerance
+    expect(text.positionNear(72, 400, tolerance: 20), -1);
+    expect(text.positionNear(400, 400, tolerance: 20), -1);
+  });
+
+  test('rectsFor covers a character range', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    final rect = text.rectsFor(7, 12).single;
+    expect(rect.left, closeTo(72 + measureHelvetica('Hello, ', 24), 1e-6));
+    expect(
+        rect.right, closeTo(72 + measureHelvetica('Hello, world', 24), 1e-6));
+  });
+
+  group('per-character advances (issue #647)', () {
+    // The regression the issue reports: interpolating a highlight linearly
+    // across a run's width assumes every character is the same width. In a
+    // proportional font they are not, and the selection band slides off the
+    // glyphs. 'I' is 0.278em in Helvetica and 'W' is 0.944em - a 3.4x spread,
+    // so the error here is a large fraction of the run rather than a few
+    // points.
+    const line = 'IIIIII WWWWWW';
+
+    PdfPageText extract() => PdfTextExtractor.extract(
+        PdfDocument.open(
+            _buildTextPdf(['BT /F1 24 Tf 72 720 Td ($line) Tj ET'])),
+        0);
+
+    test('charOffsets are the font advances, ascending and complete', () {
+      final run = extract().runs.single;
+      final offsets = run.charOffsets;
+      expect(offsets, isNotNull);
+      expect(offsets, hasLength(line.length + 1));
+      expect(offsets!.first, 0);
+      expect(offsets.last, closeTo(run.width, 1e-9));
+      for (var i = 0; i < line.length; i++) {
+        expect(offsets[i],
+            closeTo(measureHelvetica(line.substring(0, i), 1), 1e-9));
+        expect(offsets[i + 1], greaterThanOrEqualTo(offsets[i]));
+      }
+    });
+
+    test('the highlight lands on the wide word, not a third of a run away', () {
+      final text = extract();
+      final start = line.indexOf('W');
+      final rect = text.rectsFor(start, line.length).single;
+      expect(rect.left, closeTo(72 + measureHelvetica('IIIIII ', 24), 1e-6));
+      expect(rect.right, closeTo(72 + measureHelvetica(line, 24), 1e-6));
+
+      // What linear interpolation would have produced, for contrast: off by
+      // more than a quarter of the run, which is what the issue describes.
+      final width = measureHelvetica(line, 24);
+      final interpolated = 72 + width * start / line.length;
+      expect((interpolated - rect.left).abs(), greaterThan(width * 0.25));
+    });
+
+    test('hit-testing snaps to the character actually under the point', () {
+      final text = extract();
+      // The centre of the 4th 'W'. Under linear interpolation this point sits
+      // two thirds of the way along the run and would map into the 'I's.
+      final x = 72 +
+          measureHelvetica('IIIIII WWW', 24) + //
+          measureHelvetica('W', 24) / 2;
+      expect(text.positionNear(x, 726), 10);
+      // every boundary round-trips through its own offset
+      for (var i = 0; i <= line.length; i++) {
+        expect(
+            text.positionNear(
+                72 + measureHelvetica(line.substring(0, i), 24), 726),
+            i);
+      }
+    });
+
+    test('character and word spacing are inside the offsets', () {
+      // Tc 5 adds 5pt after every glyph, Tw 10 adds 10pt after each space.
+      final text = PdfTextExtractor.extract(
+          PdfDocument.open(_buildTextPdf(
+              ['BT /F1 24 Tf 5 Tc 10 Tw 72 720 Td (ab cd) Tj ET'])),
+          0);
+      final offsets = text.runs.single.charOffsets!;
+      // offsets are in em (the run transform carries the 24pt size)
+      double at(int i) => offsets[i] * 24;
+      expect(at(0), 0);
+      expect(at(1), closeTo(measureHelvetica('a', 24) + 5, 1e-9));
+      expect(at(2), closeTo(measureHelvetica('ab', 24) + 10, 1e-9));
+      // the space carries Tc *and* Tw
+      expect(at(3), closeTo(measureHelvetica('ab ', 24) + 15 + 10, 1e-9));
+      expect(at(5), closeTo(text.runs.single.width * 24, 1e-9));
+    });
+
+    test('a rotated run keeps its quad on the glyphs', () {
+      // 90° CCW baseline: the advance runs up the page, so a wrong offset
+      // shows up in y rather than x.
+      final text = PdfTextExtractor.extract(
+          PdfDocument.open(_buildTextPdf(
+              ['BT /F1 24 Tf 0 1 -1 0 300 400 Tm ($line) Tj ET'])),
+          0);
+      final start = line.indexOf('W');
+      final quad = text.quadsFor(start, line.length).single;
+      // lower-left corner of the quad sits at the start of the wide word
+      expect(quad.corners[0].$2,
+          closeTo(400 + measureHelvetica('IIIIII ', 24), 1e-6));
+      expect(
+          quad.corners[1].$2, closeTo(400 + measureHelvetica(line, 24), 1e-6));
+    });
+
+    test('runs split across show operators each carry their own offsets', () {
+      // A TJ array emits one run per string element; each must be measured
+      // from its own origin, not the line's.
+      final text = PdfTextExtractor.extract(
+          PdfDocument.open(_buildTextPdf(
+              ['BT /F1 24 Tf 72 720 Td [(IIIIII) -2000 (WWWWWW)] TJ ET'])),
+          0);
+      for (final run in text.runs) {
+        final offsets = run.charOffsets!;
+        expect(offsets.first, 0);
+        expect(offsets, hasLength(run.text.length + 1));
+        expect(offsets.last, closeTo(run.width, 1e-9));
+      }
+      final second = text.runs.last;
+      // the -2000 kern (2 em at 24pt) opens a real gap before 'WWWWWW'
+      expect(second.bounds.left,
+          closeTo(72 + measureHelvetica('IIIIII', 24) + 48, 1e-6));
+    });
+  });
+
+  test('quadsFor matches the rect for horizontal text', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    final quad = text.quadsFor(7, 12).single;
+    final ll = quad.corners[0];
+    final lr = quad.corners[1];
+    // horizontal baseline: the two baseline corners share y, advance in x
+    expect(lr.$2, closeTo(ll.$2, 1e-6));
+    expect(lr.$1, greaterThan(ll.$1));
+    // and the axis-aligned bounds equal the legacy rect
+    expect(quad.bounds, text.rectsFor(7, 12).single);
+  });
+
+  test('quadsFor rotates with rotated text', () {
+    // a 90° CCW text matrix: (x, y) -> (e - y, f + x), so the baseline
+    // runs straight up the page instead of across it
+    final doc = PdfDocument.open(_buildTextPdf([
+      'BT /F1 12 Tf 0 1 -1 0 100 100 Tm (Rotated) Tj ET',
+    ]));
+    final text = PdfTextExtractor.extract(doc, 0);
+    final quad = text.quadsFor(0, text.text.length).single;
+    final ll = quad.corners[0];
+    final lr = quad.corners[1];
+    // the baseline (ll -> lr) is vertical: same x, the advance is in y
+    expect(lr.$1, closeTo(ll.$1, 1e-6));
+    expect(lr.$2 - ll.$2, greaterThan(10));
+    // the rect still reports the enclosing axis-aligned box (covers the
+    // whole rotated quad, both wider and taller than zero)
+    final rect = text.rectsFor(0, text.text.length).single;
+    expect(rect, quad.bounds);
+    expect(rect.width, greaterThan(0));
+    expect(rect.height, greaterThan(0));
+  });
+
+  test('multi-page documents extract per page', () {
+    final doc = PdfDocument.open(buildMultiPagePdf(3));
+    expect(PdfTextExtractor.extract(doc, 0).text, 'Page 1');
+    expect(PdfTextExtractor.extract(doc, 2).text, 'Page 3');
+  });
+
+  test('textIn returns the runs whose center a rectangle covers', () {
+    final doc = PdfDocument.open(buildClassicPdf());
+    final text = PdfTextExtractor.extract(doc, 0);
+    // 'Hello, world!' spans x 72..204, y 714..738 (center ~138, 726)
+    expect(text.textIn(const PdfRect(60, 700, 300, 760)), 'Hello, world!');
+    expect(text.textIn(const PdfRect(0, 0, 50, 50)), '');
+    // covering only the tail of the run misses its center - whole runs
+    // are in or out, no partial text
+    expect(text.textIn(const PdfRect(200, 700, 300, 760)), '');
+  });
+
+  test('Arabic visual-order glyphs extract in logical order with marks', () {
+    const logical = 'رَسُول اللَّه';
+    // Embedded PDF fonts normally paint glyphs in visual left-to-right stream
+    // order. Combining marks precede their logical base in that order.
+    const visual = 'هَّللا لوُسَر';
+    final page = PdfTextExtractor.extract(
+        PdfDocument.open(_buildArabicTextPdf(visual, embedded: true)), 0);
+
+    expect(page.text, logical);
+    expect(page.findAll(logical, caseSensitive: true), hasLength(1));
+    expect(page.findAll('اللَّه', caseSensitive: true), hasLength(1));
+    expect(page.textIn(const PdfRect(60, 690, 360, 750)), logical);
+    expect(
+      PdfTextExtractor.reflowPage(
+              PdfDocument.open(_buildArabicTextPdf(visual, embedded: true)), 0)
+          .text,
+      logical,
+    );
+
+    // Logical reading order starts on the physical right of the line.
+    final firstWord = page.findAll('رَسُول', caseSensitive: true).single;
+    final secondWord = page.findAll('اللَّه', caseSensitive: true).single;
+    expect(
+        firstWord.rects.first.left, greaterThan(secondWord.rects.first.left));
+  });
+
+  test('positioned tashkil stays clustered with its Arabic base glyph', () {
+    const logical = 'ٱﻟْﺣَﻣْدُ ل';
+    final page = PdfTextExtractor.extract(
+      PdfDocument.open(buildPositionedTashkilPdf()),
+      0,
+    );
+
+    expect(page.text, logical);
+    expect(page.findAll(logical, caseSensitive: true), hasLength(1));
+  });
+
+  test('Arabic logical-order substitute text is not double-reversed', () {
+    const logical = 'مرحبا 123';
+    final page = PdfTextExtractor.extract(
+        PdfDocument.open(_buildArabicTextPdf(logical, embedded: false)), 0);
+
+    expect(page.text, logical);
+    expect(page.findAll(logical, caseSensitive: true), hasLength(1));
+  });
+
+  test('Arabic extraction keeps mixed-script runs and numbers logical', () {
+    const logical = 'مرحبا ١٢٣ PDF عالم';
+    const visual = 'ملاع PDF ١٢٣ ابحرم';
+    final page = PdfTextExtractor.extract(
+      PdfDocument.open(
+          _buildArabicTextPdf(visual, embedded: true, splitAt: 11)),
+      0,
+    );
+
+    expect(page.text, logical);
+    expect(page.findAll('١٢٣ PDF', caseSensitive: true), hasLength(1));
+  });
+
+  test('Arabic span does not reverse an LTR paragraph', () {
+    const logical = 'Hello عالم from Dart';
+    const visual = 'Hello ملاع from Dart';
+    final page = PdfTextExtractor.extract(
+        PdfDocument.open(_buildArabicTextPdf(visual, embedded: true)), 0);
+
+    expect(page.text, logical);
+    expect(page.findAll(logical, caseSensitive: true), hasLength(1));
+  });
+
+  test('Arabic extraction preserves multi-character glyph mappings', () {
+    final page = PdfTextExtractor.extract(
+      PdfDocument.open(_buildArabicGlyphPdf(
+        const ['الله', ' ', 'ل', 'و', 'س', 'ر'],
+        embedded: true,
+      )),
+      0,
+    );
+
+    expect(page.text, 'رسول الله');
+    expect(page.findAll('الله', caseSensitive: true), hasLength(1));
+  });
+
+  test('positioned RTL word runs keep logical word and line order', () {
+    const logical = 'اهلا وسهلا\nكيف حالك\nخوش آمدید';
+    final document = PdfDocument.open(buildRtlTextPdf(lines: const [
+      'اهلا وسهلا',
+      'كيف حالك',
+      'خوش آمدید',
+    ]));
+    final page = PdfTextExtractor.extract(document, 0);
+
+    expect(page.text, logical);
+    expect(page.findAll('اهلا وسهلا', caseSensitive: true), hasLength(1));
+    expect(page.findAll('خوش آمدید', caseSensitive: true), hasLength(1));
+    expect(page.textIn(const PdfRect(200, 590, 380, 750)), logical);
+
+    final first = page.findAll('اهلا', caseSensitive: true).single;
+    final second = page.findAll('وسهلا', caseSensitive: true).single;
+    expect(first.rects.first.left, greaterThan(second.rects.first.left));
+    expect(first.quads.first.isRightToLeft, isTrue);
+    expect(page.positionNear(359, 720), 0);
+    expect(page.positionNear(313, 720), 4);
+  });
+
+  group('left-to-right fast path', () {
+    // `_bidiLine` skips its per-glyph pass when no code unit on the line
+    // could be right-to-left. These pin the one sub-U+0590 way a line turns
+    // RTL, and the bidi table facts that make the skip exact.
+    test('only nonspacing marks below U+0590 can make a line RTL', () {
+      const strongRtl = {
+        bidi.CharacterType.rtl,
+        bidi.CharacterType.al,
+        bidi.CharacterType.rle,
+        bidi.CharacterType.rlo,
+        bidi.CharacterType.rli,
+      };
+      for (var c = 0; c < 0x0590; c++) {
+        final type = bidi.getCharacterType(c);
+        expect(strongRtl, isNot(contains(type)),
+            reason: 'U+${c.toRadixString(16)} is strong RTL');
+        if (type == bidi.CharacterType.nonspacingMark) {
+          expect((c >= 0x0300 && c <= 0x036F) || (c >= 0x0483 && c <= 0x0489),
+              isTrue,
+              reason: 'U+${c.toRadixString(16)} is a nonspacing mark outside '
+                  'the ranges the fast path checks');
+        }
+      }
+    });
+
+    test('a line-initial combining mark still takes the BiDi pass', () {
+      // A mark with no preceding class counts as RTL (`previous ?? rtl`), so
+      // U+0304 before "x" is a majority-RTL line and reads back reversed.
+      for (final mark in ['\u0304', '\u0483']) {
+        final page = _pageOfRuns([_glyphRun('${mark}x', 100, 0.6)]);
+        expect(page.text, 'x$mark');
+        expect(page.runs.map((run) => run.isRightToLeft), [false, true]);
+      }
+      // In a longer LTR line the mark keeps the line on the per-glyph path.
+      final page = _pageOfRuns([
+        _glyphRun('\u0304x = y', 100, 2),
+        _glyphRun('and more', 130, 4),
+      ]);
+      expect(page.text, '\u0304x = y and more');
+      expect(page.runs.first.isRightToLeft, isTrue);
+      expect(page.runs, hasLength(6 + 8), reason: 'one run per glyph');
+    });
+
+    test('run bounds equal the bounds of the run quad', () {
+      final page = _pageOfRuns([
+        _glyphRun('Upright', 100, 3.5),
+        _glyphRun('Rotated', 100, 3.5,
+            transform: const PdfMatrix(0, 12, -12, 0, 300, 400)),
+        _glyphRun('Skewed', 100, 3,
+            transform: const PdfMatrix(10, 3, -4, 11, -50.25, 610.5)),
+        _glyphRun('Flipped', 100, 3.5,
+            transform: const PdfMatrix(-12, 0, 0, -12, 500, 100)),
+      ]);
+      expect(page.runs, hasLength(4));
+      for (final run in page.runs) {
+        final quad = page
+            .quadsFor(run.startIndex, run.startIndex + run.text.length)
+            .single;
+        final (a, b) = (run.bounds, quad.bounds);
+        expect([a.left, a.bottom, a.right, a.top],
+            [b.left, b.bottom, b.right, b.top]);
+      }
+    });
+  });
+
+  test('literal search ignores clipboard bidi formatting controls', () {
+    const text = '(اﻟرﺣﻣن';
+    const page = PdfPageText(pageIndex: 0, text: text, runs: []);
+
+    final match = page.findAll('\u2067$text\u2069', caseSensitive: true).single;
+    expect((match.start, match.end), (0, text.length));
+    expect(page.findAll('\u2067\u2069'), isEmpty);
+  });
+
+  test('copy text uses paragraph-scoped Unicode bidi isolates', () {
+    expect(pdfBidiIsolateForCopy('Hello, world!'), 'Hello, world!');
+    expect(
+      pdfBidiIsolateForCopy('اهلا وسهلا'),
+      '\u2067اهلا وسهلا\u2069',
+    );
+    expect(
+      pdfBidiIsolateForCopy('Invoice: اهلا'),
+      '\u2066Invoice: اهلا\u2069',
+    );
+    expect(
+      pdfBidiIsolateForCopy('اهلا\nکیف حالک'),
+      '\u2067اهلا\u2069\n\u2067کیف حالک\u2069',
+    );
+    expect(
+      pdfBidiIsolateForCopy('\u2067اهلا\u2069'),
+      '\u2067اهلا\u2069',
+    );
+  });
+
+  test('reflow reads visual columns before stream order', () {
+    final doc = PdfDocument.open(_buildTextPdf([
+      _textAt(320, 720, 'Right top'),
+      _textAt(72, 720, 'Left top'),
+      _textAt(320, 704, 'Right bottom'),
+      _textAt(72, 704, 'Left bottom'),
+    ]));
+
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.blocks.map((block) => block.text), [
+      'Left top Left bottom',
+      'Right top Right bottom',
+    ]);
+  });
+
+  test('reflow splits paragraphs on vertical gaps', () {
+    final doc = PdfDocument.open(_buildTextPdf([
+      _textAt(72, 720, 'First line'),
+      _textAt(72, 704, 'continues here'),
+      _textAt(72, 660, 'Second paragraph'),
+    ]));
+
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.blocks.map((block) => block.text), [
+      'First line continues here',
+      'Second paragraph',
+    ]);
+  });
+
+  test('reflow repairs line-end hyphenation', () {
+    final doc = PdfDocument.open(_buildTextPdf([
+      _textAt(72, 720, 'para-'),
+      _textAt(72, 704, 'graph text'),
+    ]));
+
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.text, 'paragraph text');
+  });
+
+  test('reflow splits a bullet list into separate list items', () {
+    final doc = PdfDocument.open(_buildTextPdf([
+      _textAt(72, 720, 'Shopping list'),
+      _textAt(72, 700, '- apples'),
+      _textAt(72, 686, '- pears'),
+      _textAt(72, 672, '1. flour'),
+    ]));
+
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.blocks.map((block) => block.text), [
+      'Shopping list',
+      '- apples',
+      '- pears',
+      '1. flour',
+    ]);
+    expect(page.blocks.map((block) => block.isListItem),
+        [false, true, true, true]);
+  });
+
+  test('reflow surfaces a placed image among the text in reading order', () {
+    final doc = PdfDocument.open(_buildImagePdf());
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    // The image (drawn at y 500..620) sits between the two paragraphs.
+    expect(page.items, hasLength(3));
+    expect(page.items[0], isA<PdfReflowBlock>());
+    expect((page.items[0] as PdfReflowBlock).text, 'Above the figure');
+    expect(page.items[1], isA<PdfReflowImage>());
+    expect((page.items[2] as PdfReflowBlock).text, 'Below the figure');
+
+    final image = page.images.single;
+    expect(image.bounds.left, closeTo(100, 1e-6));
+    expect(image.bounds.right, closeTo(300, 1e-6));
+    expect(image.aspectRatio, closeTo(200 / 120, 1e-6));
+    // text-only view ignores images
+    expect(page.text, 'Above the figure\n\nBelow the figure');
+  });
+
+  test('reflow drops a tiny decorative image', () {
+    final doc = PdfDocument.open(_buildImagePdf(imageWidth: 8, imageHeight: 8));
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+    expect(page.images, isEmpty);
+    expect(page.blocks, hasLength(2));
+  });
+
+  test('reflow orders an image-only page top to bottom', () {
+    final doc = PdfDocument.open(_imageDocWith(
+      'q 200 0 0 120 100 600 cm /Im0 Do Q\n'
+      'q 200 0 0 120 100 200 cm /Im0 Do Q',
+    ));
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.blocks, isEmpty);
+    expect(page.text, '');
+    // Same stream, but distinct placements: both survive de-duplication and
+    // read highest-first.
+    expect(page.images, hasLength(2));
+    expect(page.images.first.bounds.bottom, closeTo(600, 1e-6));
+    expect(page.images.last.bounds.bottom, closeTo(200, 1e-6));
+  });
+
+  test('reflow de-duplicates a repeated watermark image', () {
+    final doc = PdfDocument.open(_imageDocWith([
+      _textAt(100, 700, 'Body text'),
+      'q 300 0 0 300 100 300 cm /Im0 Do Q',
+      'q 300 0 0 300 100 300 cm /Im0 Do Q',
+    ].join('\n')));
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.images, hasLength(1));
+    expect(page.blocks.map((block) => block.text), ['Body text']);
+  });
+
+  group('tiling-pattern and Type3 cells', () {
+    // Extraction consumes recorded cells natively and skips the ones holding
+    // nothing it keeps. Whatever it does keep has to match the per-tile
+    // expansion a device that isn't a PdfTiledCellSink receives.
+    test('extract matches the per-tile expansion and skips textless hatch', () {
+      final doc = PdfDocument.open(_cellDoc());
+      final reference = _collectUnsunk(doc);
+      final extracted = PdfTextExtractor.extract(doc, 0);
+
+      expect(serializePageText(extracted),
+          serializePageText(_textFromRuns(reference.runs)));
+      // 3x3 label tiles plus their one-tile margin, once upright and once
+      // under a rotated pattern matrix; the hatch contributes nothing.
+      final cells = extracted.runs.where((run) => run.text == 'CELL').toList();
+      expect(cells,
+          hasLength(reference.runs.where((r) => r.text == 'CELL').length));
+      expect(cells.length, greaterThan(8));
+      expect(cells.map((run) => run.transform.e).toSet().length, greaterThan(3),
+          reason: 'every tile keeps its own translation');
+      expect(extracted.text, startsWith('Title'));
+      expect(extracted.text, contains('in'));
+    });
+
+    test('reflowPage keeps images drawn inside pattern and Type3 cells', () {
+      final doc = PdfDocument.open(_cellDoc());
+      final reference = _collectUnsunk(doc);
+      final page = PdfTextExtractor.reflowPage(doc, 0);
+      final expected = PdfTextReflower.reflow(_textFromRuns(reference.runs),
+          images: reference.images);
+
+      expect(_reflowSignature(page), _reflowSignature(expected));
+      // Picture tiles (the image is 30pt) and the two bitmap "A" glyphs.
+      expect(page.images.length, greaterThanOrEqualTo(4 + 2));
+      expect(page.images.length, reference.images.length);
+    });
+  });
+
+  test('reflow places an image above all text first', () {
+    final doc = PdfDocument.open(_imageDocWith([
+      'q 200 0 0 80 100 690 cm /Im0 Do Q', // top of the page, above all text
+      _textAt(100, 600, 'First paragraph'),
+      _textAt(100, 400, 'Second paragraph'),
+    ].join('\n')));
+    final page = PdfTextExtractor.reflowPage(doc, 0);
+
+    expect(page.items.first, isA<PdfReflowImage>());
+    expect((page.items[1] as PdfReflowBlock).text, 'First paragraph');
+    expect((page.items[2] as PdfReflowBlock).text, 'Second paragraph');
+  });
+}
+
+/// Page text for hand-built [runs], through the recorded-text entry point
+/// (the same line, BiDi and bounds code as a fresh extraction).
+PdfPageText _pageOfRuns(List<PdfTextRun> runs) => _textFromRuns(runs);
+
+/// An embedded-font style run: one positioned glyph per code point, spread
+/// evenly across [width] em.
+PdfTextRun _glyphRun(String text, double x, double width,
+    {PdfMatrix? transform}) {
+  final runes = text.runes.toList();
+  return PdfTextRun(
+    text: text,
+    transform: transform ?? PdfMatrix(12, 0, 0, 12, x, 700),
+    color: const PdfColor(0, 0, 0),
+    width: width,
+    glyphs: [
+      for (var i = 0; i < runes.length; i++)
+        PdfGlyphPlacement(
+            offset: width * i / runes.length,
+            text: String.fromCharCode(runes[i])),
+    ],
+  );
+}
+
+/// Page text built from [runs] exactly as a fresh extraction would build it.
+PdfPageText _textFromRuns(List<PdfTextRun> runs) =>
+    PdfTextExtractor.fromRecordedText(
+        PdfRecordedText.capture(
+            [for (final run in runs) PdfDrawTextCommand(run)]),
+        0);
+
+/// Walks page 0 into a plain collecting device - not a [PdfTiledCellSink],
+/// so the interpreter expands every recorded cell per tile into it - with
+/// the extractor's own interpreter options.
+_CollectingDevice _collectUnsunk(PdfDocument doc) {
+  final device = _CollectingDevice();
+  PdfInterpreter(
+    cos: doc.cos,
+    device: device,
+    resolveOverprint: false,
+    collectCharOffsets: true,
+  ).drawPage(doc.page(0));
+  return device;
+}
+
+String _reflowSignature(PdfReflowPage page) {
+  String rect(PdfRect r) => '${r.left},${r.bottom},${r.right},${r.top}';
+  String matrix(PdfMatrix m) => '${m.a},${m.b},${m.c},${m.d},${m.e},${m.f}';
+  return [
+    for (final item in page.items)
+      switch (item) {
+        PdfReflowBlock() => 'B ${item.text} ${rect(item.bounds)}',
+        PdfReflowImage() =>
+          'I ${rect(item.bounds)} ${matrix(item.request.transform)}',
+      },
+  ].join('\n');
+}
+
+class _CollectingDevice implements PdfDevice {
+  final runs = <PdfTextRun>[];
+  final images = <PdfImageRequest>[];
+
+  @override
+  void drawText(PdfTextRun run) => runs.add(run);
+  @override
+  void drawImage(PdfImageRequest request) => images.add(request);
+  @override
+  void save() {}
+  @override
+  void restore() {}
+  @override
+  void fillPath(PdfPath path, PdfColor color, PdfFillRule rule, double a) {}
+  @override
+  void fillPathGradient(
+      PdfPath path, PdfFillRule rule, PdfGradient gradient, double a) {}
+  @override
+  void fillMesh(PdfMesh mesh, double a) {}
+  @override
+  void strokePath(PdfPath path, PdfColor color, PdfStroke stroke, double a) {}
+  @override
+  void clipPath(PdfPath path, PdfFillRule rule) {}
+  @override
+  void setBlendMode(PdfBlendMode mode) {}
+  @override
+  void setOverprint(
+      {required bool fill, required bool stroke, required int mode}) {}
+  @override
+  void beginGroup(double alpha, {bool knockout = false}) {}
+  @override
+  void endGroup() {}
+  @override
+  void beginSoftMasked() {}
+  @override
+  void endSoftMasked(
+      {required bool luminosity,
+      required PdfRect backdrop,
+      required void Function() drawMask,
+      double backdropLuminance = 0,
+      double transferScale = 1,
+      double transferOffset = 0}) {}
+}
+
+/// A page mixing everything a recorded cell can carry: a textless line
+/// hatch, a text-bearing label pattern (upright and rotated), an
+/// image-bearing pattern, and a Type3 font whose glyphs are a bitmap (A), a
+/// filled square (B) and nested text (C). Every fill spans at least four
+/// tiles, so the interpreter records the cell instead of running it per tile.
+Uint8List _cellDoc() {
+  const content = 'BT /F1 12 Tf 72 740 Td (Title) Tj ET\n'
+      'q /Pattern cs /Hatch scn 72 500 200 100 re f Q\n'
+      'q /Pattern cs /Label scn 72 300 120 60 re f Q\n'
+      'q /Pattern cs /LabelRotated scn 72 100 60 120 re f Q\n'
+      'q /Pattern cs /Picture scn 300 300 150 150 re f Q\n'
+      'BT /T3 30 Tf 300 150 Td (ABCAB) Tj ET';
+  const hex = 'FF000000FF000000FFFFFFFF>';
+  String stream(String dict, String data) =>
+      '<< $dict /Length ${data.length} >>\nstream\n$data\nendstream';
+  String pattern(
+          String data, String bbox, int xStep, int yStep, String resources,
+          {String matrix = ''}) =>
+      stream(
+          '/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 '
+          '/BBox [$bbox] /XStep $xStep /YStep $yStep $matrix'
+          '/Resources $resources',
+          data);
+  final objects = <String>[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R '
+        '/Resources << /Font << /F1 5 0 R /T3 8 0 R >> '
+        '/XObject << /Im0 6 0 R >> '
+        '/Pattern << /Hatch 9 0 R /Label 10 0 R /Picture 11 0 R '
+        '/LabelRotated 14 0 R >> >> >>',
+    stream('', content),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    stream(
+        '/Type /XObject /Subtype /Image /Width 2 /Height 2 '
+        '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode',
+        hex),
+    stream('', '1000 0 d0 q 1000 0 0 1000 0 0 cm /Im0 Do Q'),
+    '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] '
+        '/FontMatrix [0.001 0 0 0.001 0 0] /FirstChar 65 /LastChar 67 '
+        '/Widths [1000 1000 1000] '
+        '/Encoding << /Type /Encoding /Differences [65 /A /B /C] >> '
+        '/CharProcs << /A 7 0 R /B 12 0 R /C 13 0 R >> '
+        '/Resources << /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> >> >>',
+    pattern('0 0 m 10 10 l S', '0 0 10 10', 10, 10, '<< >>'),
+    pattern('BT /F1 4 Tf 1 1 Td (CELL) Tj ET', '0 0 40 20', 40, 20,
+        '<< /Font << /F1 5 0 R >> >>'),
+    pattern('q 30 0 0 30 5 5 cm /Im0 Do Q', '0 0 50 50', 50, 50,
+        '<< /XObject << /Im0 6 0 R >> >>'),
+    stream('', '1000 0 d0 0 0 800 800 re f'),
+    stream('', '1000 0 d0 BT /F1 500 Tf 0 0 Td (in) Tj ET'),
+    pattern('BT /F1 4 Tf 1 1 Td (CELL) Tj ET', '0 0 40 20', 40, 20,
+        '<< /Font << /F1 5 0 R >> >>',
+        matrix: '/Matrix [0 1 -1 0 0 0] '),
+  ];
+  return _assemblePdf(objects);
+}
+
+/// A one-page PDF with two text paragraphs and a single image XObject drawn
+/// between them via `cm`/`Do`. The image is placed at (100, 500) sized
+/// [imageWidth]×[imageHeight] in page units. The pixel data is ASCII-hex so
+/// the whole file stays 7-bit (reflow only records the draw request, but the
+/// fixture stays decodable for parity).
+Uint8List _buildImagePdf({double imageWidth = 200, double imageHeight = 120}) =>
+    _imageDocWith([
+      _textAt(100, 700, 'Above the figure'),
+      'q $imageWidth 0 0 $imageHeight 100 500 cm /Im0 Do Q',
+      _textAt(100, 400, 'Below the figure'),
+    ].join('\n'));
+
+/// A one-page PDF whose content is [content]; an `/Im0` 2×2 DeviceRGB image
+/// XObject and an `/F1` Helvetica font are available as resources.
+Uint8List _imageDocWith(String content) {
+  // 2×2 DeviceRGB: red, green, blue, white.
+  const hex = 'FF000000FF000000FFFFFFFF>';
+  final objects = <String>[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R '
+        '/Resources << /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> >> >>',
+    '<< /Length ${content.length} >>\nstream\n$content\nendstream',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /XObject /Subtype /Image /Width 2 /Height 2 '
+        '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode '
+        '/Length ${hex.length} >>\nstream\n$hex\nendstream',
+  ];
+  return _assemblePdf(objects);
+}
+
+String _textAt(num x, num y, String text) =>
+    'BT /F1 12 Tf $x $y Td (${_escapePdfText(text)}) Tj ET';
+
+String _escapePdfText(String text) =>
+    text.replaceAll('\\', r'\\').replaceAll('(', r'\(').replaceAll(')', r'\)');
+
+Uint8List _buildTextPdf(List<String> operations) {
+  final content = operations.join('\n');
+  final objects = <String>[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R '
+        '/Resources << /Font << /F1 5 0 R >> >> >>',
+    '<< /Length ${content.length} >>\nstream\n$content\nendstream',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  return _assemblePdf(objects);
+}
+
+/// A one-line PDF whose character codes map to [text] through /ToUnicode.
+///
+/// The Type3 variant represents the common embedded-font case: its glyph list
+/// is authoritative, so the content stream is visual order. The Type1 variant
+/// has no font program and represents the package's Unicode substitution path,
+/// whose decoded text is already logical order.
+Uint8List _buildArabicTextPdf(String text,
+        {required bool embedded, int? splitAt}) =>
+    _buildArabicGlyphPdf(
+      [for (final rune in text.runes) String.fromCharCode(rune)],
+      embedded: embedded,
+      splitAt: splitAt,
+    );
+
+Uint8List _buildArabicGlyphPdf(List<String> glyphTexts,
+    {required bool embedded,
+    int? splitAt,
+    String textMatrix = '1 0 0 1 72 720',
+    bool repeatFirstGlyphOnSecondLine = false}) {
+  final codes = [for (var i = 0; i < glyphTexts.length; i++) i + 1];
+  final shown = codes.map((c) => c.toRadixString(16).padLeft(2, '0')).join();
+  final shownText = splitAt == null
+      ? '<$shown> Tj'
+      : '<${shown.substring(0, splitAt * 2)}> Tj '
+          '<${shown.substring(splitAt * 2)}> Tj';
+  final secondLine =
+      repeatFirstGlyphOnSecondLine ? ' 1 0 0 1 72 680 Tm <01> Tj' : '';
+  final content = 'BT /F1 24 Tf $textMatrix Tm $shownText$secondLine ET';
+  final cmapEntries = <String>[];
+  final widths = <String>[];
+  final names = <String>[];
+  for (var i = 0; i < glyphTexts.length; i++) {
+    final code = codes[i];
+    final glyphText = glyphTexts[i];
+    final unicode = glyphText.codeUnits
+        .map((unit) => unit.toRadixString(16).padLeft(4, '0'))
+        .join();
+    cmapEntries.add('<${code.toRadixString(16).padLeft(2, '0')}> '
+        '<$unicode>');
+    widths.add(switch (glyphText.runes.toList()) {
+      [0x20] => '250',
+      [>= 0x064B && <= 0x065F] => '0',
+      _ => '500',
+    });
+    names.add('/g$code');
+  }
+  final cmap = [
+    '/CIDInit /ProcSet findresource begin',
+    '12 dict begin begincmap',
+    '1 begincodespacerange <00> <FF> endcodespacerange',
+    '${cmapEntries.length} beginbfchar',
+    ...cmapEntries,
+    'endbfchar endcmap CMapName currentdict /CMap defineresource pop',
+    'end end',
+  ].join('\n');
+  final type3 = embedded
+      ? ' /FontBBox [0 -200 1000 800] '
+          '/FontMatrix [0.001 0 0 0.001 0 0] '
+          '/CharProcs << ${[
+          for (final name in names) '$name 7 0 R'
+        ].join(' ')} >> '
+          '/Resources << >>'
+      : '';
+  final font = '<< /Type /Font /Subtype /${embedded ? 'Type3' : 'Type1'} '
+      '${embedded ? '' : '/BaseFont /Helvetica '}'
+      '/FirstChar 1 /LastChar ${glyphTexts.length} '
+      '/Widths [${widths.join(' ')}] '
+      '/Encoding << /Type /Encoding /Differences [1 ${names.join(' ')}] >> '
+      '/ToUnicode 6 0 R$type3 >>';
+  const charProc = '500 0 d0 0 0 450 700 re f';
+  final objects = <String>[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+        '/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    '<< /Length ${content.length} >>\nstream\n$content\nendstream',
+    font,
+    '<< /Length ${cmap.length} >>\nstream\n$cmap\nendstream',
+    '<< /Length ${charProc.length} >>\nstream\n$charProc\nendstream',
+  ];
+  return _assemblePdf(objects);
+}
+
+Uint8List _assemblePdf(List<String> objects) {
+  final buffer = StringBuffer('%PDF-1.4\n');
+  final offsets = <int>[];
+  for (var i = 0; i < objects.length; i++) {
+    offsets.add(buffer.length);
+    buffer.write('${i + 1} 0 obj\n${objects[i]}\nendobj\n');
+  }
+  final xrefOffset = buffer.length;
+  buffer
+    ..write('xref\n0 ${objects.length + 1}\n')
+    ..write('0000000000 65535 f \n');
+  for (final offset in offsets) {
+    buffer.write('${offset.toString().padLeft(10, '0')} 00000 n \n');
+  }
+  buffer
+    ..write('trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n')
+    ..write('startxref\n$xrefOffset\n%%EOF\n');
+  return ascii(buffer.toString());
+}

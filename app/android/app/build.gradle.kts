@@ -1,0 +1,86 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+plugins {
+    id("com.android.application")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Release signing is read from android/key.properties when present (see
+// app/RELEASING.md); without it the release build falls back to the debug
+// keys so `flutter run --release` and unsigned CI builds still work.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "dev.milanko.dart_pdf_editor_app"
+    // Pinned above the template default: flutter_secure_storage 11 requires
+    // consumers to compile against SDK 37.
+    compileSdk = 37
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        applicationId = "it.tesonepdf.pdf"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            proguardFiles("proguard-rules.pro")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // The onnxruntime plugin (pinned at 1.4.1, unmaintained) bundles a
+            // prebuilt libonnxruntime.so from ORT 1.15.1 whose 64-bit LOAD
+            // segments are 4 KB-aligned, which Google Play now rejects ("does
+            // not support 16 KB memory page sizes"). We vendor a 16 KB-aligned
+            // arm64-v8a build (extracted from the official ORT 1.20.0 Android
+            // AAR - its C API is forward-compatible with the plugin's FFI
+            // bindings) into this module's jniLibs. The app source set outranks
+            // the dependency, so pickFirst keeps our aligned copy. The plugin's
+            // 32-bit armeabi-v7a lib is left untouched - the 16 KB requirement
+            // applies to 64-bit ABIs only.
+            pickFirsts += "**/libonnxruntime.so"
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+flutter {
+    source = "../.."
+}
