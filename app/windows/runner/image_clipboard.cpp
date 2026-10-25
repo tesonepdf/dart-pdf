@@ -1,0 +1,436 @@
+#include "image_clipboard.h"
+
+#include "dib_pixels.h"
+
+#include <objbase.h>
+#include <objidl.h>
+#include <ocidl.h>
+#include <wincodec.h>
+#include <wrl/client.h>
+
+#include <cstring>
+#include <limits>
+#include <new>
+#include <utility>
+
+using Microsoft::WRL::ComPtr;
+
+namespace {
+
+// The registered clipboard format name browsers and Office use to exchange
+// lossless PNG images. Registered once; the returned id is stable per session.
+DWORD local_snapshot_sequence = 0;
+
+UINT PdfClipboardFormat() {
+  static const UINT format = ::RegisterClipboardFormatW(L"application/pdf");
+  return format;
+}
+
+UINT AdobePdfClipboardFormat() {
+  static const UINT format = ::RegisterClipboardFormatW(L"Portable Document Format");
+  return format;
+}
+
+UINT PngClipboardFormat() {
+  static const UINT format = ::RegisterClipboardFormatW(L"PNG");
+  return format;
+}
+
+// COM apartment is initialized once per process in wWinMain (COINIT_-
+// APARTMENTTHREADED); the channel handler runs on that same UI thread.
+ComPtr<IWICImagingFactory> CreateWicFactory() {
+  ComPtr<IWICImagingFactory> factory;
+  ::CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                     IID_PPV_ARGS(&factory));
+  return factory;
+}
+
+// Decodes |png| into straight-alpha 32bpp BGRA pixels laid out top-down.
+// Returns false on any failure (bad data, unsupported format, OOM).
+bool DecodePngToBgra(IWICImagingFactory* factory,
+                     const std::vector<uint8_t>& png, UINT* width, UINT* height,
+                     std::vector<uint8_t>* pixels) {
+  if (factory == nullptr || png.empty() ||
+      png.size() > (std::numeric_limits<DWORD>::max)()) {
+    return false;
+  }
+  ComPtr<IWICStream> stream;
+  if (FAILED(factory->CreateStream(&stream))) {
+    return false;
+  }
+  // InitializeFromMemory wants a non-const buffer but only reads from it.
+  if (FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(png.data()),
+                                          static_cast<DWORD>(png.size())))) {
+    return false;
+  }
+  ComPtr<IWICBitmapDecoder> decoder;
+  if (FAILED(factory->CreateDecoderFromStream(
+          stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, &decoder))) {
+    return false;
+  }
+  ComPtr<IWICBitmapFrameDecode> frame;
+  if (FAILED(decoder->GetFrame(0, &frame))) {
+    return false;
+  }
+  ComPtr<IWICFormatConverter> converter;
+  if (FAILED(factory->CreateFormatConverter(&converter))) {
+    return false;
+  }
+  if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppBGRA,
+                                   WICBitmapDitherTypeNone, nullptr, 0.0,
+                                   WICBitmapPaletteTypeMedianCut))) {
+    return false;
+  }
+  if (FAILED(converter->GetSize(width, height)) || *width == 0 ||
+      *height == 0) {
+    return false;
+  }
+  // WIC takes 32-bit stride/buffer lengths. Registered clipboard data is
+  // untrusted: reject overflowing dimensions and fail cleanly on allocation.
+  const uint64_t row_bytes = static_cast<uint64_t>(*width) * 4;
+  const uint64_t total_bytes = row_bytes * *height;
+  if (row_bytes > (std::numeric_limits<UINT>::max)() ||
+      total_bytes > (std::numeric_limits<UINT>::max)()) {
+    return false;
+  }
+  const UINT stride = static_cast<UINT>(row_bytes);
+  const size_t total = static_cast<size_t>(total_bytes);
+  try {
+    pixels->resize(total);
+  } catch (const std::bad_alloc&) {
+    return false;
+  }
+  return SUCCEEDED(converter->CopyPixels(
+      nullptr, stride, static_cast<UINT>(total), pixels->data()));
+}
+
+// Builds a CF_DIBV5 global block (BITMAPV5HEADER + bottom-up BGRA rows) from
+// the top-down BGRA |pixels|. Returns nullptr on allocation failure.
+HGLOBAL BuildDibV5(UINT width, UINT height,
+                   const std::vector<uint8_t>& pixels) {
+  const UINT stride = width * 4;
+  const size_t image_size = static_cast<size_t>(stride) * height;
+  const size_t total = sizeof(BITMAPV5HEADER) + image_size;
+  HGLOBAL handle = ::GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, total);
+  if (handle == nullptr) {
+    return nullptr;
+  }
+  auto* buffer = static_cast<uint8_t*>(::GlobalLock(handle));
+  if (buffer == nullptr) {
+    ::GlobalFree(handle);
+    return nullptr;
+  }
+  auto* header = reinterpret_cast<BITMAPV5HEADER*>(buffer);
+  header->bV5Size = sizeof(BITMAPV5HEADER);
+  header->bV5Width = static_cast<LONG>(width);
+  header->bV5Height = static_cast<LONG>(height);  // positive => bottom-up rows
+  header->bV5Planes = 1;
+  header->bV5BitCount = 32;
+  header->bV5Compression = BI_BITFIELDS;
+  header->bV5SizeImage = static_cast<DWORD>(image_size);
+  header->bV5RedMask = 0x00FF0000;
+  header->bV5GreenMask = 0x0000FF00;
+  header->bV5BlueMask = 0x000000FF;
+  header->bV5AlphaMask = 0xFF000000;
+  header->bV5CSType = LCS_WINDOWS_COLOR_SPACE;
+  header->bV5Intent = LCS_GM_IMAGES;
+
+  uint8_t* dst = buffer + sizeof(BITMAPV5HEADER);
+  // Flip the top-down source into the bottom-up rows a DIB expects.
+  for (UINT row = 0; row < height; row++) {
+    const uint8_t* src =
+        pixels.data() + static_cast<size_t>(height - 1 - row) * stride;
+    std::memcpy(dst + static_cast<size_t>(row) * stride, src, stride);
+  }
+  ::GlobalUnlock(handle);
+  return handle;
+}
+
+// Copies |bytes| into a GMEM_MOVEABLE global block for SetClipboardData, which
+// takes ownership on success. Returns nullptr on allocation failure.
+HGLOBAL CopyToGlobal(const std::vector<uint8_t>& bytes) {
+  HGLOBAL handle = ::GlobalAlloc(GMEM_MOVEABLE, bytes.size());
+  if (handle == nullptr) {
+    return nullptr;
+  }
+  void* buffer = ::GlobalLock(handle);
+  if (buffer == nullptr) {
+    ::GlobalFree(handle);
+    return nullptr;
+  }
+  std::memcpy(buffer, bytes.data(), bytes.size());
+  ::GlobalUnlock(handle);
+  return handle;
+}
+
+// Reads all bytes out of an in-memory IStream backed by an HGLOBAL.
+bool ReadStreamBytes(IStream* stream, std::vector<uint8_t>* out) {
+  HGLOBAL handle = nullptr;
+  if (FAILED(::GetHGlobalFromStream(stream, &handle)) || handle == nullptr) {
+    return false;
+  }
+  const SIZE_T size = ::GlobalSize(handle);
+  void* buffer = ::GlobalLock(handle);
+  if (buffer == nullptr) {
+    return false;
+  }
+  out->assign(static_cast<uint8_t*>(buffer),
+              static_cast<uint8_t*>(buffer) + size);
+  ::GlobalUnlock(handle);
+  return true;
+}
+
+// Encodes a WIC bitmap source as PNG bytes.
+bool EncodeSourceToPng(IWICImagingFactory* factory, IWICBitmapSource* source,
+                       std::vector<uint8_t>* png) {
+  ComPtr<IStream> stream;
+  if (FAILED(::CreateStreamOnHGlobal(nullptr, TRUE, &stream))) {
+    return false;
+  }
+  ComPtr<IWICBitmapEncoder> encoder;
+  if (FAILED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr,
+                                    &encoder))) {
+    return false;
+  }
+  if (FAILED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache))) {
+    return false;
+  }
+  ComPtr<IWICBitmapFrameEncode> frame;
+  ComPtr<IPropertyBag2> props;
+  if (FAILED(encoder->CreateNewFrame(&frame, &props))) {
+    return false;
+  }
+  if (FAILED(frame->Initialize(props.Get()))) {
+    return false;
+  }
+  if (FAILED(frame->WriteSource(source, nullptr))) {
+    return false;
+  }
+  if (FAILED(frame->Commit()) || FAILED(encoder->Commit())) {
+    return false;
+  }
+  return ReadStreamBytes(stream.Get(), png);
+}
+
+// Guard that opens the clipboard in the constructor and closes it in the
+// destructor so every early-return path releases it.
+class ClipboardGuard {
+ public:
+  explicit ClipboardGuard(HWND owner) : open_(false) {
+    // Clipboard ownership transfers (screenshots, browsers, Office) briefly
+    // lock the clipboard. Give that transfer up to 40 ms to finish.
+    for (int attempt = 0; attempt < 5; ++attempt) {
+      if (::OpenClipboard(owner) != FALSE) {
+        open_ = true;
+        break;
+      }
+      if (attempt < 4) ::Sleep(10);
+    }
+  }
+  ~ClipboardGuard() {
+    if (open_) {
+      ::CloseClipboard();
+    }
+  }
+  bool open() const { return open_; }
+
+ private:
+  bool open_;
+};
+
+}  // namespace
+
+static bool CopyImageAndPdf(HWND owner, const std::vector<uint8_t>& png,
+                            const std::vector<uint8_t>* pdf) {
+  ComPtr<IWICImagingFactory> factory = CreateWicFactory();
+  UINT width = 0;
+  UINT height = 0;
+  std::vector<uint8_t> pixels;
+  if (!DecodePngToBgra(factory.Get(), png, &width, &height, &pixels)) {
+    return false;
+  }
+  HGLOBAL dib = BuildDibV5(width, height, pixels);
+  if (dib == nullptr) {
+    return false;
+  }
+  HGLOBAL raw_png = CopyToGlobal(png);
+  if (raw_png == nullptr) {
+    ::GlobalFree(dib);
+    return false;
+  }
+
+  ClipboardGuard clipboard(owner);
+  if (!clipboard.open()) {
+    ::GlobalFree(dib);
+    ::GlobalFree(raw_png);
+    return false;
+  }
+  ::EmptyClipboard();
+
+  // SetClipboardData takes ownership of the handle only when it succeeds; free
+  // whatever it rejects. Success of either format means a paste will work, so
+  // only report failure when both were rejected.
+  int placed = 0;
+  if (pdf != nullptr) {
+    for (UINT format : {PdfClipboardFormat(), AdobePdfClipboardFormat()}) {
+      HGLOBAL raw_pdf = CopyToGlobal(*pdf);
+      if (raw_pdf != nullptr) {
+        if (format != 0 && ::SetClipboardData(format, raw_pdf) != nullptr) {
+          placed++;
+        } else {
+          ::GlobalFree(raw_pdf);
+        }
+      }
+    }
+  }
+  if (::SetClipboardData(CF_DIBV5, dib) != nullptr) {
+    placed++;
+  } else {
+    ::GlobalFree(dib);
+  }
+  if (::SetClipboardData(PngClipboardFormat(), raw_png) != nullptr) {
+    placed++;
+  } else {
+    ::GlobalFree(raw_png);
+  }
+  return placed > 0;
+}
+
+bool CopyPngToClipboard(HWND owner, const std::vector<uint8_t>& png) {
+  return CopyImageAndPdf(owner, png, nullptr);
+}
+
+bool CopySnapshotToClipboard(HWND owner, const std::vector<uint8_t>& pdf,
+                             const std::vector<uint8_t>& png) {
+  if (pdf.empty()) return false;
+  const bool copied = CopyImageAndPdf(owner, png, &pdf);
+  // Read after CloseClipboard: every window/engine shares this owner stamp.
+  local_snapshot_sequence = copied ? ::GetClipboardSequenceNumber() : 0;
+  return copied;
+}
+
+void MarkLocalClipboardCopy() {
+  local_snapshot_sequence = ::GetClipboardSequenceNumber();
+}
+
+std::optional<ClipboardPdf> ReadExternalPdfFromClipboard(HWND owner) {
+  ClipboardGuard clipboard(owner);
+  if (!clipboard.open()) return std::nullopt;
+  if (local_snapshot_sequence != 0 &&
+      local_snapshot_sequence == ::GetClipboardSequenceNumber()) {
+    return std::nullopt;
+  }
+  for (UINT format : {PdfClipboardFormat(), AdobePdfClipboardFormat()}) {
+    HANDLE handle = ::GetClipboardData(format);
+    if (handle == nullptr) continue;
+    const SIZE_T size = ::GlobalSize(handle);
+    void* data = ::GlobalLock(handle);
+    if (data == nullptr) continue;
+    std::vector<uint8_t> pdf(static_cast<uint8_t*>(data),
+                             static_cast<uint8_t*>(data) + size);
+    ::GlobalUnlock(handle);
+    if (!pdf.empty()) return ClipboardPdf{std::move(pdf), ::GetClipboardSequenceNumber()};
+  }
+  return std::nullopt;
+}
+
+std::optional<std::vector<uint8_t>> ReadImageFromClipboard(
+    HWND owner, bool external_only) {
+  ClipboardGuard clipboard(owner);
+  if (!clipboard.open()) {
+    return std::nullopt;
+  }
+  if (external_only && local_snapshot_sequence != 0 &&
+      local_snapshot_sequence == ::GetClipboardSequenceNumber()) {
+    return std::nullopt;
+  }
+
+  // Prefer a lossless PNG when a source app offered one (browsers, Office).
+  for (const UINT png_format :
+       {PngClipboardFormat(), ::RegisterClipboardFormatW(L"image/png")}) {
+    if (!::IsClipboardFormatAvailable(png_format)) continue;
+    HANDLE handle = ::GetClipboardData(png_format);
+    if (handle != nullptr) {
+      const SIZE_T size = ::GlobalSize(handle);
+      void* buffer = ::GlobalLock(handle);
+      if (buffer != nullptr && size > 0) {
+        std::vector<uint8_t> png(static_cast<uint8_t*>(buffer),
+                                 static_cast<uint8_t*>(buffer) + size);
+        ::GlobalUnlock(handle);
+        // Empty or malformed registered data must not hide a usable bitmap
+        // representation offered by the same clipboard owner.
+        ComPtr<IWICImagingFactory> factory = CreateWicFactory();
+        UINT width = 0, height = 0;
+        std::vector<uint8_t> pixels;
+        if (DecodePngToBgra(factory.Get(), png, &width, &height, &pixels)) {
+          return png;
+        }
+        buffer = nullptr;  // already unlocked above
+      }
+      if (buffer != nullptr) {
+        ::GlobalUnlock(handle);
+      }
+    }
+  }
+
+  // Next, a 32bpp DIB read directly, keeping its alpha. Browsers (a web app's
+  // copied image, without a PNG alongside) publish transparency this way;
+  // routing it through CF_BITMAP below would drop the alpha and paint the
+  // transparent background black, which reads as an inverted image.
+  // Windows synthesizes CF_DIB from CF_DIBV5, so this covers both.
+  for (const UINT format :
+       {static_cast<UINT>(CF_DIBV5), static_cast<UINT>(CF_DIB)}) {
+    if (!::IsClipboardFormatAvailable(format)) continue;
+    HANDLE handle = ::GetClipboardData(format);
+    if (handle != nullptr) {
+      const SIZE_T size = ::GlobalSize(handle);
+      const void* buffer = ::GlobalLock(handle);
+      std::optional<dart_pdf::DibImage> dib;
+      if (buffer != nullptr) {
+        dib = dart_pdf::DecodePackedDib32(static_cast<const uint8_t*>(buffer),
+                                          size);
+        ::GlobalUnlock(handle);
+      }
+      ComPtr<IWICImagingFactory> factory;
+      if (dib.has_value()) factory = CreateWicFactory();
+      if (factory) {
+        // An opaque image encodes as plain RGB (no soft mask in the PDF).
+        const UINT stride = dib->width * 4;
+        ComPtr<IWICBitmap> wic_bitmap;
+        std::vector<uint8_t> png;
+        if (SUCCEEDED(factory->CreateBitmapFromMemory(
+                dib->width, dib->height,
+                dib->has_alpha ? GUID_WICPixelFormat32bppBGRA
+                               : GUID_WICPixelFormat32bppBGR,
+                stride, static_cast<UINT>(dib->bgra.size()),
+                dib->bgra.data(), &wic_bitmap)) &&
+            EncodeSourceToPng(factory.Get(), wic_bitmap.Get(), &png)) {
+          return png;
+        }
+      }
+    }
+  }
+
+  // Otherwise fall back to a bitmap the system synthesizes from CF_DIB and
+  // re-encode it as PNG. Ignore any alpha channel - pasted screenshots and
+  // DDB-derived bitmaps carry a zeroed alpha that would render fully clear.
+  if (::IsClipboardFormatAvailable(CF_BITMAP)) {
+    HBITMAP bitmap =
+        static_cast<HBITMAP>(::GetClipboardData(CF_BITMAP));
+    if (bitmap != nullptr) {
+      ComPtr<IWICImagingFactory> factory = CreateWicFactory();
+      if (factory) {
+        ComPtr<IWICBitmap> wic_bitmap;
+        if (SUCCEEDED(factory->CreateBitmapFromHBITMAP(
+                bitmap, nullptr, WICBitmapIgnoreAlpha, &wic_bitmap))) {
+          std::vector<uint8_t> png;
+          if (EncodeSourceToPng(factory.Get(), wic_bitmap.Get(), &png)) {
+            return png;
+          }
+        }
+      }
+    }
+  }
+
+  return std::nullopt;
+}

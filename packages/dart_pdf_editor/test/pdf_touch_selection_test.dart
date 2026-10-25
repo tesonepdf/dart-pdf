@@ -1,0 +1,595 @@
+// Touch text selection: drags scroll (never select), a long press
+// selects the word under the finger and extends by word while dragged,
+// and lifting shows drag handles plus a Copy/Select-All chip.
+
+import 'package:flutter/gestures.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf_document/pdf_document.dart';
+import 'package:dart_pdf_editor/dart_pdf_editor.dart';
+import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+Uint8List _buildSplitRunTextPdf() {
+  const content = 'BT /F1 24 Tf 72 720 Td (signs) Tj ET '
+      'BT /F1 24 Tf 150 720 Td (and) Tj ET';
+  final objects = <String>[
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+        '/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    '<< /Length ${content.length} >>\nstream\n$content\nendstream',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  final buffer = StringBuffer('%PDF-1.4\n');
+  final offsets = <int>[];
+  for (var i = 0; i < objects.length; i++) {
+    offsets.add(buffer.length);
+    buffer.write('${i + 1} 0 obj\n${objects[i]}\nendobj\n');
+  }
+  final xref = buffer.length;
+  buffer.write('xref\n0 ${objects.length + 1}\n0000000000 65535 f \n');
+  for (final offset in offsets) {
+    buffer.write('${offset.toString().padLeft(10, '0')} 00000 n \n');
+  }
+  buffer.write('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n');
+  return Uint8List.fromList(buffer.toString().codeUnits);
+}
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  // 800px viewport over a 612pt page (fit-width); fixture text 'Page N'
+  // sits at 72,720 in 24pt Helvetica ('Page' spans x 72..120, 'N'
+  // 132..144)
+  const scale = 800 / 612;
+  Offset view(double x, double y) => Offset(x * scale, (792 - y) * scale);
+
+  Future<PdfViewerController> pumpViewer(WidgetTester tester,
+      {int pages = 3, Uint8List? bytes, bool contextMenuEnabled = true}) async {
+    final controller = PdfViewerController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: PdfViewer(
+          initialFit: PdfViewerFit.width,
+          document: PdfDocument.open(bytes ?? buildMultiPagePdf(pages)),
+          controller: controller,
+          contextMenuEnabled: contextMenuEnabled,
+        ),
+      ),
+    ));
+    await tester.pump();
+    return controller;
+  }
+
+  Future<({PdfViewerController viewer, PdfEditingController editing})>
+      pumpEditor(
+    WidgetTester tester, {
+    PdfStyledTextPrompt? styledTextPrompt,
+  }) async {
+    final viewer = PdfViewerController();
+    final editing = PdfEditingController(buildMultiPagePdf(1));
+    addTearDown(viewer.dispose);
+    addTearDown(editing.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListenableBuilder(
+          listenable: editing,
+          builder: (context, _) => PdfViewer(
+            initialFit: PdfViewerFit.width,
+            document: editing.document,
+            controller: viewer,
+            editing: editing,
+            editingStyledTextPrompt: styledTextPrompt,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    return (viewer: viewer, editing: editing);
+  }
+
+  /// Long-presses the word at [at] and lifts, leaving handles + chip.
+  Future<void> longPressSelect(WidgetTester tester, Offset at) async {
+    final gesture = await tester.startGesture(at);
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.up();
+    await tester.pump();
+  }
+
+  group('touch scrolling vs selection', () {
+    testWidgets('a vertical touch drag over text scrolls, never selects',
+        (tester) async {
+      final controller = await pumpViewer(tester, pages: 5);
+      await tester.dragFrom(view(100, 720), const Offset(0, -2500));
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(controller.currentPage, greaterThan(0));
+      expect(controller.hasSelection, isFalse);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('a horizontal touch drag across text does not select',
+        (tester) async {
+      // regression: the selection pan recognizer accepted touch, so any
+      // swipe with a horizontal component crossed pan slop first and
+      // turned into a text selection instead of a scroll
+      final controller = await pumpViewer(tester);
+      final gesture = await tester.startGesture(view(158, 720));
+      await gesture.moveBy(const Offset(-40, -6));
+      await tester.pump();
+      await gesture.moveTo(view(50, 715));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(controller.hasSelection, isFalse);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('mouse drag selection still works and shows no touch chrome',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      final gesture = await tester.startGesture(view(158, 720),
+          kind: PointerDeviceKind.mouse);
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+      await gesture.moveTo(view(50, 720));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(controller.selectedText, 'Page 1');
+      expect(find.byKey(const ValueKey('pdf-text-handle-start')), findsNothing);
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+    });
+  });
+
+  testWidgets('touch word-drag wash is continuous across split text runs',
+      (tester) async {
+    final controller = await pumpViewer(
+      tester,
+      pages: 1,
+      bytes: _buildSplitRunTextPdf(),
+    );
+    final gesture = await tester.startGesture(view(90, 720));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(view(170, 720));
+    await tester.pump();
+
+    expect(controller.selectedText, contains('signs'));
+    expect(controller.selectedText, contains('and'));
+    expect(controller.selectionRectsOn(0), hasLength(1));
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  group('armed text markup', () {
+    testWidgets('mouse drag applies markup and leaves the tool armed',
+        (tester) async {
+      final state = await pumpEditor(tester);
+      state.editing.markupTool = PdfMarkupKind.highlight;
+      await tester.pump();
+
+      final gesture = await tester.startGesture(view(158, 720),
+          kind: PointerDeviceKind.mouse);
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+      await gesture.moveTo(view(50, 720));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(state.viewer.hasSelection, isFalse);
+      expect(state.editing.markupTool, PdfMarkupKind.highlight);
+      final annotations = state.editing.document.page(0).annotations;
+      expect(annotations, hasLength(1));
+      expect(annotations.single.subtype, 'Highlight');
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('touch long-press applies the armed markup on lift',
+        (tester) async {
+      final state = await pumpEditor(tester);
+      state.editing.markupTool = PdfMarkupKind.underline;
+      await tester.pump();
+
+      await longPressSelect(tester, view(100, 720));
+
+      expect(state.viewer.hasSelection, isFalse);
+      expect(state.editing.markupTool, PdfMarkupKind.underline);
+      final annotations = state.editing.document.page(0).annotations;
+      expect(annotations, hasLength(1));
+      expect(annotations.single.subtype, 'Underline');
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+  });
+
+  group('long-press selection', () {
+    testWidgets('RTL selection starts on the right edge', (tester) async {
+      final controller = await pumpViewer(tester, bytes: buildRtlTextPdf());
+      await longPressSelect(tester, view(336, 720));
+
+      expect(controller.selectedText, 'اهلا');
+      final start =
+          tester.getCenter(find.byKey(const ValueKey('pdf-text-handle-start')));
+      final end =
+          tester.getCenter(find.byKey(const ValueKey('pdf-text-handle-end')));
+      expect(start.dx, closeTo(view(360, 720).dx, 1));
+      expect(end.dx, closeTo(view(312, 720).dx, 1));
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('RTL long-press selection keeps word order across lines',
+        (tester) async {
+      final controller = await pumpViewer(tester, bytes: buildRtlTextPdf());
+      final gesture = await tester.startGesture(view(336, 720));
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveTo(view(276, 680));
+      await tester.pump();
+
+      expect(controller.selectedText, 'اهلا وسهلا\nكيف حالك');
+      await gesture.up();
+      await tester.pump();
+
+      final copied = <String?>[];
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String?);
+        }
+        return null;
+      });
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-text-selection-chip-copy')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      expect(copied, [
+        '\u2067اهلا وسهلا\u2069\n'
+            '\u2067كيف حالك\u2069'
+      ]);
+    });
+
+    testWidgets(
+        'long press selects the word under the finger and shows '
+        'handles and the chip', (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+
+      expect(controller.selectedText, 'Page');
+      expect(
+          find.byKey(const ValueKey('pdf-text-handle-start')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip-edit')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip-markup')),
+          findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets(
+        'contextMenuEnabled: false hides the chip but keeps the selection, '
+        'its handles and word-drag extension', (tester) async {
+      final controller = await pumpViewer(tester, contextMenuEnabled: false);
+      final gesture = await tester.startGesture(view(100, 720));
+      await tester.pump(const Duration(milliseconds: 600));
+      // the press still extends by word while it drags
+      await gesture.moveTo(view(138, 720));
+      await tester.pump();
+      expect(controller.selectedText, 'Page 1');
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('pdf-text-handle-start')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('chrome stays hidden while the press is still down',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      final gesture = await tester.startGesture(view(100, 720));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(controller.selectedText, 'Page');
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+      await gesture.up();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('dragging during the long press extends by whole words',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      final gesture = await tester.startGesture(view(100, 720));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(controller.selectedText, 'Page');
+      await gesture.moveTo(view(140, 720));
+      await tester.pump();
+      expect(controller.selectedText, 'Page 1');
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('long press on empty page area clears the selection',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      expect(controller.hasSelection, isTrue);
+
+      await longPressSelect(tester, view(300, 400));
+      expect(controller.hasSelection, isFalse);
+      expect(find.byKey(const ValueKey('pdf-text-handle-end')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('a plain tap dismisses the selection and its chrome',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      expect(controller.hasSelection, isTrue);
+
+      await tester.tapAt(view(300, 400));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(controller.hasSelection, isFalse);
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+    });
+
+    testWidgets('long press does not select while an editing tool is armed',
+        (tester) async {
+      final editing = PdfEditingController(buildMultiPagePdf(1));
+      final viewer = PdfViewerController();
+      addTearDown(editing.dispose);
+      addTearDown(viewer.dispose);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: editing,
+            builder: (context, _) => PdfViewer(
+              initialFit: PdfViewerFit.width,
+              document: editing.document,
+              controller: viewer,
+              editing: editing,
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      editing.tool = PdfEditTool.rectangle;
+      await tester.pump();
+
+      final gesture = await tester.startGesture(view(100, 720));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(viewer.hasSelection, isFalse);
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(viewer.hasSelection, isFalse);
+    });
+  });
+
+  group('long-press selection in Select mode', () {
+    testWidgets('a long press over text selects the word', (tester) async {
+      final (:viewer, :editing) = await pumpEditor(tester);
+      editing.tool = PdfEditTool.select;
+      await tester.pump();
+
+      await longPressSelect(tester, view(100, 728));
+      expect(viewer.selectedText, 'Page');
+      expect(editing.tool, PdfEditTool.select);
+    });
+
+    testWidgets('dragging during the long press extends by whole words',
+        (tester) async {
+      final (:viewer, :editing) = await pumpEditor(tester);
+      editing.tool = PdfEditTool.select;
+      await tester.pump();
+
+      final gesture = await tester.startGesture(view(100, 728));
+      await tester.pump(const Duration(milliseconds: 600));
+      await gesture.moveTo(view(140, 728));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(viewer.selectedText, 'Page 1');
+    });
+
+    testWidgets('a long press on an annotation leaves the text alone',
+        (tester) async {
+      final (:viewer, :editing) = await pumpEditor(tester);
+      editing.addRectangle(0, const PdfRect(60, 700, 160, 760));
+      editing.tool = PdfEditTool.select;
+      await tester.pump();
+
+      final gesture = await tester.startGesture(view(100, 728));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(viewer.hasSelection, isFalse);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(viewer.hasSelection, isFalse);
+    });
+  });
+
+  group('selection handles', () {
+    testWidgets('dragging the end handle extends the selection',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      expect(controller.selectedText, 'Page');
+
+      final endHandle = find.byKey(const ValueKey('pdf-text-handle-end'));
+      final box = tester.getTopLeft(endHandle);
+      final size = tester.getSize(endHandle);
+      final handle = box + Offset(size.width / 2, size.height - 9);
+      final gesture = await tester.startGesture(handle);
+      await tester.pump();
+      // the eager recognizer claims on contact: no slop to pay
+      await gesture.moveBy(Offset((150 - 120) * scale, 0));
+      await tester.pump();
+      expect(controller.selectedText, 'Page 1');
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('dragging the start handle re-anchors the other end',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(135, 720)); // the '1'
+      expect(controller.selectedText, '1');
+
+      // grab the ball above the line: on a one-word selection the two
+      // handle boxes overlap across the stem zone (the end handle, on
+      // top, wins there), but the ball regions stay unambiguous
+      final box = tester
+          .getTopLeft(find.byKey(const ValueKey('pdf-text-handle-start')));
+      final size =
+          tester.getSize(find.byKey(const ValueKey('pdf-text-handle-start')));
+      final gesture =
+          await tester.startGesture(box + Offset(size.width / 2, 6));
+      await tester.pump();
+      await gesture.moveTo(view(72, 720));
+      await tester.pump();
+      expect(controller.selectedText, 'Page 1');
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('a handle drag scrolls nothing out from under itself',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      final before = controller.currentPage;
+
+      final handle =
+          tester.getCenter(find.byKey(const ValueKey('pdf-text-handle-end')));
+      final gesture = await tester.startGesture(handle);
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, 120));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      expect(controller.currentPage, before);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+  });
+
+  group('copy chip', () {
+    testWidgets('Copy puts the selection on the clipboard and dismisses',
+        (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      expect(controller.selectedText, 'Page');
+
+      final copied = <String?>[];
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String?);
+        }
+        return null;
+      });
+
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-text-selection-chip-copy')));
+      // touch taps on chrome resolve after the double-tap timeout
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+
+      expect(copied, ['Page']);
+      expect(controller.hasSelection, isFalse);
+      expect(
+          find.byKey(const ValueKey('pdf-text-selection-chip')), findsNothing);
+    });
+
+    testWidgets('Select all selects the whole page text', (tester) async {
+      final controller = await pumpViewer(tester);
+      await longPressSelect(tester, view(100, 720));
+      expect(controller.selectedText, 'Page');
+
+      await tester.tap(
+          find.byKey(const ValueKey('pdf-text-selection-chip-select-all')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+
+      expect(controller.selectedText, 'Page 1');
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip')),
+          findsOneWidget);
+    });
+  });
+
+  group('editor selection actions', () {
+    testWidgets('the editor chip exposes pencil and markup actions',
+        (tester) async {
+      await pumpEditor(tester);
+      await longPressSelect(tester, view(100, 720));
+
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip-edit')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('pdf-text-selection-chip-markup')),
+          findsOneWidget);
+    });
+
+    testWidgets('the pencil edits only the selected text occurrence',
+        (tester) async {
+      String? promptedWith;
+      final state = await pumpEditor(
+        tester,
+        styledTextPrompt: (context,
+            {required initial, palette = const <Color>[], pickFont}) async {
+          promptedWith = initial;
+          return const PdfStyledTextEdit('Document', PdfTextStyle());
+        },
+      );
+      await longPressSelect(tester, view(100, 720));
+      expect(state.viewer.selectedText, 'Page');
+
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-text-selection-chip-edit')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(promptedWith, 'Page');
+      final text = PdfPageElements.of(state.editing.document, 0)
+          .elements
+          .where((element) => element.kind == PdfElementKind.text)
+          .map((element) => element.text)
+          .join();
+      expect(text, 'Document 1');
+      expect(state.viewer.hasSelection, isFalse);
+    });
+
+    testWidgets('the markup menu applies a highlight to the selection',
+        (tester) async {
+      final state = await pumpEditor(tester);
+      await longPressSelect(tester, view(100, 720));
+
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-text-selection-chip-markup')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-text-selection-highlight')));
+      await tester.pumpAndSettle();
+
+      expect(state.editing.document.page(0).annotations.single.subtype,
+          'Highlight');
+      expect(state.viewer.hasSelection, isFalse);
+    });
+  });
+}

@@ -1,0 +1,258 @@
+import 'dart:math' as math;
+
+import 'package:pdf_cos/pdf_cos.dart';
+import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
+import 'package:test/test.dart';
+
+CosToken lex(String source) => CosLexer(ascii(source)).nextToken();
+
+List<CosToken> lexAll(String source) {
+  final lexer = CosLexer(ascii(source));
+  final tokens = <CosToken>[];
+  while (true) {
+    final t = lexer.nextToken();
+    if (t.type == CosTokenType.eof) break;
+    tokens.add(t);
+  }
+  return tokens;
+}
+
+void main() {
+  group('numbers', () {
+    test('integers', () {
+      expect(lex('42').intValue, 42);
+      expect(lex('-17').intValue, -17);
+      expect(lex('+17').intValue, 17);
+      expect(lex('0000000017').intValue, 17);
+    });
+
+    test('reals', () {
+      expect(lex('3.14').realValue, 3.14);
+      expect(lex('-0.5').realValue, -0.5);
+      expect(lex('.5').realValue, 0.5);
+      expect(lex('-.5').realValue, -0.5);
+      expect(lex('4.').realValue, 4.0);
+    });
+
+    test('fast real path is bit-exact with double.parse', () {
+      // The byte-level real parser (≤15 digits, one dot, no exponent) must
+      // produce the identical double to the string path it replaces.
+      final rng = math.Random(42);
+      for (var i = 0; i < 20000; i++) {
+        final intDigits = rng.nextInt(8);
+        final fracDigits = rng.nextInt(15 - intDigits);
+        final sign = ['', '-', '+'][rng.nextInt(3)];
+        final intPart = List.generate(intDigits, (_) => rng.nextInt(10)).join();
+        final fracPart =
+            List.generate(fracDigits, (_) => rng.nextInt(10)).join();
+        final s = '$sign$intPart.$fracPart';
+        if (intPart.isEmpty && fracPart.isEmpty) continue;
+        final normalized = [
+          if (sign == '-') '-',
+          if (intPart.isEmpty) '0' else intPart,
+          '.',
+          if (fracPart.isEmpty) '0' else fracPart,
+        ].join();
+        expect(lex(s).realValue, double.parse(normalized), reason: s);
+      }
+      // >15 digits falls back to the string path - still exact
+      expect(lex('123456789.0123456789').realValue,
+          double.parse('123456789.0123456789'));
+    });
+
+    test('numeric fast and fallback paths preserve token boundaries', () {
+      for (final source in [
+        '.000068328212',
+        '-.0017587801',
+        '999999999999999.', // last exact fast-path real
+        '9999999999999999.', // first fallback real
+        '.000000000000001',
+        '.0000000000000001',
+        '-9223372036854775808', // int64 minimum needs the fallback
+        '+000000000000000017',
+        '00000000000000000017',
+      ]) {
+        final lexer = CosLexer(ascii('$source/Next'));
+        final token = lexer.nextToken();
+        expect(token.value,
+            source.contains('.') ? double.parse(source) : int.parse(source),
+            reason: source);
+        expect(lexer.position, source.length, reason: source);
+        expect(lexer.nextToken().textValue, 'Next', reason: source);
+      }
+    });
+
+    test('real signed zero and permissive bare-dot syntax survive', () {
+      for (final source in ['-0.', '-.0', '-0.0000000000000000', '-.']) {
+        final token = lex(source);
+        expect(token.type, CosTokenType.real, reason: source);
+        expect(token.realValue, 0, reason: source);
+        expect(token.realValue.isNegative, isTrue, reason: source);
+      }
+      expect(lex('.').realValue, 0);
+      expect(lex('+.').realValue, 0);
+    });
+
+    test('malformed numeric tokens consume all signs and dots', () {
+      for (final source in ['1.2.3', '1.-2', '.1+2', '++1', '+', '-']) {
+        final lexer = CosLexer(ascii('$source/Next'));
+        expect(() => lexer.nextToken(), throwsA(isA<CosParseException>()),
+            reason: source);
+        expect(lexer.position, source.length, reason: source);
+        expect(lexer.nextToken().textValue, 'Next', reason: source);
+      }
+    });
+
+    test('large integers parse exactly, matching int.tryParse', () {
+      // The direct byte parser handles ≤18-digit mantissas; longer ones (incl.
+      // the 19-digit int64 max) must fall back to the exact string path.
+      expect(lex('999999999999999999').intValue, 999999999999999999); // 18
+      expect(lex('9223372036854775807').intValue, 9223372036854775807); // max
+      expect(lex('+9223372036854775807').intValue, 9223372036854775807);
+    });
+
+    test('an integer that overflows int64 is malformed', () {
+      // int.tryParse returns null past the 64-bit range; the lexer must throw
+      // rather than silently wrap from the direct parse.
+      expect(() => lex('9223372036854775808'), throwsA(isA<Exception>()));
+      expect(() => lex('99999999999999999999'), throwsA(isA<Exception>()));
+    });
+
+    test('an embedded sign is malformed, not a silent number', () {
+      // `1-2` lexes as one number token; both the direct and string paths
+      // must reject it the same way.
+      expect(() => lex('1-2'), throwsA(isA<Exception>()));
+      expect(() => lex('--5'), throwsA(isA<Exception>()));
+    });
+  });
+
+  group('names', () {
+    test('simple', () {
+      expect(lex('/Type').textValue, 'Type');
+    });
+
+    test('hex escapes', () {
+      expect(lex('/A#42').textValue, 'AB');
+      expect(lex('/Lime#20Green').textValue, 'Lime Green');
+    });
+
+    test('terminated by delimiter', () {
+      final tokens = lexAll('/Name/Other');
+      expect(tokens, hasLength(2));
+      expect(tokens[0].textValue, 'Name');
+      expect(tokens[1].textValue, 'Other');
+    });
+  });
+
+  group('literal strings', () {
+    test('plain', () {
+      expect(String.fromCharCodes(lex('(Hello)').bytesValue), 'Hello');
+    });
+
+    test('nested parentheses', () {
+      expect(String.fromCharCodes(lex('(a (b) c)').bytesValue), 'a (b) c');
+    });
+
+    test('escapes', () {
+      expect(String.fromCharCodes(lex(r'(a\(b\)c\\d)').bytesValue), r'a(b)c\d');
+      expect(lex(r'(\n\r\t)').bytesValue, [0x0A, 0x0D, 0x09]);
+    });
+
+    test('octal escapes', () {
+      expect(lex(r'(\053)').bytesValue, [0x2B]);
+      expect(lex(r'(\53)').bytesValue, [0x2B]);
+    });
+
+    test('line continuation', () {
+      expect(String.fromCharCodes(lex('(ab\\\ncd)').bytesValue), 'abcd');
+    });
+
+    test('embedded CRLF normalizes to LF', () {
+      expect(lex('(a\r\nb)').bytesValue, [0x61, 0x0A, 0x62]);
+    });
+  });
+
+  group('hex strings', () {
+    test('plain', () {
+      expect(String.fromCharCodes(lex('<48656C6C6F>').bytesValue), 'Hello');
+    });
+
+    test('whitespace ignored, odd digit padded', () {
+      expect(lex('<90 1F A>').bytesValue, [0x90, 0x1F, 0xA0]);
+    });
+  });
+
+  test('structural tokens and keywords', () {
+    final tokens = lexAll('<< /K [1 2] >> stream true R');
+    expect(tokens.map((t) => t.type), [
+      CosTokenType.dictOpen,
+      CosTokenType.name,
+      CosTokenType.arrayOpen,
+      CosTokenType.integer,
+      CosTokenType.integer,
+      CosTokenType.arrayClose,
+      CosTokenType.dictClose,
+      CosTokenType.keyword,
+      CosTokenType.keyword,
+      CosTokenType.keyword,
+    ]);
+  });
+
+  test('explicit token buffer is reused and overwritten', () {
+    final lexer = CosLexer(ascii('12 /Name m'));
+    final buffer = CosTokenBuffer();
+
+    final integer = lexer.nextToken(buffer);
+    expect(identical(integer, buffer), isTrue);
+    expect((integer.type, integer.intValue, integer.offset),
+        (CosTokenType.integer, 12, 0));
+
+    final name = lexer.nextToken(buffer);
+    expect(identical(name, integer), isTrue);
+    expect((name.type, name.textValue, name.offset),
+        (CosTokenType.name, 'Name', 3));
+
+    final keyword = lexer.nextToken(buffer);
+    expect(identical(keyword, integer), isTrue);
+    expect((keyword.type, keyword.textValue, keyword.offset),
+        (CosTokenType.keyword, 'm', 9));
+
+    expect(identical(lexer.nextToken(buffer), buffer), isTrue);
+    expect((buffer.type, buffer.value, buffer.offset),
+        (CosTokenType.eof, null, 10));
+  });
+
+  test('token buffer carries a packed keyword code for short keywords only',
+      () {
+    final lexer = CosLexer(ascii('re { } BDC true abcd 1.5 -0.0 /re 7 EMC'));
+    final buffer = CosTokenBuffer();
+    (Object?, int) next() {
+      final token = lexer.nextToken(buffer);
+      return (token.value, buffer.keywordCode);
+    }
+
+    expect(next(), ('re', 0x6572));
+    // Braces are keyword tokens but never operators: no code, so a consumer
+    // dispatching on it cannot re-run the previous operator.
+    expect(next(), ('{', -1));
+    expect(next(), ('}', -1));
+    expect(next(), ('BDC', 0x434442));
+    expect(next(), ('true', -1));
+    expect(next(), ('abcd', -1));
+    // Reals are stored unboxed and still read back through every accessor.
+    expect(next(), (1.5, -1));
+    expect(buffer.realValue, 1.5);
+    lexer.nextToken(buffer);
+    expect((buffer.type, buffer.realValue.isNegative, buffer.value),
+        (CosTokenType.real, true, -0.0));
+    expect(next(), ('re', -1)); // a name
+    expect(buffer.type, CosTokenType.name);
+    expect(next(), (7, -1));
+    expect(next(), ('EMC', 0x434d45));
+  });
+
+  test('comments are skipped', () {
+    final tokens = lexAll('42 % the answer\n7');
+    expect(tokens.map((t) => t.intValue), [42, 7]);
+  });
+}

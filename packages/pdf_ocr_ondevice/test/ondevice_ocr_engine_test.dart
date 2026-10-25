@@ -1,0 +1,186 @@
+// The on-device engine reads a page raster into an OcrImage, runs an
+// OcrModelRunner, and maps each recognized line's PIXEL box back to PDF user
+// space - proven here with a fake runner (no ONNX), so the engine + geometry
+// are covered without a model. applyOcr then turns the spans into an
+// invisible, selectable text layer.
+import 'dart:io';
+
+import 'package:dart_pdf_editor/dart_pdf_editor.dart';
+import 'package:flutter/painting.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf_document/pdf_document.dart';
+import 'package:pdf_graphics/pdf_graphics.dart';
+import 'package:pdf_ocr_ondevice/pdf_ocr_ondevice.dart';
+import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
+
+/// Returns canned lines and records whether it was loaded - exactly the
+/// contract a real ONNX runner fulfils, minus the inference.
+class _FakeRunner implements OcrModelRunner {
+  _FakeRunner(this.lines);
+  final List<RecognizedTextLine> lines;
+  int loadCount = 0;
+  bool disposed = false;
+
+  @override
+  Future<void> load() async => loadCount++;
+
+  @override
+  Future<List<RecognizedTextLine>> recognize(OcrImage image) async {
+    expect(image.width, greaterThan(0));
+    expect(image.rgba.length, image.width * image.height * 4);
+    return lines;
+  }
+
+  @override
+  Future<void> dispose() async => disposed = true;
+}
+
+void main() {
+  test('pixelRatioFor targets 216 dpi and caps the raster side', () {
+    // US Letter (612 x 792pt): 3 x 792 = 2376 px, well under the cap.
+    final letter = PdfDocument.open(buildClassicPdf()).page(0);
+    expect(OnDeviceOcrEngine.pixelRatioFor(letter), 3);
+    // A 8504pt-wide strip at ratio 3 would be 25 512 px; fit it to 4000.
+    final strip = PdfDocument.open(buildSyntheticCadStrip(ops: 1)).page(0);
+    expect(
+        OnDeviceOcrEngine.pixelRatioFor(strip), closeTo(4000 / 8503.939, 1e-9));
+    expect(OnDeviceOcrEngine.pixelRatioFor(letter, target: 2), 2);
+  });
+
+  test('downloaded models use the isolate runner by default', () async {
+    final temp = Directory.systemTemp.createTempSync('pdf_ocr_worker_test');
+    addTearDown(() {
+      if (temp.existsSync()) temp.deleteSync(recursive: true);
+    });
+    final model = PdfOcrModel(
+      id: 'worker-test',
+      displayName: 'Worker test',
+      detection: PdfOcrModelFile(
+        name: 'det.onnx',
+        url: Uri.parse('https://example.test/det.onnx'),
+      ),
+      recognition: PdfOcrModelFile(
+        name: 'rec.onnx',
+        url: Uri.parse('https://example.test/rec.onnx'),
+      ),
+      dictionary: PdfOcrModelFile(
+        name: 'dict.txt',
+        url: Uri.parse('https://example.test/dict.txt'),
+      ),
+    );
+    final manager = PdfOcrModelManager(cacheRoot: () async => temp);
+    addTearDown(manager.close);
+    final directory = await manager.directory(model);
+    directory.createSync(recursive: true);
+    for (final file in model.files) {
+      File('${directory.path}/${file.name}').writeAsBytesSync([1]);
+    }
+
+    final workerEngine =
+        await OnDeviceOcrEngine.fromDownloadedModel(manager, model);
+    expect(workerEngine.runner, isA<IsolateOcrModelRunner>());
+    await workerEngine.dispose();
+
+    final localEngine = await OnDeviceOcrEngine.fromDownloadedModel(
+      manager,
+      model,
+      useWorkerIsolate: false,
+    );
+    expect(localEngine.runner, isA<OnnxOcrModelRunner>());
+    await localEngine.dispose();
+  });
+
+  testWidgets('maps a pixel line box to user space and loads once',
+      (tester) async {
+    await tester.runAsync(() async {
+      final doc = PdfDocument.open(buildClassicPdf()); // 612 x 792
+      final image =
+          await PdfPageRenderer.renderImage(doc.page(0), pixelRatio: 2);
+      final runner = _FakeRunner([
+        const RecognizedTextLine(
+          text: 'Scanned',
+          pixelBounds: Rect.fromLTWH(100, 120, 240, 36),
+          confidence: 0.9,
+        ),
+      ]);
+      final engine = OnDeviceOcrEngine(runner);
+      try {
+        final page = PdfOcrPageImage(
+            image: image, page: doc.page(0), pageIndex: 0, pixelRatio: 2);
+        final spans = await engine.recognize(page);
+        // Second call must reuse the loaded runner.
+        await engine.recognize(page);
+        expect(runner.loadCount, 1);
+
+        expect(spans, hasLength(1));
+        final r = spans.single.bounds;
+        // pixel x 100..340 / 2 = 50..170; pixel y 120..156 top-down ->
+        // user-space top = 792 - 60, bottom = 792 - 78.
+        expect(r.left, closeTo(50, 0.5));
+        expect(r.right, closeTo(170, 0.5));
+        expect(r.top, closeTo(792 - 60, 0.5));
+        expect(r.bottom, closeTo(792 - 78, 0.5));
+      } finally {
+        image.dispose();
+        await engine.dispose();
+      }
+      expect(runner.disposed, isTrue);
+    });
+  });
+
+  testWidgets('drops lines below minConfidence and empty text', (tester) async {
+    await tester.runAsync(() async {
+      final doc = PdfDocument.open(buildClassicPdf());
+      final image = await PdfPageRenderer.renderImage(doc.page(0));
+      final engine = OnDeviceOcrEngine(
+        _FakeRunner(const [
+          RecognizedTextLine(
+              text: 'keep',
+              pixelBounds: Rect.fromLTWH(10, 10, 40, 12),
+              confidence: 0.8),
+          RecognizedTextLine(
+              text: 'drop',
+              pixelBounds: Rect.fromLTWH(10, 30, 40, 12),
+              confidence: 0.2),
+          RecognizedTextLine(
+              text: '   ',
+              pixelBounds: Rect.fromLTWH(10, 50, 40, 12),
+              confidence: 0.9),
+        ]),
+        minConfidence: 0.5,
+      );
+      try {
+        final page = PdfOcrPageImage(
+            image: image, page: doc.page(0), pageIndex: 0, pixelRatio: 1);
+        final spans = await engine.recognize(page);
+        expect(spans.map((s) => s.text), ['keep']);
+      } finally {
+        image.dispose();
+        await engine.dispose();
+      }
+    });
+  });
+
+  testWidgets('applyOcr writes an invisible, selectable layer from the engine',
+      (tester) async {
+    await tester.runAsync(() async {
+      final editor = PdfEditor(PdfDocument.open(buildClassicPdf()));
+      final engine = OnDeviceOcrEngine(_FakeRunner(const [
+        RecognizedTextLine(
+          text: 'Invoice',
+          // Clear of the page's own "Hello, world!", which applyOcr would
+          // treat as already-extracted text.
+          pixelBounds: Rect.fromLTWH(120, 1200, 200, 40),
+          confidence: 0.95,
+        ),
+      ]));
+      final written = await editor.applyOcr(0, engine, pixelRatio: 2);
+      expect(written, 1);
+
+      final reopened = PdfDocument.open(editor.save());
+      final pageText = PdfTextExtractor.extract(reopened, 0);
+      expect(pageText.text, contains('Invoice'));
+      await engine.dispose();
+    });
+  });
+}

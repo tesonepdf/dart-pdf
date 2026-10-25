@@ -1,0 +1,37 @@
+DartPDF on-device OCR model bundle (ocr-models-v1)
+==================================================
+
+These model files are redistributed for use by the `pdf_ocr_ondevice`
+package (https://github.com/ben-milanko/dart-pdf). They are DERIVED WORKS of
+PaddleOCR's PP-OCRv5 *mobile* models and are distributed under the same
+license, the Apache License, Version 2.0 (see LICENSE.txt).
+
+Upstream source and copyright
+-----------------------------
+  Project:   PaddleOCR (PP-OCRv5)
+  Copyright: Copyright (c) PaddlePaddle Authors
+  License:   Apache License, Version 2.0
+  Origin:    https://github.com/PaddlePaddle/PaddleOCR
+             https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det
+             https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec
+
+Modifications made (Apache-2.0 section 4(b))
+--------------------------------------------
+  * PP-OCRv5_mobile_det.onnx — converted from the official PaddlePaddle
+    inference model (inference.json + inference.pdiparams) to ONNX with
+    paddle2onnx, opset 14. No weights were retrained or altered.
+  * PP-OCRv5_mobile_rec.onnx — converted from the official PaddlePaddle
+    inference model to ONNX with paddle2onnx, opset 14. No weights were
+    retrained or altered.
+  * ppocrv5_dict.txt — the recognizer's character dictionary, extracted
+    verbatim (one token per line) from the official PP-OCRv5_mobile_rec
+    CTCLabelDecode configuration. 18383 entries.
+
+No NOTICE file is shipped by upstream PaddleOCR, so none is reproduced here
+beyond this attribution.
+
+File integrity (SHA-256)
+------------------------
+  d5de5df358366210d16419b9636a2fc1efa5d7a20688f38a7869ec7b1a4f4f7d  PP-OCRv5_mobile_det.onnx
+  0030c6b05fbe29b07a93701503938d637efe7423325e2efb2bd7c8f220d40a8d  PP-OCRv5_mobile_rec.onnx
+  d1979e9f794c464c0d2e0b70a7fe14dd978e9dc644c0e71f14158cdf8342af1b  ppocrv5_dict.txt
