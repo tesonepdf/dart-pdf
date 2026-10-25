@@ -1,0 +1,27 @@
+name: pdf_test_fixtures
+description: >-
+  Programmatically-built PDF files for testing PDF tooling. Builders compute
+  every offset, so fixtures are always structurally correct.
+version: 11.0.0
+repository: https://github.com/tesonepdf/dart-pdf/tree/main/packages/pdf_test_fixtures
+issue_tracker: https://github.com/tesonepdf/dart-pdf/issues
+topics:
+  - pdf
+  - testing
+  - fixtures
+# The test signer identity is a deliberately-published throwaway key,
+# used only to exercise signature creation/validation in tests.
+false_secrets:
+  - /lib/src/signer_identity.dart
+resolution: workspace
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  archive: ^4.3.0
+  crypto: ^3.0.0
+  pdf_cos: ^11.0.0
+
+dev_dependencies:
+  lints: ^6.1.0

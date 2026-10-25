@@ -1,0 +1,651 @@
+import 'dart:typed_data';
+
+import 'package:pdf_cos/pdf_cos.dart';
+import 'package:pdf_document/pdf_document.dart';
+import 'package:pdf_graphics/pdf_graphics.dart';
+import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
+import 'package:test/test.dart';
+
+void main() {
+  late CosDocument cos;
+
+  setUp(() => cos = CosDocument.open(buildClassicPdf()));
+
+  CosDictionary exponential({List<double> c0 = const [1, 0, 0]}) =>
+      CosDictionary({
+        'FunctionType': const CosInteger(2),
+        'Domain': CosArray([const CosInteger(0), const CosInteger(1)]),
+        'C0': CosArray([for (final v in c0) CosReal(v)]),
+        'C1': CosArray([
+          const CosInteger(0),
+          const CosInteger(0),
+          const CosInteger(1),
+        ]),
+        'N': const CosInteger(1),
+      });
+
+  group('PdfFunction', () {
+    test('type 2 interpolates exponentially', () {
+      final fn = PdfFunction.parse(cos, exponential())!;
+      expect(fn.evaluate(0), [1, 0, 0]);
+      expect(fn.evaluate(1), [0, 0, 1]);
+      expect(fn.evaluate(0.5), [0.5, 0, 0.5]);
+    });
+
+    test('type 3 stitches subfunctions', () {
+      final fn = PdfFunction.parse(
+        cos,
+        CosDictionary({
+          'FunctionType': const CosInteger(3),
+          'Domain': CosArray([const CosInteger(0), const CosInteger(1)]),
+          'Functions': CosArray([
+            exponential(c0: const [0, 0, 0]),
+            exponential(c0: const [1, 1, 1]),
+          ]),
+          'Bounds': CosArray([const CosReal(0.5)]),
+          'Encode': CosArray([
+            const CosInteger(0),
+            const CosInteger(1),
+            const CosInteger(0),
+            const CosInteger(1),
+          ]),
+        }),
+      )!;
+      expect(fn.evaluate(0.25), [0, 0, 0.5]);
+      expect(fn.evaluate(0.75), [0.5, 0.5, 1]);
+    });
+
+    test('type 0 interpolates linearly between samples', () {
+      final fn = PdfFunction.parse(
+        cos,
+        CosStream(
+          CosDictionary({
+            'FunctionType': const CosInteger(0),
+            'Domain': CosArray([const CosInteger(0), const CosInteger(1)]),
+            'Range': CosArray([const CosInteger(0), const CosInteger(1)]),
+            'Size': CosArray([const CosInteger(2)]),
+            'BitsPerSample': const CosInteger(8),
+          }),
+          Uint8List.fromList([0, 255]),
+        ),
+      )!;
+      expect(fn.evaluate(0).single, 0);
+      expect(fn.evaluate(1).single, 1);
+      expect(fn.evaluate(0.5).single, closeTo(0.5, 1e-9));
+      expect(fn.evaluate(0.25).single, closeTo(0.25, 1e-9));
+    });
+
+    test('type 0 evaluates every input of a multi-dimensional sampler', () {
+      // A 2x2x2 identity tint transform: 3 inputs -> 3 outputs, sampled at
+      // the cube corners. This is the shape of devicen.pdf's transform, and
+      // regressed to black-on-non-first-input before multilinear support.
+      // Sample point (i0, i1, i2) with the first dimension varying fastest;
+      // the RGB value stored at each corner is the corner coordinate itself.
+      final samples = <int>[];
+      for (var i2 = 0; i2 < 2; i2++) {
+        for (var i1 = 0; i1 < 2; i1++) {
+          for (var i0 = 0; i0 < 2; i0++) {
+            samples.addAll([i0 * 255, i1 * 255, i2 * 255]);
+          }
+        }
+      }
+      final fn = PdfFunction.parse(
+        cos,
+        CosStream(
+          CosDictionary({
+            'FunctionType': const CosInteger(0),
+            'Domain': CosArray([
+              for (var i = 0; i < 3; i++) ...const [CosInteger(0), CosInteger(1)]
+            ]),
+            'Range': CosArray([
+              for (var i = 0; i < 3; i++) ...const [CosInteger(0), CosInteger(1)]
+            ]),
+            'Size': CosArray(
+                [const CosInteger(2), const CosInteger(2), const CosInteger(2)]),
+            'BitsPerSample': const CosInteger(8),
+          }),
+          Uint8List.fromList(samples),
+        ),
+      )!;
+
+      void expectClose(List<double> actual, List<double> expected) {
+        expect(actual.length, expected.length);
+        for (var i = 0; i < expected.length; i++) {
+          expect(actual[i], closeTo(expected[i], 1e-9));
+        }
+      }
+
+      // Red, green and blue must each survive - not just the first input.
+      expectClose(fn.evaluateAt([1, 0, 0]), [1, 0, 0]);
+      expectClose(fn.evaluateAt([0, 1, 0]), [0, 1, 0]);
+      expectClose(fn.evaluateAt([0, 0, 1]), [0, 0, 1]);
+      expectClose(fn.evaluateAt([1, 1, 0]), [1, 1, 0]);
+      // Interior point exercises the trilinear blend across all 8 corners.
+      expectClose(fn.evaluateAt([0.5, 0.25, 0.75]), [0.5, 0.25, 0.75]);
+    });
+
+    CosStream calculator(String program, {List<CosObject>? range}) =>
+        CosStream(
+          CosDictionary({
+            'FunctionType': const CosInteger(4),
+            'Domain': CosArray([const CosInteger(0), const CosInteger(1)]),
+            'Range': CosArray(range ??
+                [const CosInteger(0), const CosInteger(1)]),
+            'Length': CosInteger(program.length),
+          }),
+          ascii(program),
+        );
+
+    group('type 4 (PostScript calculator)', () {
+      test('arithmetic and stack operators', () {
+        final fn = PdfFunction.parse(
+            cos, calculator('{ dup 0.5 mul exch 2 exp add }'))!;
+        // x/2 + x^2
+        expect(fn.evaluate(0.5).single, closeTo(0.5, 1e-9));
+        expect(fn.evaluate(1).single, 1);
+      });
+
+      test('conditionals branch on comparison results', () {
+        final fn = PdfFunction.parse(
+            cos, calculator('{ 0.5 lt { 0 } { 1 } ifelse }'))!;
+        expect(fn.evaluate(0.25).single, 0);
+        expect(fn.evaluate(0.75).single, 1);
+      });
+
+      test('multiple outputs come off the stack in order', () {
+        // tint transform shape: one input to three components
+        final fn = PdfFunction.parse(
+          cos,
+          calculator('{ dup dup 0.5 mul }', range: [
+            const CosInteger(0),
+            const CosInteger(1),
+            const CosInteger(0),
+            const CosInteger(1),
+            const CosInteger(0),
+            const CosInteger(1),
+          ]),
+        )!;
+        expect(fn.evaluate(0.8), [
+          closeTo(0.8, 1e-9),
+          closeTo(0.8, 1e-9),
+          closeTo(0.4, 1e-9),
+        ]);
+      });
+
+      test('roll, index, and degree trigonometry', () {
+        // 1 2 3 with "3 1 roll" becomes 3 1 2; two pops leave the 3
+        final fn = PdfFunction.parse(
+            cos, calculator('{ pop 1 2 3 3 1 roll pop pop }', range: [
+          const CosInteger(0),
+          const CosInteger(10),
+        ]))!;
+        expect(fn.evaluate(0).single, 3);
+        final sine =
+            PdfFunction.parse(cos, calculator('{ pop 90 sin }'))!;
+        expect(sine.evaluate(0).single, closeTo(1, 1e-9));
+      });
+
+      test('atan calculator program renders the PDF.js polar color space', () {
+        const program =
+            '{ pop exch 360 mul dup sin exch cos atan 360 div sub abs '
+            '.1 exch sub dup 0 lt { pop 0 } if 10 mul sqrt 1 exch sub dup dup }';
+        final fn = PdfFunction.parse(
+          cos,
+          calculator(program, range: [
+            for (var i = 0; i < 3; i++) ...[
+              const CosInteger(0),
+              const CosInteger(1),
+            ],
+          ]),
+        )!;
+
+        expect(fn.evaluateAt([10 / 255, 250 / 255, 0]), [
+          for (var i = 0; i < 3; i++) closeTo(1, 1e-9),
+        ]);
+        expect(fn.evaluateAt([128 / 255, 128 / 255, 0]), [
+          for (var i = 0; i < 3; i++) closeTo(0, 1e-9),
+        ]);
+      });
+
+      test('outputs clamp to /Range', () {
+        final fn = PdfFunction.parse(cos, calculator('{ 4 mul }'))!;
+        expect(fn.evaluate(0.9).single, 1);
+      });
+
+      test('broken programs fall back to the range floor', () {
+        final fn =
+            PdfFunction.parse(cos, calculator('{ pop frobnicate }'))!;
+        expect(fn.evaluate(0.5).single, 0);
+      });
+
+      test('comments and nested procedures parse', () {
+        final fn = PdfFunction.parse(
+            cos,
+            calculator(
+                '{ % a comment\n true { 0.5 } if }'))!;
+        expect(fn.evaluate(0.1).single, 0.5);
+      });
+    });
+  });
+
+  group('PdfShading', () {
+    test('axial shading samples into gradient stops', () {
+      final shading = PdfShading.parse(
+        cos,
+        CosDictionary({
+          'ShadingType': const CosInteger(2),
+          'ColorSpace': const CosName('DeviceRGB'),
+          'Coords': CosArray([
+            const CosInteger(0),
+            const CosInteger(0),
+            const CosInteger(100),
+            const CosInteger(0),
+          ]),
+          'Function': exponential(),
+        }),
+      )!;
+      final gradient = shading.toGradient(PdfMatrix.identity)!;
+      expect(gradient.isRadial, isFalse);
+      expect(gradient.colors.first, const PdfColor(1, 0, 0));
+      expect(gradient.colors.last, const PdfColor(0, 0, 1));
+      expect(gradient.stops.first, 0);
+      expect(gradient.stops.last, 1);
+    });
+
+    test('mesh shading types return no gradient', () {
+      final shading = PdfShading.parse(
+        cos,
+        CosDictionary({
+          'ShadingType': const CosInteger(4),
+          'ColorSpace': const CosName('DeviceRGB'),
+        }),
+      )!;
+      expect(shading.toGradient(PdfMatrix.identity), isNull);
+    });
+
+    PdfShading radial(List<num> coords, {List<bool>? extend}) => PdfShading.parse(
+          cos,
+          CosDictionary({
+            'ShadingType': const CosInteger(3),
+            'ColorSpace': const CosName('DeviceRGB'),
+            'Coords': CosArray([for (final v in coords) CosReal(v.toDouble())]),
+            'Function': exponential(),
+            if (extend != null)
+              'Extend': CosArray([for (final e in extend) CosBoolean(e)]),
+          }),
+        )!;
+
+    test('nested radial circles sample into a radial gradient', () {
+      // circle 0 sits inside circle 1 (concentric-ish): a clean two-point
+      // conical gradient the device renders directly.
+      final shading = radial([50, 50, 10, 55, 50, 60]);
+      final gradient = shading.toGradient(PdfMatrix.identity)!;
+      expect(gradient.isRadial, isTrue);
+      expect(shading.toRadialConeMesh(PdfMatrix.identity), isNull);
+    });
+
+    test('non-nested radial circles decode into a cone mesh, not a gradient',
+        () {
+      // r0=0 point outside the r1=60 circle (d=90): the swept cone case that
+      // a device radial gradient can't express.
+      final shading = radial([521, 289, 0, 431, 289, 60], extend: [false, true]);
+      expect(shading.toGradient(PdfMatrix.identity), isNull);
+
+      final mesh = shading.toRadialConeMesh(
+        PdfMatrix.identity,
+        clip: const PdfRect(0, 0, 595, 842),
+      )!;
+      expect(mesh.vertices, isNotEmpty);
+      expect(mesh.triangles.length % 3, 0);
+
+      // Every vertex lies on some swept circle centred between the two
+      // endpoints, so the whole mesh stays within the union of those circles'
+      // bounding span - never on the far (empty) side of the point.
+      for (final v in mesh.vertices) {
+        expect(v.x, lessThanOrEqualTo(521 + 1e-6));
+      }
+      // The colour field spans the function: red (s→0, at the point) through
+      // to blue (s→1, the large circle).
+      final reds = mesh.vertices.where((v) => v.color.red > 0.9);
+      final blues = mesh.vertices.where((v) => v.color.blue > 0.9);
+      expect(reds, isNotEmpty);
+      expect(blues, isNotEmpty);
+    });
+
+    test('an unextended radial end stops the sweep at its circle', () {
+      // extend [true false]: the sweep must not run past s=1 (the large
+      // circle), so no vertex sits beyond it on the growing side.
+      final shading =
+          radial([521, 289, 0, 431, 289, 60], extend: [true, false]);
+      final mesh = shading.toRadialConeMesh(
+        PdfMatrix.identity,
+        clip: const PdfRect(0, 0, 595, 842),
+      )!;
+      // s ≤ 1 keeps radii ≤ 60 and centres between the endpoints: the left
+      // edge can reach at most x1 - r1 = 431 - 60 = 371.
+      for (final v in mesh.vertices) {
+        expect(v.x, greaterThanOrEqualTo(371 - 1e-6));
+      }
+    });
+  });
+
+  group('mesh shadings', () {
+    CosStream meshStream(int type, List<int> bytes,
+        {Map<String, CosObject> extra = const {}}) {
+      return CosStream(
+        CosDictionary({
+          'ShadingType': CosInteger(type),
+          'ColorSpace': const CosName('DeviceRGB'),
+          'BitsPerCoordinate': const CosInteger(8),
+          'BitsPerComponent': const CosInteger(8),
+          'BitsPerFlag': const CosInteger(8),
+          'Decode': CosArray([
+            const CosInteger(0), const CosInteger(255), // x
+            const CosInteger(0), const CosInteger(255), // y
+            const CosInteger(0), const CosInteger(1), // r
+            const CosInteger(0), const CosInteger(1), // g
+            const CosInteger(0), const CosInteger(1), // b
+          ]),
+          'Length': CosInteger(bytes.length),
+          ...extra,
+        }),
+        Uint8List.fromList(bytes),
+      );
+    }
+
+    test('type 4 free-form triangles decode with edge flags', () {
+      // triangle (0,0) red, (100,0) green, (0,100) blue, then a strip
+      // continuation (flag 1) adding (100,100) white
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(4, [
+            0, 0, 0, 255, 0, 0, //
+            0, 100, 0, 0, 255, 0,
+            0, 0, 100, 0, 0, 255,
+            1, 100, 100, 255, 255, 255,
+          ]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.vertices, hasLength(4));
+      expect(mesh.triangles, [0, 1, 2, 1, 2, 3]);
+      expect(mesh.vertices[0].color, const PdfColor(1, 0, 0));
+      expect(mesh.vertices[3].x, 100);
+      expect(mesh.vertices[3].y, 100);
+      expect(mesh.vertices[3].color, const PdfColor(1, 1, 1));
+    });
+
+    test('type 4 applies the supplied transform', () {
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(4, [
+            0, 0, 0, 255, 0, 0, //
+            0, 100, 0, 0, 255, 0,
+            0, 0, 100, 0, 0, 255,
+          ]))!;
+      final mesh =
+          shading.toMesh(const PdfMatrix(2, 0, 0, 2, 10, 20))!;
+      expect(mesh.vertices[1].x, 210);
+      expect(mesh.vertices[2].y, 220);
+    });
+
+    test('type 5 lattices triangulate between rows', () {
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(5, [
+            0, 0, 255, 0, 0, //
+            100, 0, 0, 255, 0,
+            0, 100, 0, 0, 255,
+            100, 100, 255, 255, 255,
+          ], extra: {
+            'VerticesPerRow': const CosInteger(2),
+          }))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.vertices, hasLength(4));
+      expect(mesh.triangles, hasLength(6)); // two triangles
+    });
+
+    test('type 4 colors map through /Function', () {
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(4, [
+            0, 0, 0, 0, //
+            0, 100, 0, 128,
+            0, 0, 100, 255,
+          ], extra: {
+            // t in [0,1] -> (t, 0, 1-t)
+            'Decode': CosArray([
+              const CosInteger(0), const CosInteger(255),
+              const CosInteger(0), const CosInteger(255),
+              const CosInteger(0), const CosInteger(1),
+            ]),
+            'Function': CosStream(
+              CosDictionary({
+                'FunctionType': const CosInteger(4),
+                'Domain': CosArray(
+                    [const CosInteger(0), const CosInteger(1)]),
+                'Range': CosArray([
+                  const CosInteger(0), const CosInteger(1), //
+                  const CosInteger(0), const CosInteger(1),
+                  const CosInteger(0), const CosInteger(1),
+                ]),
+              }),
+              ascii('{ dup 0 exch 1 exch sub }'),
+            ),
+          }))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.vertices[0].color.red, closeTo(0, 1e-6));
+      expect(mesh.vertices[0].color.blue, closeTo(1, 1e-6));
+      expect(mesh.vertices[2].color.red, closeTo(1, 1e-6));
+      expect(mesh.vertices[2].color.blue, closeTo(0, 1e-6));
+    });
+
+    test('type 6 Coons patches tessellate with corner colors', () {
+      // a flat unit-square-like patch (0,0)-(90,0)-(90,90)-(0,90); all
+      // boundary control points sit on the edges
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(6, [
+            0, // new patch
+            0, 0, 0, 30, 0, 60, 0, 90, // left edge p11..p14 (x,y pairs)
+            30, 90, 60, 90, 90, 90, // to p44
+            90, 60, 90, 30, 90, 0, // down to p41
+            60, 0, 30, 0, // back toward p11
+            255, 0, 0, // c1 red
+            0, 255, 0, // c2 green
+            0, 0, 255, // c3 blue
+            255, 255, 255, // c4 white
+          ]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      // 9x9 vertex grid, 8x8 cells, 2 triangles each
+      expect(mesh.vertices, hasLength(81));
+      expect(mesh.triangles, hasLength(128 * 3));
+      expect(mesh.vertices.first.color, const PdfColor(1, 0, 0));
+      expect(mesh.vertices.last.color, const PdfColor(0, 0, 1));
+      // geometry spans the patch
+      final xs = mesh.vertices.map((v) => v.x);
+      expect(xs.reduce((a, b) => a < b ? a : b), closeTo(0, 1e-6));
+      expect(xs.reduce((a, b) => a > b ? a : b), closeTo(90, 1e-6));
+    });
+
+    test('type 6 edge flags share the previous patch edge', () {
+      final patch1 = [
+        0,
+        0, 0, 0, 30, 0, 60, 0, 90, //
+        30, 90, 60, 90, 90, 90,
+        90, 60, 90, 30, 90, 0,
+        60, 0, 30, 0,
+        255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255,
+      ];
+      final patch2 = [
+        2, // share edge p44..p41 (the x=90 edge)
+        120, 90, 150, 90, 180, 90, // continues to the right
+        180, 60, 180, 30, 180, 0,
+        150, 0, 120, 0,
+        255, 0, 0, // new c3
+        0, 255, 0, // new c4
+      ];
+      final shading =
+          PdfShading.parse(cos, meshStream(6, [...patch1, ...patch2]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.vertices, hasLength(162)); // two tessellated patches
+      final xs = mesh.vertices.map((v) => v.x);
+      expect(xs.reduce((a, b) => a > b ? a : b), closeTo(180, 1e-6));
+    });
+
+    test('a small flat patch subdivides far less than 8 (#536)', () {
+      // A 6x6-unit patch whose four corners are the same colour: nothing to
+      // resolve geometrically or chromatically, so it collapses toward one
+      // cell instead of 128 triangles.
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(6, [
+            0,
+            0, 0, 0, 2, 0, 4, 0, 6, //
+            2, 6, 4, 6, 6, 6, //
+            6, 4, 6, 2, 6, 0, //
+            4, 0, 2, 0, //
+            128, 128, 128, // c1
+            128, 128, 128, // c2
+            128, 128, 128, // c3
+            128, 128, 128, // c4
+          ]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      // n == 1: a 2x2 vertex grid, one cell, two triangles.
+      expect(mesh.vertices, hasLength(4));
+      expect(mesh.triangles, hasLength(2 * 3));
+    });
+
+    test('a large flat patch still tessellates finely for geometry (#536)', () {
+      // Same flat colour but a big patch: the size metric keeps the division
+      // count high so a curved surface is not under-tessellated - the
+      // fidelity guard. Corners span 90 units -> 8 cells.
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(6, [
+            0,
+            0, 0, 0, 30, 0, 60, 0, 90, //
+            30, 90, 60, 90, 90, 90, //
+            90, 60, 90, 30, 90, 0, //
+            60, 0, 30, 0, //
+            200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200,
+          ]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.triangles, hasLength(128 * 3),
+          reason: 'large patch keeps the full division count');
+    });
+
+    test('a small patch with a hard colour transition stays subdivided (#536)',
+        () {
+      // Tiny but full-range corner colours: the colour metric alone keeps the
+      // count high so the gradient is not banded.
+      final shading = PdfShading.parse(
+          cos,
+          meshStream(6, [
+            0,
+            0, 0, 0, 2, 0, 4, 0, 6, //
+            2, 6, 4, 6, 6, 6, //
+            6, 4, 6, 2, 6, 0, //
+            4, 0, 2, 0, //
+            255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255,
+          ]))!;
+      final mesh = shading.toMesh(PdfMatrix.identity)!;
+      expect(mesh.triangles, hasLength(128 * 3),
+          reason: 'a full-range colour transition needs the full count');
+    });
+
+    test('non-mesh types return no mesh', () {
+      final shading = PdfShading.parse(
+        cos,
+        CosDictionary({
+          'ShadingType': const CosInteger(2),
+          'ColorSpace': const CosName('DeviceRGB'),
+        }),
+      )!;
+      expect(shading.toMesh(PdfMatrix.identity), isNull);
+    });
+
+    test('type 1 samples its 2-input function into a grid mesh', () {
+      // color = (x, x, x): pop y, duplicate x twice
+      const program = '{ pop dup dup }';
+      final shading = PdfShading.parse(
+        cos,
+        CosDictionary({
+          'ShadingType': const CosInteger(1),
+          'ColorSpace': const CosName('DeviceRGB'),
+          'Domain': CosArray([
+            const CosInteger(0),
+            const CosInteger(1),
+            const CosInteger(0),
+            const CosInteger(1),
+          ]),
+          // domain space → target space: scale 2, translate (5, 5)
+          'Matrix': CosArray([
+            const CosInteger(2),
+            const CosInteger(0),
+            const CosInteger(0),
+            const CosInteger(2),
+            const CosInteger(5),
+            const CosInteger(5),
+          ]),
+          'Function': CosStream(
+            CosDictionary({
+              'FunctionType': const CosInteger(4),
+              'Domain': CosArray([
+                const CosInteger(0),
+                const CosInteger(1),
+                const CosInteger(0),
+                const CosInteger(1),
+              ]),
+              'Range': CosArray([
+                for (var i = 0; i < 3; i++) ...[
+                  const CosInteger(0),
+                  const CosInteger(1),
+                ],
+              ]),
+              'Length': CosInteger(program.length),
+            }),
+            ascii(program),
+          ),
+        }),
+      )!;
+      final mesh = shading.toFunctionMesh(PdfMatrix.identity)!;
+      // 24×24 cells, 25×25 vertices, two triangles per cell
+      expect(mesh.vertices, hasLength(25 * 25));
+      expect(mesh.triangles, hasLength(24 * 24 * 2 * 3));
+      final first = mesh.vertices.first; // domain (0,0)
+      expect(first.x, 5);
+      expect(first.y, 5);
+      expect(first.color, const PdfColor(0, 0, 0));
+      final last = mesh.vertices.last; // domain (1,1)
+      expect(last.x, 7);
+      expect(last.y, 7);
+      expect(last.color, const PdfColor(1, 1, 1));
+      // other types stay on their own decode paths
+      expect(shading.toGradient(PdfMatrix.identity), isNull);
+      expect(shading.toMesh(PdfMatrix.identity), isNull);
+    });
+
+    test('calculator functions clamp each input to its own domain pair', () {
+      const program = '{ add 2 div }';
+      final fn = PdfFunction.parse(
+        cos,
+        CosStream(
+          CosDictionary({
+            'FunctionType': const CosInteger(4),
+            'Domain': CosArray([
+              const CosInteger(0),
+              const CosInteger(1),
+              const CosInteger(0),
+              const CosInteger(1),
+            ]),
+            'Range': CosArray([const CosInteger(0), const CosInteger(1)]),
+            'Length': CosInteger(program.length),
+          }),
+          ascii(program),
+        ),
+      )!;
+      expect(fn.evaluateAt([0.2, 0.6]).single, closeTo(0.4, 1e-9));
+      // out-of-domain inputs clamp per pair
+      expect(fn.evaluateAt([-1, 2]).single, closeTo(0.5, 1e-9));
+    });
+  });
+}

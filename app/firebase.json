@@ -1,0 +1,142 @@
+{
+  "hosting": {
+    "site": "tesonepdf-dart-pdf",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "comment": "Cache busting: run `tool/web_cache_bust.sh` after every Flutter web build. It appends ?v=<content-hash> to stable Flutter entrypoint URLs, deferred JS parts, the PDF render worker, and bundled fonts. Those content-addressed URLs can be cached for a year, while the bootstrap/manifests/root documents below are always revalidated so the next page load discovers the new hashes.",
+        "source": "**/*.@(eot|otf|ttf|ttc|woff|woff2|font.css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "**/@(AssetManifest*|FontManifest.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(jpg|jpeg|gif|png|svg|webp|ico)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(wasm|mjs)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=31536000"
+          }
+        ]
+      },
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/manifest.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/version.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/flutter_bootstrap.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/flutter_service_worker.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/flutter.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "comment": "Cross-origin isolation: enables SharedArrayBuffer, which skwasm's multithreaded renderer uses (without it, --wasm falls back to single-threaded skwasm_heavy) and which lets the in-browser OCR (ocr_web.dart, onnxruntime-web) run multithreaded. COEP is `credentialless`, not `require-corp`: both isolate the page (crossOriginIsolated === true on Chromium/Firefox), but `require-corp` ALSO demands every cross-origin subresource send a CORP header, and the OCR loads onnxruntime-web's script and WASM from jsDelivr, which doesn't. `credentialless` loads cross-origin resources without credentials instead of requiring CORP, so that fetch works while the page keeps its isolation. The OCR models themselves are same-origin (ocr/pp-ocrv5-mobile/, put in the build by tool/fetch_ocr_models.sh). Safari has no credentialless support, so it just isn't cross-origin isolated there (single-threaded skwasm_heavy + single-threaded OCR) - an acceptable fallback. The Flutter shell + skwasm assets are same-origin; PDFs come from the local file picker (not fetched).",
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "Cross-Origin-Embedder-Policy",
+            "value": "credentialless"
+          }
+        ]
+      }
+    ]
+  }
+}

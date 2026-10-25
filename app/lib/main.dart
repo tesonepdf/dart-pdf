@@ -1,0 +1,182 @@
+import 'dart:async';
+
+// The perf_log entry, NOT the package entry: main.dart runs before the
+// deferred app.dart loading unit (the splash), and importing the entry here
+// would drag the whole editor stack into the initial web download that the
+// deferred split exists to keep small.
+import 'package:dart_pdf_editor/perf_log.dart';
+import 'package:material_ui/material_ui.dart';
+
+import 'l10n/app_delegates.dart';
+import 'l10n/app_localizations.dart';
+
+import 'app.dart' deferred as app;
+import 'app_info.dart' deferred as app_info;
+import 'window_support.dart';
+import 'windows_file_dialogs.dart';
+
+/// The git commit this build was compiled from, or `unknown` for a build that
+/// did not pass one. Supplied by the build scripts as
+/// `--dart-define=PDF_BUILD_COMMIT=$(git rev-parse --short HEAD)`; a plain
+/// `flutter run` leaves it unset, which is honest rather than misleading.
+const kBuildCommit =
+    String.fromEnvironment('PDF_BUILD_COMMIT', defaultValue: 'unknown');
+
+/// On Windows and Linux the OS launches the app with the opened file as a
+/// command-line argument; the Flutter runner forwards it here.
+Future<void> main(List<String> args) async {
+  // This must run before binding initialization: WidgetsFlutterBinding picks
+  // its windowing owner in its constructor.
+  enableDartPdfWindowing();
+
+  // PackageInfo (loaded below) needs the binding; ensure it before awaiting.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Windows only, and after the Dart plugin registrant has run so this wins:
+  // the stock file_selector plugin dereferences a Flutter view the runner
+  // never creates, so opening or saving a document would crash the process.
+  WindowsFileDialogs.installIfNeeded();
+
+  // Diagnostics: turn on the in-app performance trace (interpret times,
+  // render-hold/scheduler transitions, prerender warms, and frame JANK,
+  // streamed to the browser console) without a rebuild by opening the app
+  // with `?perf=1`. Off otherwise - it's verbose and adds per-line print
+  // overhead. `Uri.base` carries the page URL on web (and is harmless on
+  // native, where there's no query string), so no `package:web` import.
+  // Stamp the build unconditionally, so it is already set whichever way the
+  // trace is later turned on - `?perf=1` here, or the devtools toggle, which
+  // is how a trace is usually captured on a device. Setting it does nothing on
+  // its own; PdfPerfLog emits it as the first line only once logging is on.
+  PdfPerfLog.buildTag = 'commit=$kBuildCommit';
+  if (Uri.base.queryParameters['perf'] == '1') {
+    PdfPerfLog.enabled = true;
+  }
+
+  runDartPdfApp(_DeferredApp(launchArgs: args));
+
+  // Do not block first paint or the initial loading unit on package metadata.
+  // The About box refreshes from this best-effort value after the shell is
+  // already on screen.
+  unawaited(_loadAppInfo());
+}
+
+Future<void> _loadAppInfo() async {
+  try {
+    await app_info.loadLibrary();
+    await app_info.AppInfo.load();
+  } catch (_) {
+    // Keep the fallback; the About box is non-critical.
+  }
+}
+
+class _DeferredApp extends StatefulWidget {
+  const _DeferredApp({required this.launchArgs});
+
+  final List<String> launchArgs;
+
+  @override
+  State<_DeferredApp> createState() => _DeferredAppState();
+}
+
+class _DeferredAppState extends State<_DeferredApp> {
+  Object? _error;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      await app.loadLibrary();
+      if (mounted) setState(() => _loaded = true);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loaded) {
+      return app.DartPdfEditorApp(launchArgs: widget.launchArgs);
+    }
+    return MaterialApp(
+      title: 'DartPDF',
+      localizationsDelegates: appLocalizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      darkTheme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
+      home: Scaffold(
+        body: Center(
+          child: _error == null
+              ? const _StartupIndicator()
+              : _StartupError(error: _error!),
+        ),
+      ),
+    );
+  }
+}
+
+class _StartupIndicator extends StatelessWidget {
+  const _StartupIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.picture_as_pdf_outlined, size: 56, color: colors.primary),
+        const SizedBox(height: 24),
+        const SizedBox(
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Loading DartPDF…',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, size: 48, color: colors.error),
+          const SizedBox(height: 16),
+          Text(
+            'DartPDF failed to load',
+            style: Theme.of(context).textTheme.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$error',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
