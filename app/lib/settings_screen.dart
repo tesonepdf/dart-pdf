@@ -303,8 +303,12 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 Text(appL10n(context).settingsAbout,
                     style: theme.textTheme.titleSmall),
                 const SizedBox(height: 4),
-                Text('${AppInfo.displayName} ${AppInfo.displayVersion}',
-                    style: theme.textTheme.bodyMedium),
+                Text(
+                  AppInfo.buildNumber.isEmpty
+                      ? '${AppInfo.displayName} ${AppInfo.displayVersion}'
+                      : '${AppInfo.displayName} ${AppInfo.displayVersion} #${AppInfo.buildNumber}',
+                  style: theme.textTheme.bodyMedium,
+                ),
                 Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
                 const SizedBox(height: 4),
                 TextButton.icon(
