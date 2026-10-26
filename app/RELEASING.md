@@ -122,10 +122,10 @@ Windows** — where swapping a running, unsigned bundle is fragile — the
 artifact is downloaded and handed to the OS installer (the `.dmg` mounts, the
 `.exe` runs). The `build.yml` workflow also updates the rolling
 `app-android-latest` prerelease after successful APK builds. Sideloaded Android
-installs check that release on startup, select the APK matching the device ABI,
-and hand the verified download to Android's package installer. Android still
-requires the user to confirm installation and may ask them to allow installs
-from DartPDF. iOS, a Linux tarball install, and a release with no matching
+installs check that release on startup and offer the universal
+`DartPDF-Android.apk`; the user can choose whether to download it. Android's
+package installer still requires the user to confirm installation and may ask
+them to allow installs from DartPDF. iOS, a Linux tarball install, and a release with no matching
 artifact fall back to the browser download. Stable app Releases must keep the
 **`app-v<version>` tag** and the artifact file names CI produces
 (`dartpdf-macos.dmg`, `dartpdf-windows-portable.exe` /
@@ -136,9 +136,22 @@ repo's pub-package releases, are ignored. The one exception is the exact
 rolling tag `app-nightly`, recognized on Windows and macOS only after the user
 enables nightly updates; it must provide the source markers and the
 `dartpdf-nightly-windows-installer.exe`/ZIP and `dartpdf-nightly-macos.dmg`
-assets documented above. The Android rolling prerelease must include
-`app-arm64-v8a.apk`, `app-armeabi-v7a.apk`, and `app-x86_64.apk`, plus the
-`main-sha` and `app-version` markers in its notes. Publish
+assets documented above. The Android rolling prerelease must include only the
+universal `DartPDF-Android.apk`, plus `main-sha`, `app-version`, and `app-build`
+markers in its notes. The build number equals the commit count and is included
+in the displayed version. To refresh the local archive after a release, run
+`powershell -ExecutionPolicy Bypass -File .\tool\sync-local-builds.ps1` from the
+repository root. It stores one APK per build in `apk\android` and one portable
+Windows ZIP per build in `apk\windows`, retaining the four newest published
+builds in each folder. Cloud Actions cannot write directly to the local PC, so
+run the script after a build finishes.
+
+Android releases require the same permanent signing keystore on every build.
+Configure `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and
+`KEY_PASSWORD` as repository Actions secrets. The workflow fails before
+publishing Android updates when any secret is missing. An APK installed with a
+different signing key must be backed up and reinstalled before it can receive
+updates signed by the new key. Publish
 stable draft Releases so the GitHub `/releases` API exposes them (drafts
 aren't visible unauthenticated). Flatpak and Snap installations skip the
 GitHub checker and update through their package repositories. The web build is

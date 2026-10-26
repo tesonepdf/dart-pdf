@@ -89,4 +89,5 @@ password.txt
 *.jks
 key.properties
 _apk/
+/apk/
 .tools/flutter/

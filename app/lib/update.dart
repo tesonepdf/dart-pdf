@@ -104,6 +104,7 @@ class ReleaseInfo {
     this.isNightly = false,
     this.isAndroidUpdate = false,
     this.commitSha,
+    this.buildNumber,
   });
 
   final AppVersion version;
@@ -129,9 +130,16 @@ class ReleaseInfo {
   /// Source commit recorded by a rolling release workflow, when present.
   final String? commitSha;
 
+  /// CI build number recorded by a rolling release workflow, when present.
+  final String? buildNumber;
+
   /// Human-readable build label for update banners and buttons.
   String get displayVersion {
-    if (!isNightly) return version.toString();
+    final base = isNightly ? _nightlyDisplayVersion() : version.toString();
+    return buildNumber == null ? base : '$base #$buildNumber';
+  }
+
+  String _nightlyDisplayVersion() {
     final sha = commitSha;
     final shortSha = sha?.substring(0, sha.length < 7 ? sha.length : 7);
     return shortSha == null || shortSha.isEmpty
@@ -149,6 +157,7 @@ class ReleaseInfo {
       RegExp(r'<!-- main-sha: ([0-9a-fA-F]{7,40}) -->');
   static final _versionMarker =
       RegExp(r'<!-- app-version: ([0-9A-Za-z.+-]+) -->');
+  static final _buildMarker = RegExp(r'<!-- app-build: (\d+) -->');
 
   /// Builds a release from one element of the GitHub `/releases` array,
   /// returning null when the tag isn't a parseable version (so non-app tags
@@ -194,6 +203,7 @@ class ReleaseInfo {
       isNightly: isNightly,
       isAndroidUpdate: isAndroidUpdate,
       commitSha: commitSha,
+      buildNumber: _buildMarker.firstMatch(notes)?.group(1),
     );
   }
 }
@@ -558,6 +568,7 @@ class UpdateService extends ChangeNotifier {
       'x86_64': 'app-x86_64.apk',
     };
     return [
+      'DartPDF-Android.apk',
       for (final abi in _androidAbis)
         if (namesByAbi[abi] case final name?) name,
     ];

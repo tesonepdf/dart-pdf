@@ -1,33 +1,56 @@
 name: Build APK e Windows
 
-# Parte a ogni push su main e anche a mano dalla scheda "Actions".
-# Produce APK Android separati per architettura e windows-x64.zip (Windows,
-# portatile), pubblica la build numerata e aggiorna il prerelease Android
-# rolling. Se nei Secrets ci sono KEYSTORE_BASE64,
-# KEYSTORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD l'APK e' firmato con la tua chiave.
+run-name: ${{ github.event.head_commit.message }}
+
+# Parte a ogni push su main.
+# Produce un APK Android universale e windows-x64.zip (Windows, portatile),
+# pubblica la build numerata e aggiorna il prerelease Android rolling.
+# La firma Android permanente richiede i quattro Secrets documentati in
+# app/RELEASING.md.
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: build
-  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: '3.47.7'
 
 jobs:
-  apk:
+  version:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     outputs:
       version: ${{ steps.app-version.outputs.version }}
       number: ${{ steps.app-version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Calcola versione e numero build
+        id: app-version
+        run: |
+          commit_epoch="$(git log -1 --format=%ct HEAD)"
+          read -r year day hour minute < <(
+            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %-j %-H %-M'
+          )
+          version="$((year - 2020)).${day}.${hour}${minute}"
+          number="$(git rev-list --count HEAD)"
+          echo "VERSIONE=${version}" >> "$GITHUB_ENV"
+          echo "NUMERO=${number}" >> "$GITHUB_ENV"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+  apk:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+      number: ${{ needs.version.outputs.number }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,6 +69,11 @@ jobs:
           cache: true
 
       - run: flutter pub get
+
+      - name: Imposta versione e numero build
+        run: |
+          echo "VERSIONE=${{ needs.version.outputs.version }}" >> "$GITHUB_ENV"
+          echo "NUMERO=${{ needs.version.outputs.number }}" >> "$GITHUB_ENV"
 
       # Copiato dal flusso originale del progetto: sistema alcuni plugin
       # Android che altrimenti non compilano.
@@ -111,63 +139,47 @@ jobs:
             echo "No CargoKit Gradle plugin found; skipping patch."
           fi
 
-      - name: Prepara la firma (se ci sono i Secrets)
+      - name: Prepara la firma Android permanente
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Nessuna chiave nei Secrets: uso la chiave di prova."
-            exit 0
+          if [[ -z "$KEYSTORE_BASE64" || -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "::error::Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in repository Actions secrets."
+            exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > app/android/app/release.jks
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=release.jks\n' \
             "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > app/android/key.properties
           echo "Chiave di firma pronta."
 
-      - name: Calcola versione e numero build
-        id: app-version
-        run: |
-          commit_epoch="$(git log -1 --format=%ct HEAD)"
-          read -r year day hour minute < <(
-            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %-j %-H %-M'
-          )
-          version="$((year - 2020)).${day}.${hour}${minute}"
-          number="$(git rev-list --count HEAD)"
-          echo "VERSIONE=${version}" >> "$GITHUB_ENV"
-          echo "NUMERO=${number}" >> "$GITHUB_ENV"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "number=${number}" >> "$GITHUB_OUTPUT"
-
       - name: Compila l'APK
         working-directory: app
         run: |
-          flutter build apk --release --split-per-abi \
+          flutter build apk --release \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
             --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA"
 
       - name: Controllo che lo scanner funzioni dopo la riduzione del codice
         run: |
-          shopt -s nullglob
-          apks=(app/build/app/outputs/flutter-apk/app-*-release.apk)
-          if [[ ${#apks[@]} -ne 3 ]]; then
-            echo "Expected three per-ABI APKs, found ${#apks[@]}."
+          apk="app/build/app/outputs/flutter-apk/app-release.apk"
+          if [[ ! -f "$apk" ]]; then
+            echo "Universal APK not found: $apk"
             exit 1
           fi
-          for apk in "${apks[@]}"; do
-            python3 tool/check_android_scanner.py "$apk"
-          done
+          python3 tool/check_android_scanner.py "$apk"
 
       - uses: actions/upload-artifact@v7
         with:
           name: apk
-          path: app/build/app/outputs/flutter-apk/app-*-release.apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 
   windows:
+    needs: version
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -187,9 +199,7 @@ jobs:
         working-directory: app
         shell: pwsh
         run: |
-          $versionLine = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value
-          $buildName = $versionLine.Split('+')[0]
-          flutter build windows --release --build-name="$buildName" --build-number="${{ github.run_number }}"
+          flutter build windows --release --build-name="${{ needs.version.outputs.version }}" --build-number="${{ needs.version.outputs.number }}"
           if ($LASTEXITCODE -ne 0) { throw "flutter build windows non riuscito ($LASTEXITCODE)" }
 
       - name: Crea lo zip portatile
@@ -210,7 +220,7 @@ jobs:
           retention-days: 7
 
   release:
-    needs: [apk, windows]
+    needs: [apk, windows, version]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -232,39 +242,62 @@ jobs:
       - name: Pubblica la Release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSIONE: ${{ needs.apk.outputs.version }}
-          NUMERO: ${{ needs.apk.outputs.number }}
+          VERSIONE: ${{ needs.version.outputs.version }}
+          NUMERO: ${{ needs.version.outputs.number }}
         run: |
-          cp dl/apk/app-arm64-v8a-release.apk app-arm64-v8a.apk
-          cp dl/apk/app-armeabi-v7a-release.apk app-armeabi-v7a.apk
-          cp dl/apk/app-x86_64-release.apk app-x86_64.apk
+          cp dl/apk/app-release.apk DartPDF-Android.apk
           cp dl/windows/windows-x64.zip windows-x64.zip
-          gh release create "build-${GITHUB_RUN_NUMBER}" \
-            app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk windows-x64.zip \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Build #${NUMERO} - versione ${VERSIONE}" \
-            --notes "Commit ${GITHUB_SHA}" \
-            --latest
-
-          app_version="$VERSIONE"
-          android_tag="app-android-latest"
-          android_notes="$(printf 'Aggiornamento Android automatico.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->' "$GITHUB_SHA" "$app_version")"
-
-          if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$android_tag" \
-              app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk \
+          build_tag="build-${NUMERO}"
+          build_title="Build #${NUMERO} - versione ${VERSIONE}"
+          build_notes="Commit ${GITHUB_SHA}"
+          if gh release view "$build_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$build_tag" \
+              DartPDF-Android.apk windows-x64.zip \
               --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$android_tag" \
+            gh release edit "$build_tag" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "DartPDF Android latest" \
-              --notes "$android_notes"
+              --title "$build_title" \
+              --notes "$build_notes"
           else
-            gh release create "$android_tag" \
-              app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk \
+            gh release create "$build_tag" \
+              DartPDF-Android.apk windows-x64.zip \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "DartPDF Android latest" \
-              --notes "$android_notes" \
-              --prerelease
+              --title "$build_title" \
+              --notes "$build_notes" \
+              --latest
+          fi
+
+          latest_main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$latest_main_sha" == "$GITHUB_SHA" ]]; then
+            android_tag="app-android-latest"
+            android_notes="$(printf 'Nuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+
+            if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$android_tag" \
+                DartPDF-Android.apk \
+                --repo "$GITHUB_REPOSITORY" --clobber
+              android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
+              old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
+                --jq '.[] | select(.name != "DartPDF-Android.apk") | .id')"
+              if [[ -n "$old_asset_ids" ]]; then
+                while IFS= read -r asset_id; do
+                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+                done <<< "$old_asset_ids"
+              fi
+              gh release edit "$android_tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "DartPDF Android latest" \
+                --notes "$android_notes"
+            else
+              gh release create "$android_tag" \
+                DartPDF-Android.apk \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --title "DartPDF Android latest" \
+                --notes "$android_notes" \
+                --prerelease
+            fi
+          else
+            echo "Main advanced to $latest_main_sha; keeping this build release without moving the rolling Android tag."
           fi
