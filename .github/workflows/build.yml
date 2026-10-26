@@ -1,7 +1,7 @@
 name: Build APK e Windows
 
 # Parte a ogni push su main e anche a mano dalla scheda "Actions".
-# Produce: app.apk (Android) e windows-x64.zip (Windows, portatile),
+# Produce APK Android separati per architettura e windows-x64.zip (Windows, portatile),
 # pubblicati come Release del repo. Se nei Secrets ci sono KEYSTORE_BASE64,
 # KEYSTORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD l'APK e' firmato con la tua chiave.
 
@@ -127,15 +127,24 @@ jobs:
         run: |
           # numero di build crescente (minuti dal 1970): Android accetta
           # l'installazione sopra la versione precedente solo se il numero sale
-          flutter build apk --release --build-number=$(( $(date +%s) / 60 ))
+          flutter build apk --release --split-per-abi --build-number=$(( $(date +%s) / 60 ))
 
       - name: Controllo che lo scanner funzioni dopo la riduzione del codice
-        run: python3 tool/check_android_scanner.py app/build/app/outputs/flutter-apk/app-release.apk
+        run: |
+          shopt -s nullglob
+          apks=(app/build/app/outputs/flutter-apk/app-*-release.apk)
+          if [[ ${#apks[@]} -ne 3 ]]; then
+            echo "Expected three per-ABI APKs, found ${#apks[@]}."
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            python3 tool/check_android_scanner.py "$apk"
+          done
 
       - uses: actions/upload-artifact@v7
         with:
           name: apk
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          path: app/build/app/outputs/flutter-apk/app-*-release.apk
           retention-days: 7
 
   windows:
@@ -200,9 +209,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp dl/apk/app-release.apk app.apk
+          cp dl/apk/app-arm64-v8a-release.apk app-arm64-v8a.apk
+          cp dl/apk/app-armeabi-v7a-release.apk app-armeabi-v7a.apk
+          cp dl/apk/app-x86_64-release.apk app-x86_64.apk
           cp dl/windows/windows-x64.zip windows-x64.zip
-          gh release create "build-${GITHUB_RUN_NUMBER}" app.apk windows-x64.zip \
+          gh release create "build-${GITHUB_RUN_NUMBER}" \
+            app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk windows-x64.zip \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Build ${GITHUB_RUN_NUMBER}" \
