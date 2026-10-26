@@ -1,16 +1,5 @@
-// The app menu on a phone: a bottom sheet instead of the popup.
-//
-// The popup lists every action as a row, which on a phone is fifteen rows and
-// two screens of scrolling. The sheet keeps the same actions but gives them a
-// shape a thumb can work with: a search field on top (the command palette, so
-// nothing becomes unreachable), four large buttons for what people do most
-// (New, Open, Print, Sign), the last few files inline rather than in a
-// submenu, and everything rarer folded into two rows that open a page inside
-// the sheet (Export, More tools).
-//
-// The editor screen decides which action lands where (`_MenuAction.sheet`);
-// this file only lays them out. Every action row keeps the popup's
-// `menu-<id>` key.
+// The phone menu uses the same File, This document, and App groups as the
+// desktop popup, with full-width touch targets and a recent-files subpage.
 import 'package:material_ui/material_ui.dart';
 
 import 'l10n/app_l10n.dart';
@@ -42,12 +31,11 @@ class AppMenuSheetEntry {
 Future<VoidCallback?> showAppMenuSheet(
   BuildContext context, {
   required AppMenuSheetEntry search,
-  required List<AppMenuSheetEntry> create,
-  required List<AppMenuSheetEntry> primary,
-  required List<AppMenuSheetEntry> recents,
-  required AppMenuSheetEntry? seeAllRecents,
-  required List<AppMenuSheetEntry> export,
-  required List<AppMenuSheetEntry> moreTools,
+  required List<AppMenuSheetEntry> file,
+  required List<AppMenuSheetEntry> document,
+  required List<AppMenuSheetEntry> recentFiles,
+  required AppMenuSheetEntry viewAllRecentFiles,
+  required AppMenuSheetEntry? clearRecentFiles,
   required bool? readOnly,
   required VoidCallback onToggleReadOnly,
   required List<AppMenuSheetEntry> app,
@@ -59,12 +47,11 @@ Future<VoidCallback?> showAppMenuSheet(
       showDragHandle: true,
       builder: (context) => AppMenuSheet(
         search: search,
-        create: create,
-        primary: primary,
-        recents: recents,
-        seeAllRecents: seeAllRecents,
-        export: export,
-        moreTools: moreTools,
+        file: file,
+        document: document,
+        recentFiles: recentFiles,
+        viewAllRecentFiles: viewAllRecentFiles,
+        clearRecentFiles: clearRecentFiles,
         readOnly: readOnly,
         onToggleReadOnly: onToggleReadOnly,
         app: app,
@@ -75,12 +62,11 @@ class AppMenuSheet extends StatefulWidget {
   const AppMenuSheet({
     super.key,
     required this.search,
-    required this.create,
-    required this.primary,
-    required this.recents,
-    required this.seeAllRecents,
-    required this.export,
-    required this.moreTools,
+    required this.file,
+    required this.document,
+    required this.recentFiles,
+    required this.viewAllRecentFiles,
+    required this.clearRecentFiles,
     required this.readOnly,
     required this.onToggleReadOnly,
     required this.app,
@@ -89,18 +75,11 @@ class AppMenuSheet extends StatefulWidget {
   /// The search field: opens the command palette.
   final AppMenuSheetEntry search;
 
-  /// What New offers. One entry runs straight away; more open a page.
-  final List<AppMenuSheetEntry> create;
-
-  /// The large buttons after New (Open, then Print and Sign with a document).
-  final List<AppMenuSheetEntry> primary;
-
-  final List<AppMenuSheetEntry> recents;
-  final AppMenuSheetEntry? seeAllRecents;
-
-  /// Folded groups. A group of one shows as its own row instead.
-  final List<AppMenuSheetEntry> export;
-  final List<AppMenuSheetEntry> moreTools;
+  final List<AppMenuSheetEntry> file;
+  final List<AppMenuSheetEntry> document;
+  final List<AppMenuSheetEntry> recentFiles;
+  final AppMenuSheetEntry viewAllRecentFiles;
+  final AppMenuSheetEntry? clearRecentFiles;
 
   /// Null without a document (no switch to show).
   final bool? readOnly;
@@ -146,62 +125,53 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
 
   Widget _buildMain(BuildContext context) {
     final l = appL10n(context);
-    final create = widget.create;
-    final newButton = AppMenuSheetEntry(
-      key: const ValueKey('menu-new'),
-      icon: Icons.note_add_outlined,
-      title: l.appMenuNew,
-      run: create.length == 1 ? create.single.run : () {},
-    );
-    final document = [
-      _group(
-          'export', l.appMenuExport, Icons.ios_share_outlined, widget.export),
-      _group('more-tools', l.appMenuMoreTools, Icons.handyman_outlined,
-          widget.moreTools),
-    ].expand((rows) => rows).toList();
-
+    final appItemCount = widget.app.length + (widget.readOnly == null ? 0 : 1);
     return Column(
       key: const ValueKey('app-menu-sheet'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _PrimaryButton(
-                  entry: newButton,
-                  onTap: create.length == 1
-                      ? () => _pick(newButton)
-                      : () => setState(() => _page =
-                          (id: 'new', title: l.appMenuNew, items: create)),
-                ),
-              ),
-              for (final entry in widget.primary)
-                Expanded(
-                  child: _PrimaryButton(
-                    entry: entry,
-                    onTap: entry.enabled ? () => _pick(entry) : null,
-                  ),
-                ),
-            ],
+        const Divider(height: 24),
+        if (widget.file.length + 1 >= 2)
+          _SectionLabel(l.editorMenuSectionFile),
+        for (final entry in widget.file) _row(entry),
+        ListTile(
+          key: const ValueKey('menu-open-recent'),
+          leading: const Icon(Icons.history),
+          title: Text(l.editorOpenRecent),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => setState(
+            () => _page = (
+              id: 'recent',
+              title: l.editorOpenRecent,
+              items: [
+                widget.viewAllRecentFiles,
+                if (widget.recentFiles.isEmpty)
+                  AppMenuSheetEntry(
+                    key: const ValueKey('menu-no-recent-files'),
+                    icon: Icons.history_toggle_off,
+                    title: l.editorNoRecentFiles,
+                    run: () {},
+                    enabled: false,
+                  )
+                else
+                  ...widget.recentFiles,
+                if (widget.clearRecentFiles case final clear?)
+                  clear,
+              ],
+            ),
           ),
         ),
-        if (widget.recents.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _SectionLabel(l.appMenuRecent),
-          for (final entry in widget.recents) _row(entry, recent: true),
-          if (widget.seeAllRecents case final seeAll?) _row(seeAll),
+        if (widget.document.isNotEmpty) ...[
+          const Divider(height: 24),
+          if (widget.document.length >= 2)
+            _SectionLabel(l.editorMenuSectionDocument),
+          for (final entry in widget.document) _row(entry),
         ],
-        if (document.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _SectionLabel(l.editorMenuSectionDocument),
-          ...document,
+        if (appItemCount > 0) ...[
+          const Divider(height: 24),
+          if (appItemCount >= 2) _SectionLabel(l.editorMenuSectionApp),
         ],
-        const Divider(height: 17),
         if (widget.readOnly case final readOnly?)
           SwitchListTile(
             key: const ValueKey('menu-read-only'),
@@ -214,31 +184,6 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
         for (final entry in widget.app) _row(entry),
       ],
     );
-  }
-
-  /// A folded group: one row that opens its page, or - for a group of one -
-  /// that one action's own row, since a page holding a single row is a
-  /// detour.
-  List<Widget> _group(
-      String id, String title, IconData icon, List<AppMenuSheetEntry> items) {
-    if (items.isEmpty) return const [];
-    if (items.length == 1) return [_row(items.single)];
-    return [
-      ListTile(
-        key: ValueKey('menu-group-$id'),
-        leading: Icon(icon),
-        title: Text(title),
-        // Naming what is inside answers "where did Print go?" without a tap.
-        subtitle: Text(
-          items.map((e) => _bare(e.title)).join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () =>
-            setState(() => _page = (id: id, title: title, items: items)),
-      ),
-    ];
   }
 
   Widget _buildPage(_SubPage page) => Column(
@@ -264,24 +209,16 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
         ],
       );
 
-  Widget _row(AppMenuSheetEntry entry, {bool recent = false}) => ListTile(
+  Widget _row(AppMenuSheetEntry entry) => ListTile(
         key: entry.key,
         enabled: entry.enabled,
         leading: Icon(entry.icon),
-        title: recent
-            ? MiddleEllipsisText(entry.title, hidePdfExtension: true)
-            : Text(entry.title),
+        title: Text(entry.title),
         subtitle: entry.subtitle == null
             ? null
-            : recent
-                ? MiddleEllipsisText(entry.subtitle!)
-                : Text(entry.subtitle!),
+            : MiddleEllipsisText(entry.subtitle!),
         onTap: () => _pick(entry),
       );
-
-  /// "Print…" reads as "Print" inside a list of names.
-  static String _bare(String title) =>
-      title.endsWith('…') ? title.substring(0, title.length - 1) : title;
 }
 
 class _SearchField extends StatelessWidget {
@@ -327,64 +264,6 @@ class _SearchField extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A large icon-over-label button in the top row.
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.entry, required this.onTap});
-
-  final AppMenuSheetEntry entry;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final enabled = onTap != null;
-    final foreground = enabled
-        ? scheme.onSecondaryContainer
-        : scheme.onSurface.withValues(alpha: 0.38);
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: entry.title,
-      excludeSemantics: true,
-      child: InkWell(
-        key: entry.key,
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: enabled
-                      ? scheme.secondaryContainer
-                      : scheme.onSurface.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(entry.icon, color: foreground),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                entry.title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: enabled ? scheme.onSurface : foreground,
-                ),
-              ),
-            ],
           ),
         ),
       ),

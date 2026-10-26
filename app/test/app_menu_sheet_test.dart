@@ -1,7 +1,5 @@
-// On a phone the app menu is a bottom sheet: a search field, four large
-// buttons (New, Open, Print, Sign), and the rarer actions folded under Export
-// and More tools. Tablets and desktops keep the sectioned popup
-// (app_menu_sections_test.dart).
+// Phones use the same File, This document, and App menu sections as desktop,
+// laid out as full-width touch rows instead of a popup.
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -50,64 +48,65 @@ void main() {
 
   Finder key(String value) => find.byKey(ValueKey(value));
 
-  testWidgets('a phone gets the sheet with the four large buttons',
+  testWidgets('a phone gets the same menu sections and actions as desktop',
       (tester) async {
     phoneSize(tester);
     await pump(tester, withDoc: true);
     await openMenu(tester);
 
     expect(key('app-menu-sheet'), findsOneWidget);
-    expect(find.text('FILE'), findsNothing);
+    expect(find.text('FILE'), findsOneWidget);
+    expect(find.text('THIS DOCUMENT'), findsOneWidget);
+    expect(find.text('APP'), findsOneWidget);
     expect(key('menu-command-palette'), findsOneWidget);
     for (final id in [
-      'menu-new',
+      'menu-new-document',
       'menu-open',
+      'menu-open-recent',
+      'menu-save-as',
+      'menu-reduce-file-size',
       'menu-print',
+      'menu-export-image',
       'menu-digital-signature',
+      'menu-compare',
+      'menu-insert-document',
+      'menu-read-only',
+      'menu-settings',
     ]) {
       expect(key(id), findsOneWidget, reason: id);
     }
-    expect(find.text('New'), findsOneWidget);
-    expect(find.text('Open'), findsOneWidget);
-    expect(find.text('Print'), findsOneWidget);
-    expect(find.text('Sign'), findsOneWidget);
-
-    // The header's Share button already covers this on a phone.
-    expect(key('menu-save-as'), findsNothing);
-    // Rarer actions are folded, not listed.
-    expect(key('menu-reduce-file-size'), findsNothing);
-    expect(key('menu-compare'), findsNothing);
-    expect(key('menu-group-export'), findsOneWidget);
-    expect(key('menu-group-more-tools'), findsOneWidget);
-    expect(key('menu-read-only'), findsOneWidget);
-    expect(key('menu-settings'), findsOneWidget);
+    expect(key('menu-group-export'), findsNothing);
+    expect(key('menu-group-more-tools'), findsNothing);
+    expect(tester.getTopLeft(find.text('FILE')).dy,
+        lessThan(tester.getTopLeft(key('menu-new-document')).dy));
+    expect(tester.getTopLeft(key('menu-new-document')).dy,
+        lessThan(tester.getTopLeft(key('menu-open')).dy));
+    expect(tester.getTopLeft(key('menu-open')).dy,
+        lessThan(tester.getTopLeft(key('menu-open-recent')).dy));
+    expect(tester.getTopLeft(key('menu-open-recent')).dy,
+        lessThan(tester.getTopLeft(find.text('THIS DOCUMENT')).dy));
+    expect(tester.getTopLeft(find.text('THIS DOCUMENT')).dy,
+        lessThan(tester.getTopLeft(key('menu-save-as')).dy));
+    expect(tester.getTopLeft(key('menu-compare')).dy,
+        lessThan(tester.getTopLeft(find.text('APP')).dy));
+    expect(tester.getTopLeft(find.text('APP')).dy,
+        lessThan(tester.getTopLeft(key('menu-settings')).dy));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a folded group opens a page, and back returns to the menu',
+  testWidgets('Open Recent opens its page, and back returns to the menu',
       (tester) async {
     phoneSize(tester);
     await pump(tester, withDoc: true);
     await openMenu(tester);
 
-    await tester.tap(key('menu-group-export'));
+    await tester.tap(key('menu-open-recent'));
     await tester.pumpAndSettle();
-    expect(key('app-menu-sheet-export'), findsOneWidget);
-    expect(key('menu-export-image'), findsOneWidget);
-    expect(key('menu-reduce-file-size'), findsOneWidget);
-    expect(key('menu-print'), findsNothing);
+    expect(key('app-menu-sheet-recent'), findsOneWidget);
+    expect(key('menu-recent-see-all'), findsOneWidget);
+    expect(key('menu-no-recent-files'), findsOneWidget);
 
     await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
-    expect(key('app-menu-sheet'), findsOneWidget);
-
-    await tester.tap(key('menu-group-more-tools'));
-    await tester.pumpAndSettle();
-    expect(key('menu-compare'), findsOneWidget);
-    expect(key('menu-insert-document'), findsOneWidget);
-
-    // System back leaves the page first, then the sheet.
-    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(key('app-menu-sheet'), findsOneWidget);
     await tester.binding.handlePopRoute();
@@ -115,13 +114,15 @@ void main() {
     expect(key('app-menu-sheet'), findsNothing);
   });
 
-  testWidgets('with nothing open only New and Open remain', (tester) async {
+  testWidgets('without a document only file and app actions remain',
+      (tester) async {
     phoneSize(tester);
     await pump(tester);
     await openMenu(tester);
 
-    expect(key('menu-new'), findsOneWidget);
+    expect(key('menu-new-document'), findsOneWidget);
     expect(key('menu-open'), findsOneWidget);
+    expect(key('menu-open-recent'), findsOneWidget);
     expect(key('menu-print'), findsNothing);
     expect(key('menu-digital-signature'), findsNothing);
     expect(key('menu-group-export'), findsNothing);
@@ -134,15 +135,21 @@ void main() {
     await pump(tester, withScanner: true);
     await openMenu(tester);
 
-    await tester.tap(key('menu-new'));
-    await tester.pumpAndSettle();
-    expect(key('app-menu-sheet-new'), findsOneWidget);
     expect(key('menu-scan-document'), findsOneWidget);
-
     await tester.tap(key('menu-new-document'));
     await tester.pumpAndSettle();
     expect(key('app-menu-sheet-new'), findsNothing);
     expect(key('new-document-dialog'), findsOneWidget);
+  });
+
+  testWidgets('scan is directly available in the File section',
+      (tester) async {
+    phoneSize(tester);
+    await pump(tester, withDoc: true, withScanner: true);
+    await openMenu(tester);
+
+    expect(key('menu-scan-document'), findsOneWidget);
+    expect(key('menu-insert-scan'), findsOneWidget);
   });
 
   testWidgets('read-only is a switch in the sheet', (tester) async {
