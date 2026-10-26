@@ -82,6 +82,7 @@ void main() {
         'body': '''
 <!-- main-sha: abcdef1234567890abcdef1234567890abcdef12 -->
 <!-- app-version: 3.1.1 -->
+<!-- app-build: 42 -->
 ''',
         'html_url': 'https://example.test/android',
         'assets': [
@@ -97,6 +98,8 @@ void main() {
       expect(release!.isAndroidUpdate, isTrue);
       expect(release.version, const AppVersion(3, 1, 1));
       expect(release.commitSha, 'abcdef1234567890abcdef1234567890abcdef12');
+      expect(release.buildNumber, '42');
+      expect(release.displayVersion, '3.1.1 #42');
       expect(release.identity,
           '$dartPdfAndroidTag@abcdef1234567890abcdef1234567890abcdef12');
       expect(release.assetSizes['app-arm64-v8a.apk'], 12345);
@@ -138,6 +141,34 @@ void main() {
       expect(service.latest, same(android));
       expect(service.downloadAssetName, 'app-armeabi-v7a.apk');
       expect(service.downloadUrl, 'https://example.test/armv7.apk');
+    });
+
+    test('Android prefers the single universal APK when available', () async {
+      final android = ReleaseInfo(
+        version: const AppVersion(6, 299, 2255),
+        tagName: dartPdfAndroidTag,
+        name: 'DartPDF Android latest',
+        notes: '',
+        htmlUrl: 'https://example.test/android',
+        assets: const {
+          'DartPDF-Android.apk': 'https://example.test/universal.apk',
+          'app-arm64-v8a.apk': 'https://example.test/arm64.apk',
+        },
+        isAndroidUpdate: true,
+        commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
+      final service = _service(
+        '6.299.2245',
+        releases: [android],
+        platform: TargetPlatform.android,
+      );
+      addTearDown(service.dispose);
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.updateAvailable, isTrue);
+      expect(service.downloadAssetName, 'DartPDF-Android.apk');
+      expect(service.downloadUrl, 'https://example.test/universal.apk');
     });
 
     test('Android does not offer the rolling APK already installed', () async {
