@@ -33,13 +33,29 @@ ReleaseInfo _nightlyRelease({
       commitSha: commit,
     );
 
+ReleaseInfo _androidRelease({
+  String commit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+}) =>
+    ReleaseInfo(
+      version: const AppVersion(6, 299, 2255),
+      tagName: dartPdfAndroidTag,
+      name: 'DartPDF Android latest',
+      notes: '',
+      htmlUrl: 'https://example.test/android',
+      assets: const {
+        'DartPDF-Android.apk': 'https://example.test/DartPDF-Android.apk',
+      },
+      isAndroidUpdate: true,
+      commitSha: commit,
+      buildNumber: '10',
+    );
+
 UpdateService _fakeService({
   required String current,
   required List<ReleaseInfo> releases,
   String currentBuildCommit = 'unknown',
-  // Update checks are a desktop-only feature (mobile updates through the app
-  // stores), and widget tests default to the Android target platform, so pin a
-  // desktop platform to exercise the update UI.
+  // Pin a platform explicitly so the update UI tests don't depend on the
+  // current test runner.
   TargetPlatform platform = TargetPlatform.macOS,
 }) =>
     UpdateService(
@@ -256,6 +272,34 @@ void main() {
     expect(updates.shouldNotify, isFalse);
   });
 
+  testWidgets('Android startup check offers the user a new APK',
+      (tester) async {
+    final updates = _fakeService(
+      current: '6.299.2245',
+      releases: [_androidRelease()],
+      currentBuildCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      platform: TargetPlatform.android,
+    );
+    addTearDown(updates.dispose);
+
+    await tester.pumpWidget(MaterialApp(
+      home: EditorScreen(
+        prefs: prefs,
+        updateService: updates,
+        autoCheckUpdates: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('update-available-banner')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('#10'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('update-banner-download')), findsOneWidget);
+  });
+
   testWidgets('no banner when already on the latest version', (tester) async {
     final updates =
         _fakeService(current: '1.3.0', releases: [_release('app-v1.3.0')]);
@@ -276,7 +320,7 @@ void main() {
     );
   });
 
-  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+  for (final platform in [TargetPlatform.iOS]) {
     testWidgets('no startup banner on ${platform.name} (updates via the store)',
         (tester) async {
       final updates = _fakeService(
