@@ -11,7 +11,12 @@ import 'package:material_ui/material_ui.dart';
 // Material strings outside English (a Ukrainian app crashed on the first
 // MaterialLocalizations.of with them).
 void main() {
-  for (final locale in const [Locale('uk'), Locale('de'), Locale('ar')]) {
+  for (final locale in const [
+    Locale('uk'),
+    Locale('de'),
+    Locale('ar'),
+    Locale('it'),
+  ]) {
     testWidgets('every bundle resolves for $locale', (tester) async {
       late BuildContext captured;
       await tester.pumpWidget(MaterialApp(
@@ -32,6 +37,15 @@ void main() {
       expect(material, isNot(isA<DefaultMaterialLocalizations>()));
       expect(material.cancelButtonLabel,
           isNot(const DefaultMaterialLocalizations().cancelButtonLabel));
+      if (locale == const Locale('it')) {
+        expect(AppLocalizations.of(captured)!.ocrAutoOfferTitle,
+            'Vuoi mantenere attivo l\'OCR automatico?');
+        expect(AppLocalizations.of(captured)!.settingsSignatures, 'Firme');
+        expect(DartPdfEditorLocalizations.of(captured)!.sidebarSignatureInvalid,
+            'Non valida');
+        expect(
+            DartPdfEditorLocalizations.of(captured)!.toolLink, 'Collegamento');
+      }
     });
   }
 }
