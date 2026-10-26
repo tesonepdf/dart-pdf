@@ -3892,7 +3892,6 @@ class _EditorScreenState extends State<EditorScreen>
     return [
       _MenuAction(
         id: 'new-document',
-        sheet: _SheetPlacement.create,
         icon: Icons.note_add_outlined,
         title: l.editorMenuNewDocument,
         shortcut: _menuShortcut('N'),
@@ -3901,7 +3900,6 @@ class _EditorScreenState extends State<EditorScreen>
       if (widget.onNewWindow != null)
         _MenuAction(
           id: 'new-window',
-          sheet: _SheetPlacement.create,
           icon: Icons.open_in_new,
           title: l.editorMenuNewWindow,
           shortcut: _menuShortcut('N', shift: true),
@@ -3910,17 +3908,14 @@ class _EditorScreenState extends State<EditorScreen>
       if (_canScan)
         _MenuAction(
           id: 'scan-document',
-          sheet: _SheetPlacement.create,
           icon: Icons.document_scanner_outlined,
           title: l.editorMenuScanDocument,
           run: () => unawaited(_newDocumentFromScan()),
         ),
       _MenuAction(
         id: 'open',
-        sheet: _SheetPlacement.primary,
         icon: Icons.folder_open,
         title: l.editorMenuOpen,
-        sheetTitle: l.appMenuOpen,
         shortcut: _menuShortcut('O'),
         run: () => unawaited(_pickAndOpen()),
       ),
@@ -3937,14 +3932,9 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'save-as',
         requiresDocument: true,
-        // On a phone the header's own Share button already does this.
-        sheet:
-            _usesMobileShare ? _SheetPlacement.hidden : _SheetPlacement.export,
-        icon: _usesMobileShare ? Icons.share_outlined : Icons.save_as_outlined,
-        title: _usesMobileShare
-            ? WidgetsLocalizations.of(context).shareButtonLabel
-            : l.editorMenuSaveAs,
-        shortcut: _usesMobileShare ? null : _menuShortcut('S', shift: true),
+        icon: Icons.save_as_outlined,
+        title: l.editorMenuSaveAs,
+        shortcut: _menuShortcut('S', shift: true),
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_save(tab, saveAs: true));
@@ -3953,7 +3943,6 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'reduce-file-size',
         requiresDocument: true,
-        sheet: _SheetPlacement.export,
         icon: Icons.compress_outlined,
         title: l.editorMenuReduceFileSize,
         run: () {
@@ -3964,10 +3953,8 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'print',
         requiresDocument: true,
-        sheet: _SheetPlacement.primary,
         icon: Icons.print_outlined,
         title: l.editorMenuPrint,
-        sheetTitle: l.appMenuPrint,
         shortcut: _menuShortcut('P'),
         run: () {
           final tab = _active;
@@ -3977,7 +3964,6 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'export-image',
         requiresDocument: true,
-        sheet: _SheetPlacement.export,
         icon: Icons.image_outlined,
         title: l.editorMenuExportImage,
         run: () {
@@ -3988,12 +3974,10 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'digital-signature',
         requiresDocument: true,
-        sheet: _SheetPlacement.primary,
         icon: Icons.verified_user_outlined,
         title: _digitallySigning
             ? l.editorMenuDigitallySigning
             : l.editorMenuDigitallySign,
-        sheetTitle: l.appMenuSign,
         enabled: !_digitallySigning,
         run: () {
           final tab = _active;
@@ -4004,7 +3988,6 @@ class _EditorScreenState extends State<EditorScreen>
         _MenuAction(
           id: 'ocr',
           requiresDocument: true,
-          sheet: _SheetPlacement.moreTools,
           icon: Icons.document_scanner_outlined,
           title: l.editorMenuOcr,
           run: () => unawaited(_runOcr()),
@@ -4012,7 +3995,6 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'compare',
         requiresDocument: true,
-        sheet: _SheetPlacement.moreTools,
         icon: Icons.compare_arrows,
         title: l.editorMenuCompareWith,
         run: _compareWith,
@@ -4020,7 +4002,6 @@ class _EditorScreenState extends State<EditorScreen>
       _MenuAction(
         id: 'insert-document',
         requiresDocument: true,
-        sheet: _SheetPlacement.moreTools,
         icon: Icons.post_add_outlined,
         title: l.editorMenuInsertDocument,
         // Inserting pages edits the document, so it goes with read-only.
@@ -4034,7 +4015,6 @@ class _EditorScreenState extends State<EditorScreen>
         _MenuAction(
           id: 'insert-scan',
           requiresDocument: true,
-          sheet: _SheetPlacement.moreTools,
           icon: Icons.add_a_photo_outlined,
           title: l.editorMenuInsertScan,
           // Inserting pages edits the document, so it goes with read-only.
@@ -4050,7 +4030,6 @@ class _EditorScreenState extends State<EditorScreen>
   List<_MenuAction> _appActions() => [
         _MenuAction(
           id: 'settings',
-          sheet: _SheetPlacement.app,
           icon: Icons.settings_outlined,
           title: appL10n(context).editorMenuSettings,
           run: () => showAppSettings(
@@ -4806,9 +4785,7 @@ class _EditorScreenState extends State<EditorScreen>
     ];
   }
 
-  /// A phone gets the app menu as a bottom sheet: the popup's fifteen rows
-  /// run two screens deep there. Tablets and desktops keep the popup, which
-  /// fits and carries the keyboard shortcuts.
+  /// Phones use the same menu sections as desktop, sized for touch targets.
   bool _usesAppMenuSheet(BuildContext context) =>
       !_usesCompactAppMenu && _isCompactWidth(context);
 
@@ -4831,42 +4808,20 @@ class _EditorScreenState extends State<EditorScreen>
   Future<void> _showAppMenuSheet(DocumentTab? tab) async {
     final l = appL10n(context);
     final hasDocument = tab?.session != null;
-    AppMenuSheetEntry entry(_MenuAction action, {bool short = false}) =>
-        AppMenuSheetEntry(
-          key: ValueKey('menu-${action.id}'),
-          icon: action.icon,
-          title: short ? action.sheetTitle ?? action.title : action.title,
-          enabled: action.enabled,
-          run: action.run,
-        );
-    final actions = [
-      ..._fileActions(),
+    AppMenuSheetEntry entry(_MenuAction action) => AppMenuSheetEntry(
+      key: ValueKey('menu-${action.id}'),
+      icon: action.icon,
+      title: action.title,
+      enabled: action.enabled,
+      run: action.run,
+    );
+    final allRecents = _recentMenuEntries();
+    final documentActions = [
       if (hasDocument)
         for (final action in _documentActions())
           if (!(action.hiddenWhenReadOnly && _readOnly)) action,
-      ..._appActions(),
     ];
-    List<AppMenuSheetEntry> placed(_SheetPlacement where,
-            {bool short = false}) =>
-        [
-          for (final action in actions)
-            if (action.sheet == where) entry(action, short: short),
-        ];
-
-    // The popup's eight recents are a scroll of their own here; three are
-    // the ones worth a thumb, and See all opens the full screen.
-    final allRecents = _recentMenuEntries();
-    final recents = [
-      for (final recent in allRecents.take(3))
-        AppMenuSheetEntry(
-          key: ValueKey('menu-recent-${recent.id}'),
-          icon: Icons.picture_as_pdf_outlined,
-          title: recent.title.isEmpty ? l.editorUntitled : recent.title,
-          subtitle: recent.path,
-          run: () => unawaited(_openRecent(recent)),
-        ),
-    ];
-
+    final appActions = _appActions();
     final action = await showAppMenuSheet(
       context,
       search: AppMenuSheetEntry(
@@ -4875,22 +4830,36 @@ class _EditorScreenState extends State<EditorScreen>
         title: l.editorMenuSearchActions,
         run: _openCommandPalette,
       ),
-      create: placed(_SheetPlacement.create),
-      primary: placed(_SheetPlacement.primary, short: true),
-      recents: recents,
-      seeAllRecents: allRecents.length > recents.length
-          ? AppMenuSheetEntry(
-              key: const ValueKey('menu-recent-see-all'),
-              icon: Icons.history,
-              title: l.appMenuSeeAll,
-              run: _showRecentFiles,
-            )
-          : null,
-      export: placed(_SheetPlacement.export),
-      moreTools: placed(_SheetPlacement.moreTools),
+      file: [for (final action in _fileActions()) entry(action)],
+      document: [for (final action in documentActions) entry(action)],
+      recentFiles: [
+        for (final recent in allRecents)
+          AppMenuSheetEntry(
+            key: ValueKey('menu-recent-${recent.id}'),
+            icon: Icons.picture_as_pdf_outlined,
+            title: recent.title.isEmpty ? l.editorUntitled : recent.title,
+            subtitle: recent.path,
+            run: () => unawaited(_openRecent(recent)),
+          ),
+      ],
+      viewAllRecentFiles: AppMenuSheetEntry(
+        key: const ValueKey('menu-recent-see-all'),
+        icon: Icons.grid_view_outlined,
+        title: l.editorViewAllRecentFiles,
+        enabled: allRecents.isNotEmpty,
+        run: _showRecentFiles,
+      ),
+      clearRecentFiles: allRecents.isEmpty
+          ? null
+          : AppMenuSheetEntry(
+              key: const ValueKey('menu-clear-recent-files'),
+              icon: Icons.clear_all,
+              title: l.editorClearRecentFiles,
+              run: () => unawaited(_recents.clear()),
+            ),
       readOnly: hasDocument ? _readOnly : null,
       onToggleReadOnly: () => setState(() => _readOnly = !_readOnly),
-      app: placed(_SheetPlacement.app),
+      app: [for (final action in appActions) entry(action)],
     );
     if (!mounted) return;
     action?.call();
@@ -6830,8 +6799,6 @@ class _MenuAction {
     this.enabled = true,
     this.requiresDocument = false,
     this.hiddenWhenReadOnly = false,
-    required this.sheet,
-    this.sheetTitle,
   });
 
   /// Stable identity: also the menu row's key (`menu-<id>`).
@@ -6851,34 +6818,6 @@ class _MenuAction {
 
   /// Edits the document, so it goes away in read-only mode.
   final bool hiddenWhenReadOnly;
-
-  /// Where the phone menu sheet puts it (see app_menu_sheet.dart).
-  final _SheetPlacement sheet;
-
-  /// The short label under a [_SheetPlacement.primary] button ("Print"
-  /// rather than "Print…").
-  final String? sheetTitle;
-}
-
-/// Where an action sits in the phone app menu sheet.
-enum _SheetPlacement {
-  /// Behind the New button.
-  create,
-
-  /// One of the large buttons, in list order after New.
-  primary,
-
-  /// Folded under Export.
-  export,
-
-  /// Folded under More tools.
-  moreTools,
-
-  /// The rows at the foot of the sheet.
-  app,
-
-  /// Left out of the sheet; still in the palette.
-  hidden,
 }
 
 /// The app's own part of the header: the app menu, the tabs (or title) and
