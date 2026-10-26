@@ -9,8 +9,10 @@ This is the **product app**. The SDK's feature showcase lives separately in
 `packages/dart_pdf_editor/example`.
 
 This is a modified copy of the upstream project. Android and Windows builds
-run in GitHub Actions on each push to `main`; a Release is published with
-`app.apk` and `windows-x64.zip`.
+run in GitHub Actions on each push to `main`. Each Release includes a smaller
+APK for each Android CPU architecture (`app-arm64-v8a.apk`,
+`app-armeabi-v7a.apk`, and `app-x86_64.apk`) plus `windows-x64.zip`. Most modern
+Android phones use `arm64-v8a`.
 
 ## Features
 
