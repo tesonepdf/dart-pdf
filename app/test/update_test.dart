@@ -43,9 +43,10 @@ UpdateService _service(
   DateTime Function()? now,
   // Update checks are desktop-only, and widget/unit tests default to the
   // Android target platform, so pin a desktop platform unless a test overrides
-  // it to exercise the mobile opt-out.
+  // it to exercise a mobile channel.
   TargetPlatform platform = TargetPlatform.macOS,
   bool storeManagedBuild = false,
+  List<String> androidAbis = const ['arm64-v8a'],
 }) =>
     UpdateService(
       currentVersion: current,
@@ -54,6 +55,7 @@ UpdateService _service(
       now: now ?? DateTime.now,
       platform: platform,
       storeManagedBuild: storeManagedBuild,
+      androidAbisFetcher: () async => androidAbis,
       fetcher: () async {
         if (throwOnFetch) throw Exception('offline');
         return releases;
@@ -73,10 +75,95 @@ void main() {
       expect(AppVersion.tryParse('1.4'), const AppVersion(1, 4, 0));
     });
 
+    test('parses the rolling Android release markers and build identity', () {
+      final release = ReleaseInfo.fromJson({
+        'tag_name': dartPdfAndroidTag,
+        'name': 'DartPDF Android latest',
+        'body': '''
+<!-- main-sha: abcdef1234567890abcdef1234567890abcdef12 -->
+<!-- app-version: 3.1.1 -->
+''',
+        'html_url': 'https://example.test/android',
+        'assets': [
+          {
+            'name': 'app-arm64-v8a.apk',
+            'browser_download_url': 'https://example.test/app.apk',
+            'size': 12345,
+          },
+        ],
+      });
+
+      expect(release, isNotNull);
+      expect(release!.isAndroidUpdate, isTrue);
+      expect(release.version, const AppVersion(3, 1, 1));
+      expect(release.commitSha, 'abcdef1234567890abcdef1234567890abcdef12');
+      expect(release.identity,
+          '$dartPdfAndroidTag@abcdef1234567890abcdef1234567890abcdef12');
+      expect(release.assetSizes['app-arm64-v8a.apk'], 12345);
+    });
+
     test('rejects garbage', () {
       expect(AppVersion.tryParse('nightly'), isNull);
       expect(AppVersion.tryParse('pdf_cos-v1.2.1'), isNull);
       expect(AppVersion.tryParse(''), isNull);
+    });
+
+    test('Android detects a new rolling APK and selects the device ABI',
+        () async {
+      final android = ReleaseInfo(
+        version: const AppVersion(1, 3, 0),
+        tagName: dartPdfAndroidTag,
+        name: 'DartPDF Android latest',
+        notes: '',
+        htmlUrl: 'https://example.test/android',
+        assets: const {
+          'app-arm64-v8a.apk': 'https://example.test/arm64.apk',
+          'app-armeabi-v7a.apk': 'https://example.test/armv7.apk',
+        },
+        isAndroidUpdate: true,
+        commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
+      final service = _service(
+        '1.3.0',
+        releases: [android],
+        currentBuildCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        platform: TargetPlatform.android,
+        androidAbis: const ['armeabi-v7a', 'arm64-v8a'],
+      );
+      addTearDown(service.dispose);
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.updateAvailable, isTrue);
+      expect(service.latest, same(android));
+      expect(service.downloadAssetName, 'app-armeabi-v7a.apk');
+      expect(service.downloadUrl, 'https://example.test/armv7.apk');
+    });
+
+    test('Android does not offer the rolling APK already installed', () async {
+      const commit = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      final android = ReleaseInfo(
+        version: const AppVersion(1, 3, 0),
+        tagName: dartPdfAndroidTag,
+        name: 'DartPDF Android latest',
+        notes: '',
+        htmlUrl: 'https://example.test/android',
+        assets: const {},
+        isAndroidUpdate: true,
+        commitSha: commit,
+      );
+      final service = _service(
+        '1.3.0',
+        releases: [android],
+        currentBuildCommit: commit.substring(0, 7),
+        platform: TargetPlatform.android,
+      );
+      addTearDown(service.dispose);
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.status, UpdateStatus.upToDate);
+      expect(service.updateAvailable, isFalse);
     });
 
     test('orders by major, then minor, then patch', () {
@@ -518,6 +605,36 @@ Nightly build.
       });
     }
 
+    test('selects the matching Android ABI artifact', () async {
+      final service = _service(
+        '1.2.2',
+        releases: [
+          ReleaseInfo(
+            version: const AppVersion(1, 3, 0),
+            tagName: dartPdfAndroidTag,
+            name: 'Android latest',
+            notes: '',
+            htmlUrl: 'https://example.test/android',
+            assets: const {
+              'app-arm64-v8a.apk': 'https://example.test/arm64.apk',
+              'app-armeabi-v7a.apk': 'https://example.test/armv7.apk',
+            },
+            isAndroidUpdate: true,
+            commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          ),
+        ],
+        currentBuildCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        platform: TargetPlatform.android,
+        androidAbis: const ['arm64-v8a'],
+      );
+      addTearDown(service.dispose);
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.downloadAssetName, 'app-arm64-v8a.apk');
+      expect(service.downloadUrl, 'https://example.test/arm64.apk');
+    });
+
     test('falls back to the portable Windows bundle when no installer exists',
         () async {
       final service = _service(
@@ -595,30 +712,35 @@ Nightly build.
       expect(service.updateAvailable, isFalse);
     });
 
-    // Mobile updates through the app stores, where a store review routinely
-    // lags the GitHub release - so we must not nudge those users toward a
-    // build they can't install yet.
-    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-      test('is off for the store-distributed ${platform.name} build', () {
-        final service =
-            _service('1.2.2', releases: const [], platform: platform);
-        addTearDown(service.dispose);
-        expect(service.supported, isFalse);
-      });
+    test('is on for the sideloaded Android build', () {
+      final service = _service(
+        '1.2.2',
+        releases: const [],
+        platform: TargetPlatform.android,
+      );
+      addTearDown(service.dispose);
+      expect(service.supported, isTrue);
+    });
 
-      test('checkForUpdates is a no-op on ${platform.name}', () async {
-        final service = _service(
-          '1.2.2',
-          releases: [_release('app-v1.3.0')],
-          platform: platform,
-        );
-        addTearDown(service.dispose);
-        await service.checkForUpdates(force: true);
-        expect(service.status, UpdateStatus.idle);
-        expect(service.updateAvailable, isFalse);
-        expect(service.shouldNotify, isFalse);
-      });
-    }
+    test('is off for the store-distributed iOS build', () {
+      final service =
+          _service('1.2.2', releases: const [], platform: TargetPlatform.iOS);
+      addTearDown(service.dispose);
+      expect(service.supported, isFalse);
+    });
+
+    test('checkForUpdates is a no-op on iOS', () async {
+      final service = _service(
+        '1.2.2',
+        releases: [_release('app-v1.3.0')],
+        platform: TargetPlatform.iOS,
+      );
+      addTearDown(service.dispose);
+      await service.checkForUpdates(force: true);
+      expect(service.status, UpdateStatus.idle);
+      expect(service.updateAvailable, isFalse);
+      expect(service.shouldNotify, isFalse);
+    });
   });
 
   group('UpdateService default GitHub fetcher', () {
@@ -727,6 +849,57 @@ Nightly build.
         service.downloadAssetName,
         'dartpdf-nightly-windows-installer.exe',
       );
+    });
+
+    test('Android fetches its rolling release and resolves the APK', () async {
+      final requested = <Uri>[];
+      final service = UpdateService(
+        currentVersion: '1.3.0',
+        currentBuildCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        platform: TargetPlatform.android,
+        androidAbisFetcher: () async => const ['arm64-v8a'],
+        clientFactory: () => MockClient((request) async {
+          requested.add(request.url);
+          if (request.url.path.endsWith('/releases')) {
+            return http.Response('[]', 200);
+          }
+          if (request.url.path.endsWith('/releases/tags/$dartPdfAndroidTag')) {
+            return http.Response(
+              jsonEncode({
+                'tag_name': dartPdfAndroidTag,
+                'name': 'DartPDF Android latest',
+                'body': '''
+<!-- main-sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+<!-- app-version: 1.3.0 -->
+''',
+                'html_url': 'https://example.test/android',
+                'assets': [
+                  {
+                    'name': 'app-arm64-v8a.apk',
+                    'browser_download_url': 'https://example.test/arm64.apk',
+                    'size': 4096,
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+      addTearDown(service.dispose);
+
+      await service.checkForUpdates(force: true);
+
+      expect(
+          requested.map((uri) => uri.path),
+          contains(
+            '/repos/tesonepdf/dart-pdf/releases/tags/$dartPdfAndroidTag',
+          ));
+      expect(service.updateAvailable, isTrue);
+      expect(service.downloadAssetName, 'app-arm64-v8a.apk');
+      expect(service.downloadAssetSize, 4096);
+      expect(service.downloadUrl, 'https://example.test/arm64.apk');
     });
 
     test('a non-list body is treated as no releases', () async {

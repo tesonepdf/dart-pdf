@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -8,7 +9,7 @@ import 'update_platform.dart';
 
 /// Native (`dart:io`) platform ops for the in-app updater: real filesystem
 /// writes, an atomic rename to swap the running AppImage, and OS hand-off for
-/// the macOS/Windows installer artifacts.
+/// desktop installers and Android APKs.
 UpdatePlatformOps defaultUpdatePlatformOps() => IoUpdatePlatformOps();
 
 class IoUpdatePlatformOps implements UpdatePlatformOps {
@@ -27,6 +28,12 @@ class IoUpdatePlatformOps implements UpdatePlatformOps {
 
   @override
   Future<String> downloadDirectory() async {
+    if (Platform.isAndroid) {
+      final temporary = await getTemporaryDirectory();
+      final updates = Directory(joinPath(temporary.path, 'updates'));
+      await updates.create(recursive: true);
+      return updates.path;
+    }
     try {
       final downloads = await getDownloadsDirectory();
       if (downloads != null) return downloads.path;
@@ -48,14 +55,14 @@ class IoUpdatePlatformOps implements UpdatePlatformOps {
   @override
   Future<void> writeArtifact(String path, List<int> bytes,
       {bool executable = false}) async {
+    await File(path).parent.create(recursive: true);
     await File(path).writeAsBytes(bytes, flush: true);
     if (executable && !Platform.isWindows) {
       // Dart's File API has no chmod; shell out. A failure here surfaces to the
       // caller, which aborts before swapping the running binary.
       final result = await Process.run('chmod', ['+x', path]);
       if (result.exitCode != 0) {
-        throw FileSystemException(
-            'chmod +x failed: ${result.stderr}', path);
+        throw FileSystemException('chmod +x failed: ${result.stderr}', path);
       }
     }
   }
@@ -76,6 +83,16 @@ class IoUpdatePlatformOps implements UpdatePlatformOps {
 
   @override
   Future<void> openArtifact(String path) async {
+    if (Platform.isAndroid) {
+      final permitted = await const MethodChannel('dev.milanko.dartpdf/update')
+          .invokeMethod<bool>('installApk', {'path': path});
+      if (permitted != true) {
+        throw const FileSystemException(
+          'Allow DartPDF to install apps in Android settings, then try again',
+        );
+      }
+      return;
+    }
     // Go through url_launcher (NSWorkspace on macOS, ShellExecute on Windows,
     // xdg-open on Linux) rather than spawning a shell: it is the path that
     // works under the macOS App Sandbox, where `Process.start('open', …)` is

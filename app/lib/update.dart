@@ -14,6 +14,9 @@ import 'update_distribution_stub.dart'
 /// (Windows + macOS).
 const dartPdfNightlyTag = 'app-nightly';
 
+/// The rolling GitHub release used by sideloaded Android builds.
+const dartPdfAndroidTag = 'app-android-latest';
+
 /// A parsed semantic version (`major.minor.patch`), tolerant of the leading
 /// `app-v` / `v` that the release tags carry, an optional `+build` metadata
 /// suffix (ignored for ordering, per semver), and an optional `-prerelease`
@@ -99,6 +102,7 @@ class ReleaseInfo {
     required this.assets,
     this.assetSizes = const {},
     this.isNightly = false,
+    this.isAndroidUpdate = false,
     this.commitSha,
   });
 
@@ -119,7 +123,10 @@ class ReleaseInfo {
   /// Whether this is the rolling build produced from the tip of `main`.
   final bool isNightly;
 
-  /// Source commit recorded by the nightly workflow, when present.
+  /// Whether this is the rolling APK release produced from the tip of `main`.
+  final bool isAndroidUpdate;
+
+  /// Source commit recorded by a rolling release workflow, when present.
   final String? commitSha;
 
   /// Human-readable build label for update banners and buttons.
@@ -133,13 +140,14 @@ class ReleaseInfo {
   }
 
   /// Stable identity used by "Later". A rolling tag alone is insufficient:
-  /// every nightly shares `app-nightly`, so include its source commit.
-  String get identity =>
-      isNightly && commitSha != null ? '$tagName@$commitSha' : tagName;
+  /// each rolling release reuses its tag, so include its source commit.
+  String get identity => (isNightly || isAndroidUpdate) && commitSha != null
+      ? '$tagName@$commitSha'
+      : tagName;
 
-  static final _nightlyCommitMarker =
+  static final _commitMarker =
       RegExp(r'<!-- main-sha: ([0-9a-fA-F]{7,40}) -->');
-  static final _nightlyVersionMarker =
+  static final _versionMarker =
       RegExp(r'<!-- app-version: ([0-9A-Za-z.+-]+) -->');
 
   /// Builds a release from one element of the GitHub `/releases` array,
@@ -150,14 +158,14 @@ class ReleaseInfo {
     if (tag == null) return null;
     final notes = (json['body'] as String?)?.trim() ?? '';
     final isNightly = tag == dartPdfNightlyTag;
+    final isAndroidUpdate = tag == dartPdfAndroidTag;
     final version = AppVersion.tryParse(tag) ??
-        (isNightly
+        (isNightly || isAndroidUpdate
             ? AppVersion.tryParse(
-                _nightlyVersionMarker.firstMatch(notes)?.group(1) ?? '')
+                _versionMarker.firstMatch(notes)?.group(1) ?? '')
             : null);
     if (version == null) return null;
-    final commitSha =
-        _nightlyCommitMarker.firstMatch(notes)?.group(1)?.toLowerCase();
+    final commitSha = _commitMarker.firstMatch(notes)?.group(1)?.toLowerCase();
     final assets = <String, String>{};
     final assetSizes = <String, int>{};
     final rawAssets = json['assets'];
@@ -184,6 +192,7 @@ class ReleaseInfo {
       assets: assets,
       assetSizes: assetSizes,
       isNightly: isNightly,
+      isAndroidUpdate: isAndroidUpdate,
       commitSha: commitSha,
     );
   }
@@ -212,15 +221,16 @@ enum UpdateStatus {
 /// avoid real network; production uses [UpdateService]'s GitHub fetcher.
 typedef ReleaseFetcher = Future<List<ReleaseInfo>> Function();
 
+typedef AndroidAbisFetcher = Future<List<String>> Function();
+
 /// Checks GitHub Releases for a newer standalone-app build and exposes the
 /// result as a [ChangeNotifier] so the Settings panel and the startup banner
 /// can both react.
 ///
-/// This is deliberately a *checker*, not a silent binary-replacer: the app
-/// ships unsigned desktop bundles and store builds that update through their
-/// own channels, so the safe, honest action is to point the user at the right
-/// download. [downloadUrl] resolves to the artifact for the current platform
-/// (falling back to the release page).
+/// Android downloads are confirmed by Android's package installer; desktop
+/// updates use the platform-specific apply or hand-off flow. [downloadUrl]
+/// resolves to the artifact for the current platform (falling back to the
+/// release page).
 ///
 /// Mirrors [RecentsStore]'s graceful degradation: when `shared_preferences`
 /// is unavailable (widget tests) the throttle/dismissal state simply lives in
@@ -234,12 +244,14 @@ class UpdateService extends ChangeNotifier {
     this.tagPrefix = 'app-v',
     this.nightlyTag = dartPdfNightlyTag,
     ReleaseFetcher? fetcher,
+    AndroidAbisFetcher? androidAbisFetcher,
     http.Client Function()? clientFactory,
     Duration checkInterval = const Duration(hours: 24),
     DateTime Function() now = DateTime.now,
     TargetPlatform? platform,
     bool? storeManagedBuild,
   })  : _fetcher = fetcher,
+        _androidAbisFetcher = androidAbisFetcher ?? defaultAndroidSupportedAbis,
         _clientFactory = clientFactory ?? http.Client.new,
         _checkInterval = checkInterval,
         _now = now,
@@ -255,8 +267,8 @@ class UpdateService extends ChangeNotifier {
   String currentVersion;
 
   /// Git commit stamped into the running binary with `PDF_BUILD_COMMIT`.
-  /// Nightly builds use this to avoid offering the exact build already
-  /// installed even though every nightly shares one rolling release tag.
+  /// Rolling builds use this to avoid offering the exact build already
+  /// installed even though they share one release tag.
   final String currentBuildCommit;
 
   final String repoOwner;
@@ -270,6 +282,7 @@ class UpdateService extends ChangeNotifier {
   final String nightlyTag;
 
   final ReleaseFetcher? _fetcher;
+  final AndroidAbisFetcher _androidAbisFetcher;
   final http.Client Function() _clientFactory;
   final Duration _checkInterval;
   final DateTime Function() _now;
@@ -298,6 +311,7 @@ class UpdateService extends ChangeNotifier {
 
   String? _dismissedTag;
   bool _nightlyUpdates = false;
+  List<String> _androidAbis = const [];
   Future<void> _restored = Future.value();
 
   /// Completes when persisted throttle, dismissal, and channel state is ready.
@@ -307,18 +321,14 @@ class UpdateService extends ChangeNotifier {
 
   /// Whether update checks make sense on this platform.
   ///
-  /// Only the desktop builds are distributed as direct downloads from GitHub
-  /// Releases, so only they benefit from a "newer build available, download it"
-  /// nudge. Two platforms opt out:
+  /// Desktop builds and sideloaded Android builds are distributed as direct
+  /// downloads from GitHub Releases. Web and iOS opt out:
   ///
   /// * The web build is always served fresh (and an installed PWA refreshes
   ///   through its service worker), so there is nothing to check.
-  /// * The Android/iOS builds update through their app stores, and a GitHub
-  ///   release routinely lands *before* the store review clears. Checking
-  ///   GitHub there would nag mobile users about a version they can't install
-  ///   yet, and the "Download" button would only send them to a GitHub page
-  ///   that isn't their update channel - exactly the confusing dead end we
-  ///   want to avoid.
+  /// * iOS builds update through the App Store, where a GitHub release may
+  ///   precede review. Android APK builds use the rolling GitHub release and
+  ///   the Android package installer, which still asks the user to confirm.
   /// * Flatpak and Snap builds update through their package repositories.
   ///   Offering a parallel AppImage download would bypass that package
   ///   manager and leave two competing installations on the machine.
@@ -328,6 +338,7 @@ class UpdateService extends ChangeNotifier {
   bool get supported {
     if (kIsWeb || _storeManagedBuild) return false;
     return switch (_targetPlatform) {
+      TargetPlatform.android ||
       TargetPlatform.macOS ||
       TargetPlatform.windows ||
       TargetPlatform.linux =>
@@ -394,9 +405,9 @@ class UpdateService extends ChangeNotifier {
       );
 
   /// The best download URL for [latest] on the current platform: the matching
-  /// release asset when there is one, else the release page (a desktop build
+  /// release asset when there is one, else the release page (a supported build
   /// with no direct artifact falls back to the page). Only resolved on the
-  /// desktop platforms where updates are [supported].
+  /// platforms where updates are [supported].
   String? get downloadUrl {
     final release = _latest;
     if (release == null) return null;
@@ -437,6 +448,9 @@ class UpdateService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (_targetPlatform == TargetPlatform.android) {
+        _androidAbis = await _androidAbisFetcher();
+      }
       final releases = await (_fetcher ?? _fetchFromGitHub)();
       _lastChecked = _now();
       unawaited(_persistLastChecked());
@@ -445,8 +459,10 @@ class UpdateService extends ChangeNotifier {
           .where((r) => r.tagName.startsWith(tagPrefix))
           .toList()
         ..sort((a, b) => b.version.compareTo(a.version));
-      ReleaseInfo? newest =
-          stableReleases.isEmpty ? null : stableReleases.first;
+      final androidReleases = releases.where((r) => r.isAndroidUpdate).toList();
+      ReleaseInfo? newest = _targetPlatform == TargetPlatform.android
+          ? (androidReleases.isEmpty ? null : androidReleases.first)
+          : (stableReleases.isEmpty ? null : stableReleases.first);
       if (nightlyUpdates) {
         final nightlies =
             releases.where((r) => r.tagName == nightlyTag).toList();
@@ -487,7 +503,7 @@ class UpdateService extends ChangeNotifier {
   bool _isNewer(ReleaseInfo release, AppVersion current) {
     final versionOrder = release.version.compareTo(current);
     if (versionOrder != 0) return versionOrder > 0;
-    if (!release.isNightly) return false;
+    if (!release.isNightly && !release.isAndroidUpdate) return false;
     return !_sameCommit(release.commitSha, currentBuildCommit);
   }
 
@@ -523,9 +539,8 @@ class UpdateService extends ChangeNotifier {
           'dartpdf-linux-x86_64.AppImage',
           'dartpdf-linux-x64.tar.gz',
         ],
-      // Mobile (Android/iOS) never reaches here: those platforms opt out of
-      // update checks (see [supported]) because they update through their app
-      // stores, so downloadUrl is only ever resolved for the desktop builds.
+      TargetPlatform.android => _androidApkPatterns(),
+      // iOS does not distribute installable GitHub artifacts.
       _ => const <String>[],
     };
     for (final pattern in patterns) {
@@ -534,6 +549,18 @@ class UpdateService extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  List<String> _androidApkPatterns() {
+    const namesByAbi = {
+      'arm64-v8a': 'app-arm64-v8a.apk',
+      'armeabi-v7a': 'app-armeabi-v7a.apk',
+      'x86_64': 'app-x86_64.apk',
+    };
+    return [
+      for (final abi in _androidAbis)
+        if (namesByAbi[abi] case final name?) name,
+    ];
   }
 
   Future<List<ReleaseInfo>> _fetchFromGitHub() async {
@@ -580,6 +607,30 @@ class UpdateService extends ChangeNotifier {
             if (nightly != null) {
               releases.removeWhere((r) => r.tagName == nightly.tagName);
               releases.add(nightly);
+            }
+          }
+        }
+      }
+      if (_targetPlatform == TargetPlatform.android) {
+        final androidUri = Uri.https(
+          'api.github.com',
+          '/repos/$repoOwner/$repoName/releases/tags/$dartPdfAndroidTag',
+        );
+        final androidResponse = await client.get(androidUri, headers: headers);
+        if (androidResponse.statusCode != 404) {
+          if (androidResponse.statusCode != 200) {
+            throw http.ClientException(
+              'GitHub returned HTTP ${androidResponse.statusCode}',
+              androidUri,
+            );
+          }
+          final androidJson = jsonDecode(androidResponse.body);
+          if (androidJson is Map) {
+            final androidRelease =
+                ReleaseInfo.fromJson(androidJson.cast<String, dynamic>());
+            if (androidRelease != null) {
+              releases.removeWhere((r) => r.tagName == androidRelease.tagName);
+              releases.add(androidRelease);
             }
           }
         }
