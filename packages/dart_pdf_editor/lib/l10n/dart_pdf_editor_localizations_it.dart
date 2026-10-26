@@ -527,7 +527,7 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   String get linkPageLabel => 'Numero di pagina';
 
   @override
-  String get toolLink => 'Link';
+  String get toolLink => 'Collegamento';
 
   @override
   String get overlayUnderline => 'Sottolineato';
@@ -1126,7 +1126,7 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   String get shellUnbound => 'Non assegnato';
 
   @override
-  String get shellZoom => 'Zoom';
+  String get shellZoom => 'Ingrandimento';
 
   @override
   String sidebarByAuthor(String author) {
@@ -1202,54 +1202,56 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   }
 
   @override
-  String get sidebarSignatureChecking => 'Checking…';
+  String get sidebarSignatureChecking => 'Verifica in corso…';
 
   @override
-  String get sidebarSignatureTrusted => 'Valid — trusted';
+  String get sidebarSignatureTrusted => 'Valida — attendibile';
 
   @override
-  String get sidebarSignatureUnverified => 'Valid — unverified';
+  String get sidebarSignatureUnverified => 'Valida — non verificata';
 
   @override
-  String get sidebarSignatureInvalid => 'Invalid';
+  String get sidebarSignatureInvalid => 'Non valida';
 
   @override
   String sidebarSignatureSignedBy(String name) {
-    return 'Signed by $name';
+    return 'Firmato da $name';
   }
 
   @override
   String sidebarSignatureSignedAt(String time) {
-    return 'Signed $time';
+    return 'Firmato $time';
   }
 
   @override
   String sidebarSignatureTrustedVia(String authority) {
-    return 'Trusted via $authority';
+    return 'Attendibile grazie a $authority';
   }
 
   @override
   String sidebarSignatureTrustedViaList(String authority, String list) {
-    return 'Trusted via $authority ($list)';
+    return 'Attendibile grazie a $authority ($list)';
   }
 
   @override
   String get sidebarSignatureUntrustedDetail =>
-      'Signer is not from a trusted authority';
+      'Il firmatario non appartiene a un\'autorità attendibile';
 
   @override
   String get sidebarSignatureNoAnchors =>
-      'No trusted authorities are configured';
+      'Non sono configurate autorità attendibili';
 
   @override
-  String get sidebarSignatureModified => 'Document was changed after signing';
+  String get sidebarSignatureModified =>
+      'Il documento è stato modificato dopo la firma';
 
   @override
-  String get sidebarSignatureRevoked => 'The signer\'s certificate was revoked';
+  String get sidebarSignatureRevoked =>
+      'Il certificato del firmatario è stato revocato';
 
   @override
   String sidebarSignatureTimestamped(String time) {
-    return 'Timestamped $time';
+    return 'Con marca temporale $time';
   }
 
   @override
@@ -1258,38 +1260,38 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   }
 
   @override
-  String get sidebarSignatureRevokedStatus => 'Revoked';
+  String get sidebarSignatureRevokedStatus => 'Revocato';
 
   @override
   String get sidebarSignatureSelfSigned =>
-      'Self-signed: no authority has confirmed who the signer is';
+      'Autofirmato: nessuna autorità ha verificato l\'identità del firmatario';
 
   @override
   String sidebarSignatureUnknownIssuer(String authority) {
-    return 'Issued by $authority, which is not a trusted authority';
+    return 'Emesso da $authority, che non è un\'autorità attendibile';
   }
 
   @override
   String sidebarSignatureRevokedOn(String time) {
-    return 'The signer\'s certificate was revoked $time';
+    return 'Il certificato del firmatario è stato revocato il $time';
   }
 
   @override
   String sidebarSignatureRevokedAfterSigning(String time) {
-    return 'Certificate revoked $time, after the signature was timestamped';
+    return 'Certificato revocato il $time, dopo l\'apposizione della marca temporale sulla firma';
   }
 
   @override
   String get sidebarSignatureRevocationGoodLive =>
-      'Certificate not revoked (checked online)';
+      'Certificato non revocato (verifica online)';
 
   @override
   String get sidebarSignatureRevocationGoodEmbedded =>
-      'Certificate not revoked (per data saved in the document)';
+      'Certificato non revocato (in base ai dati salvati nel documento)';
 
   @override
   String get sidebarSignatureRevocationUnknown =>
-      'Revocation status could not be checked';
+      'Impossibile verificare lo stato di revoca';
 
   @override
   String get sidebarWriteReplyHint => 'Scrivi una risposta…';

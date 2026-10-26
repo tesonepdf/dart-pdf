@@ -911,21 +911,23 @@ class AppLocalizationsIt extends AppLocalizations {
   String get settingsSystem => 'Sistema';
 
   @override
-  String get settingsSignatures => 'Signatures';
+  String get settingsSignatures => 'Firme';
 
   @override
-  String get settingsAatlTitle => 'Trust Adobe Approved Trust List';
+  String get settingsAatlTitle =>
+      'Considera attendibile l\'elenco Adobe delle autorità approvate';
 
   @override
   String get settingsAatlSubtitle =>
-      'Downloads Adobe\'s list of trusted signing authorities from Adobe and checks for updates weekly. Nothing about your documents is sent.';
+      'Scarica da Adobe l\'elenco delle autorità di certificazione attendibili e ne controlla gli aggiornamenti ogni settimana. Nessun dato dei tuoi documenti viene inviato.';
 
   @override
-  String get signatureTrustAatlAction => 'Trust Adobe Approved Trust List';
+  String get signatureTrustAatlAction =>
+      'Considera attendibile l\'elenco Adobe delle autorità approvate';
 
   @override
   String get signatureTrustAatlExplanation =>
-      'Downloads Adobe\'s list of trusted signing authorities from Adobe. Nothing about this document is sent.';
+      'Scarica da Adobe l\'elenco delle autorità di certificazione attendibili. Nessun dato di questo documento viene inviato.';
 
   @override
   String get settingsThemeDark => 'Scuro';
@@ -1378,37 +1380,38 @@ class AppLocalizationsIt extends AppLocalizations {
   String get appMenuMoreTools => 'Altri strumenti';
 
   @override
-  String get settingsTextRecognition => 'Text recognition';
+  String get settingsTextRecognition => 'Riconoscimento del testo';
 
   @override
-  String get settingsAutoOcrTitle => 'Automatically OCR scans';
+  String get settingsAutoOcrTitle =>
+      'Esegui automaticamente l\'OCR delle scansioni';
 
   @override
   String get settingsAutoOcrSubtitle =>
-      'Adds a selectable, searchable text layer when you open a scanned document. Text is recognized on this device.';
+      'Aggiunge un livello di testo selezionabile e ricercabile quando apri un documento scansionato. Il testo viene riconosciuto su questo dispositivo.';
 
   @override
   String get ocrAutoResult =>
-      'Text recognized - this scan is now searchable and selectable. Automatic OCR can be turned off in Settings.';
+      'Testo riconosciuto: ora puoi cercare e selezionare il testo in questa scansione. Puoi disattivare l\'OCR automatico nelle Impostazioni.';
 
   @override
   String get ocrAutoDocumentChanged =>
-      'The pages changed while OCR was running, so no text layer was added. Choose OCR… from the menu to run it again.';
+      'Le pagine sono cambiate durante l\'OCR, quindi non è stato aggiunto alcun livello di testo. Scegli OCR… dal menu per riprovare.';
 
   @override
-  String get ocrAutoOfferTitle => 'Keep automatic OCR on?';
+  String get ocrAutoOfferTitle => 'Vuoi mantenere attivo l\'OCR automatico?';
 
   @override
   String get ocrAutoOfferMessage =>
-      'This scan is now searchable and selectable. DartPDF can do this for every scanned document you open - text is recognized on this device. You can change this later in Settings.';
+      'Ora puoi cercare e selezionare il testo in questa scansione. DartPDF può farlo per ogni documento scansionato che apri: il testo viene riconosciuto su questo dispositivo. Puoi modificare questa scelta in seguito nelle Impostazioni.';
 
   @override
-  String get ocrAutoOfferKeepOn => 'Keep on';
+  String get ocrAutoOfferKeepOn => 'Mantieni attivo';
 
   @override
-  String get ocrAutoOfferTurnOff => 'Turn off';
+  String get ocrAutoOfferTurnOff => 'Disattiva';
 
   @override
   String get ocrAutoTurnedOff =>
-      'Automatic OCR is off. Choose OCR… from the menu to recognize text in a scan, or turn it back on in Settings.';
+      'L\'OCR automatico è disattivato. Scegli OCR… dal menu per riconoscere il testo in una scansione, oppure riattivalo nelle Impostazioni.';
 }
