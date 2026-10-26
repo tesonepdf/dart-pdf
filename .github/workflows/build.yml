@@ -247,8 +247,7 @@ jobs:
             --notes "Commit ${GITHUB_SHA}" \
             --latest
 
-          version_line="$(grep -m1 '^version:' app/pubspec.yaml | sed 's/^version:[[:space:]]*//')"
-          app_version="${version_line%%+*}"
+          app_version="$VERSIONE"
           android_tag="app-android-latest"
           android_notes="$(printf 'Aggiornamento Android automatico.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->' "$GITHUB_SHA" "$app_version")"
 
