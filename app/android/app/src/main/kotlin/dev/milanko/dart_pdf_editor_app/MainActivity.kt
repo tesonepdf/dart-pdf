@@ -17,6 +17,7 @@ import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import android.view.InputDevice
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -35,6 +36,7 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
     private val imageClipboardChannelName = "dev.milanko.dartpdf/image_clipboard"
     private val mobileFileChannelName = "dev.milanko.dartpdf/mobile_file"
     private val memoryChannelName = "dev.milanko.dartpdf/memory"
+    private val updateChannelName = "dev.milanko.dartpdf/update"
     private var channel: MethodChannel? = null
     private var keyboardChannel: MethodChannel? = null
     private var keyboardInputManager: InputManager? = null
@@ -122,6 +124,26 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                 )
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updateChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "supportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("bad_args", "installApk requires a path", null)
+                        } else {
+                            try {
+                                result.success(installUpdateApk(path))
+                            } catch (e: Exception) {
+                                result.error("install_error", e.message, null)
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         // Preview-style trackpad signatures (TrackpadSignatureCapture.kt).
         val trackpad = TrackpadSignatureCapture(this).also { trackpadSignature = it }
         EventChannel(
@@ -149,6 +171,24 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
         device != null && !device.isVirtual &&
             (Build.VERSION.SDK_INT < 27 || device.isEnabled) &&
             device.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC
+    }
+
+    private fun installUpdateApk(path: String): Boolean {
+        val apk = File(path).canonicalFile
+        val updatesDirectory = File(cacheDir, "updates").canonicalFile
+        require(apk.path.startsWith(updatesDirectory.path + File.separator)) {
+            "APK must be inside the app update cache"
+        }
+        require(apk.isFile) { "Downloaded APK was not found" }
+
+        val uri = FileProvider.getUriForFile(this, "$packageName.updates", apk)
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = uri
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(intent)
+        return true
     }
 
     private fun notifyKeyboardChanged() {

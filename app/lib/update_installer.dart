@@ -39,7 +39,7 @@ enum UpdateInstallOutcome {
   unsupported,
 }
 
-/// Downloads a newer release artifact and applies it in place on desktop.
+/// Downloads a newer release artifact and applies or hands it off to the OS.
 ///
 /// This turns the update *checker* into an actual updater where it can be done
 /// safely: the Linux AppImage is a single executable, so the new build is
@@ -47,7 +47,8 @@ enum UpdateInstallOutcome {
 /// the running image, and atomically renamed over it before relaunching. On
 /// macOS and Windows - where swapping a running, unsigned bundle is fragile -
 /// the artifact is downloaded and handed to the OS installer instead of just
-/// opening a browser tab.
+/// opening a browser tab. Android APKs are handed to Android's package
+/// installer, which requires the user to confirm the installation.
 ///
 /// The filesystem/process work goes through an injectable [UpdatePlatformOps]
 /// and the download through an injectable [http.Client], so the whole flow is
@@ -82,6 +83,10 @@ class UpdateInstaller {
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
         return UpdateApplyMode.openArtifact;
+      case TargetPlatform.android:
+        return assetName.toLowerCase().endsWith('.apk')
+            ? UpdateApplyMode.openArtifact
+            : UpdateApplyMode.unsupported;
       default:
         return UpdateApplyMode.unsupported;
     }
