@@ -175,7 +175,7 @@ class EditorScreen extends StatefulWidget {
   /// the seam tests use to inject a fake without real network.
   final UpdateService? updateService;
 
-  /// The in-app updater used to download and apply a newer release (desktop).
+  /// The in-app updater used to download and apply a newer release.
   /// Injected by tests with fake platform ops / HTTP; defaults to a real one.
   final UpdateInstaller? updateInstaller;
 
@@ -376,6 +376,9 @@ class _EditorScreenState extends State<EditorScreen>
       UpdateService(
         currentVersion: AppInfo.version,
         currentBuildCommit: AppInfo.buildCommit,
+        checkInterval: defaultTargetPlatform == TargetPlatform.android
+            ? const Duration(hours: 6)
+            : const Duration(hours: 24),
       );
   bool get _ownsUpdates => widget.updateService == null;
 
@@ -796,6 +799,9 @@ class _EditorScreenState extends State<EditorScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed && widget.ownsApplicationSession) {
       _recoverOcr();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        unawaited(_updates.checkForUpdates());
+      }
     }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||

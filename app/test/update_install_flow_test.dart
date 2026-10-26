@@ -68,6 +68,20 @@ ReleaseInfo _nightlyWindowsRelease() => const ReleaseInfo(
       commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
 
+ReleaseInfo _androidRelease() => ReleaseInfo(
+      version: const AppVersion(1, 3, 0),
+      tagName: dartPdfAndroidTag,
+      name: 'DartPDF Android latest',
+      notes: '',
+      htmlUrl: 'https://example.test/android',
+      assets: const {
+        'app-arm64-v8a.apk': 'https://example.test/app.apk',
+      },
+      assetSizes: const {'app-arm64-v8a.apk': 64},
+      isAndroidUpdate: true,
+      commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+
 void main() {
   late PdfEditingPreferences prefs;
 
@@ -112,6 +126,43 @@ void main() {
 
     // Downloaded and handed to the OS installer, with a confirming snackbar.
     expect(ops.opened, '/downloads/dartpdf-macos.dmg');
+    expect(find.byKey(const ValueKey('update-handed-off')), findsOneWidget);
+  });
+
+  testWidgets('Android update banner downloads APK for package installer',
+      (tester) async {
+    final updates = UpdateService(
+      currentVersion: '1.2.0',
+      currentBuildCommit: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      platform: TargetPlatform.android,
+      androidAbisFetcher: () async => const ['arm64-v8a'],
+      fetcher: () async => [_androidRelease()],
+    );
+    addTearDown(updates.dispose);
+
+    final ops = _FakeOps(platform: TargetPlatform.android);
+    final bytes = Uint8List.fromList(List.generate(64, (i) => i));
+    final installer = UpdateInstaller(
+      ops: ops,
+      clientFactory: () => MockClient.streaming((request, body) async =>
+          http.StreamedResponse(Stream.value(bytes), 200, contentLength: 64)),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: EditorScreen(
+        prefs: prefs,
+        updateService: updates,
+        updateInstaller: installer,
+        autoCheckUpdates: true,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Update now'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('update-banner-download')));
+    await tester.pumpAndSettle();
+
+    expect(ops.opened, '/downloads/app-arm64-v8a.apk');
     expect(find.byKey(const ValueKey('update-handed-off')), findsOneWidget);
   });
 
