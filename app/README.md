@@ -8,9 +8,9 @@ Linux from one codebase.
 This is the **product app**. The SDK's feature showcase lives separately in
 `packages/dart_pdf_editor/example`.
 
-This is a modified copy of the upstream project. Its Android APK is built by
-the `Build APK` workflow in this repository. Run it from GitHub Actions or push
-a tag beginning with `v`, then download the `apk` artifact from the workflow run.
+This is a modified copy of the upstream project. Android and Windows builds
+run in GitHub Actions on each push to `main`; a Release is published with
+`app.apk` and `windows-x64.zip`.
 
 ## Features
 
