@@ -9,11 +9,11 @@ enum UpdateApplyMode {
 
   /// Download the artifact and hand it to the OS: run the installer
   /// (`.dmg` / `.exe`) or reveal it so the user completes the update. Used on
-  /// macOS and Windows, where swapping a running app bundle is fragile and the
-  /// bundles are unsigned anyway.
+  /// macOS and Windows, where swapping a running app bundle is fragile, and on
+  /// Android, where the package installer requires user confirmation.
   openArtifact,
 
-  /// No supported in-app apply path (web, mobile, a Linux tarball install, or
+  /// No supported in-app apply path (web, iOS, a Linux tarball install, or
   /// a release with no direct artifact). Callers fall back to the browser
   /// download.
   unsupported,

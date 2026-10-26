@@ -81,8 +81,7 @@ http.Client Function() _okClient(Uint8List bytes, {int chunks = 1, int? len}) {
           contentLength: len ?? bytes.length));
 }
 
-Uint8List _bytes(int n) =>
-    Uint8List.fromList(List.generate(n, (i) => i % 256));
+Uint8List _bytes(int n) => Uint8List.fromList(List.generate(n, (i) => i % 256));
 
 void main() {
   const appImageAsset = 'dartpdf-linux-x86_64.AppImage';
@@ -134,10 +133,17 @@ void main() {
       expect(installer.modeFor(''), UpdateApplyMode.unsupported);
     });
 
-    test('mobile platforms are unsupported', () {
+    test('Android APKs are handed to the package installer', () {
       final installer =
           UpdateInstaller(ops: _FakeOps(platform: TargetPlatform.android));
-      expect(installer.modeFor('app-release.apk'), UpdateApplyMode.unsupported);
+      expect(
+          installer.modeFor('app-release.apk'), UpdateApplyMode.openArtifact);
+      expect(installer.modeFor('app-release.zip'), UpdateApplyMode.unsupported);
+      expect(
+        UpdateInstaller(ops: _FakeOps(platform: TargetPlatform.iOS))
+            .modeFor('app-release.ipa'),
+        UpdateApplyMode.unsupported,
+      );
     });
   });
 
@@ -147,7 +153,8 @@ void main() {
       final ops = _FakeOps(
           platform: TargetPlatform.linux, appImagePath: '/apps/DartPDF');
       final bytes = _bytes(1024);
-      final installer = UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
+      final installer =
+          UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
 
       var applyingBeforeWrite = false;
       var onApplyingCalls = 0;
@@ -172,8 +179,10 @@ void main() {
       // Staged next to the target (same directory) and marked executable.
       expect(ops.written.keys.single, '/apps/.dartpdf-update.AppImage.part');
       expect(ops.written.values.single, bytes);
-      expect(ops.log, contains('write:/apps/.dartpdf-update.AppImage.part:'
-          'exec=true'));
+      expect(
+          ops.log,
+          contains('write:/apps/.dartpdf-update.AppImage.part:'
+              'exec=true'));
       expect(ops.replacedFrom, '/apps/.dartpdf-update.AppImage.part');
       expect(ops.replacedTo, '/apps/DartPDF');
       expect(ops.relaunched, '/apps/DartPDF');
@@ -184,7 +193,8 @@ void main() {
     test('downloads to the download dir and opens it (macOS)', () async {
       final ops = _FakeOps(platform: TargetPlatform.macOS);
       final bytes = _bytes(2048);
-      final installer = UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
+      final installer =
+          UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
 
       final outcome = await installer.downloadAndApply(
         url: 'https://example.test/dmg',
@@ -195,9 +205,28 @@ void main() {
       expect(outcome, UpdateInstallOutcome.handedOff);
       expect(ops.written['/downloads/dartpdf-macos.dmg'], bytes);
       // Hand-off artifacts are not marked executable.
-      expect(ops.log, contains('write:/downloads/dartpdf-macos.dmg:exec=false'));
+      expect(
+          ops.log, contains('write:/downloads/dartpdf-macos.dmg:exec=false'));
       expect(ops.opened, '/downloads/dartpdf-macos.dmg');
       expect(ops.relaunched, isNull);
+    });
+
+    test('downloads the APK and hands it to Android for user confirmation',
+        () async {
+      final ops = _FakeOps(platform: TargetPlatform.android);
+      final bytes = _bytes(2048);
+      final installer =
+          UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
+
+      final outcome = await installer.downloadAndApply(
+        url: 'https://example.test/app.apk',
+        assetName: 'app-arm64-v8a.apk',
+        expectedSize: bytes.length,
+      );
+
+      expect(outcome, UpdateInstallOutcome.handedOff);
+      expect(ops.written['/downloads/app-arm64-v8a.apk'], bytes);
+      expect(ops.opened, '/downloads/app-arm64-v8a.apk');
     });
   });
 
@@ -227,7 +256,8 @@ void main() {
       final ops = _FakeOps(
           platform: TargetPlatform.linux, appImagePath: '/apps/DartPDF');
       final bytes = _bytes(500);
-      final installer = UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
+      final installer =
+          UpdateInstaller(ops: ops, clientFactory: _okClient(bytes));
 
       await expectLater(
         installer.downloadAndApply(
@@ -251,7 +281,8 @@ void main() {
       );
 
       await expectLater(
-        installer.downloadAndApply(url: 'https://example.test/dmg', assetName: dmgAsset),
+        installer.downloadAndApply(
+            url: 'https://example.test/dmg', assetName: dmgAsset),
         throwsA(isA<UpdateInstallException>()),
       );
       expect(ops.opened, isNull);
@@ -288,7 +319,8 @@ void main() {
       );
 
       await expectLater(
-        installer.downloadAndApply(url: 'https://example.test/dmg', assetName: dmgAsset),
+        installer.downloadAndApply(
+            url: 'https://example.test/dmg', assetName: dmgAsset),
         throwsA(isA<UpdateInstallException>()),
       );
     });

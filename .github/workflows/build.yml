@@ -1,8 +1,9 @@
 name: Build APK e Windows
 
 # Parte a ogni push su main e anche a mano dalla scheda "Actions".
-# Produce APK Android separati per architettura e windows-x64.zip (Windows, portatile),
-# pubblicati come Release del repo. Se nei Secrets ci sono KEYSTORE_BASE64,
+# Produce APK Android separati per architettura e windows-x64.zip (Windows,
+# portatile), pubblica la build numerata e aggiorna il prerelease Android
+# rolling. Se nei Secrets ci sono KEYSTORE_BASE64,
 # KEYSTORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD l'APK e' firmato con la tua chiave.
 
 on:
@@ -127,7 +128,9 @@ jobs:
         run: |
           # numero di build crescente (minuti dal 1970): Android accetta
           # l'installazione sopra la versione precedente solo se il numero sale
-          flutter build apk --release --split-per-abi --build-number=$(( $(date +%s) / 60 ))
+          flutter build apk --release --split-per-abi \
+            --build-number=$(( $(date +%s) / 60 )) \
+            --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA"
 
       - name: Controllo che lo scanner funzioni dopo la riduzione del codice
         run: |
@@ -195,6 +198,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       - uses: actions/download-artifact@v8
         with:
           name: apk
@@ -220,3 +227,26 @@ jobs:
             --title "Build ${GITHUB_RUN_NUMBER}" \
             --notes "Commit ${GITHUB_SHA}" \
             --latest
+
+          version_line="$(grep -m1 '^version:' app/pubspec.yaml | sed 's/^version:[[:space:]]*//')"
+          app_version="${version_line%%+*}"
+          android_tag="app-android-latest"
+          android_notes="$(printf 'Aggiornamento Android automatico.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->' "$GITHUB_SHA" "$app_version")"
+
+          if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$android_tag" \
+              app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$android_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "DartPDF Android latest" \
+              --notes "$android_notes"
+          else
+            gh release create "$android_tag" \
+              app-arm64-v8a.apk app-armeabi-v7a.apk app-x86_64.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "DartPDF Android latest" \
+              --notes "$android_notes" \
+              --prerelease
+          fi
