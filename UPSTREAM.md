@@ -9,7 +9,7 @@ Base della copia. Per vedere le novità: https://github.com/ben-milanko/dart-pdf
 ## Modifiche rispetto all'originale
 
 - `app/android/app/build.gradle.kts`: `applicationId` impostato a `it.tesonepdf.pdf`; il `namespace` è rimasto invariato.
-- Aggiunta una workflow GitHub Actions autonoma per compilare l'APK.
+- Aggiunto un workflow GitHub Actions per compilare APK Android e app Windows e pubblicarli come Release.
 - Gli endpoint app per release, sorgente e segnalazione problemi puntano alla repository `tesonepdf/dart-pdf`.
 - I modelli OCR e le relative licenze sono inclusi in `packages/pdf_ocr_ondevice/assets/ocr/`; app e build web li servono dalla repository dell'utente.
 - Rimossa la selezione Firebase demo; il target di hosting è stato rinominato `tesonepdf-dart-pdf`.
