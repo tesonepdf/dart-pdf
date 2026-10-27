@@ -141,9 +141,9 @@ universal `DartPDF-Android.apk`, plus `main-sha`, `app-version`, and `app-build`
 markers in its notes. The build number equals the commit count and is included
 in the displayed version. To refresh the local archive after a release, run
 `powershell -ExecutionPolicy Bypass -File .\tool\sync-local-builds.ps1` from the
-repository root. It stores one APK per build in `apk\android` and one portable
-Windows ZIP per build in `apk\windows`, retaining the four newest published
-builds in each folder. Cloud Actions cannot write directly to the local PC, so
+repository root. It downloads only the latest build (skipped if already present), stores one
+APK in `apk\android` and one portable Windows ZIP in `apk\windows`, and
+deletes anything beyond the four newest builds in each folder. Cloud Actions cannot write directly to the local PC, so
 run the script after a build finishes.
 
 Android releases require the same permanent signing keystore on every build.
