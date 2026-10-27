@@ -1,4 +1,7 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:image/image.dart' as img;
 
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
@@ -126,15 +129,10 @@ class PdfLineFieldDetector {
     if (w0 is! CosInteger || h0 is! CosInteger) return;
     final sourceW = w0.value, sourceH = h0.value;
     if (sourceW <= 0 || sourceH <= 0) return;
-    final targetW = math.min(sourceW, 2000);
-    final targetH = math.max(1, (sourceH * targetW / sourceW).round());
-    final pixels = targetW < sourceW
-        ? decodePdfImagePixelsScaled(
-            document.cos, request.stream, targetW, targetH)
-        : decodePdfImagePixels(document.cos, request.stream);
-    if (pixels == null) return;
-    final w = pixels.width, h = pixels.height;
-    final rgba = pixels.rgba;
+    final gray = _grayPixels(document, request, sourceW, sourceH);
+    if (gray == null) return;
+    final w = gray.width, h = gray.height;
+    final samples = gray.samples;
     final pxPerPt = w / m.a;
     final minRun = math.max(6, (14 * pxPerPt).round());
     final minChain = (minLength * pxPerPt).round();
@@ -142,9 +140,7 @@ class PdfLineFieldDetector {
     final maxRows = math.max(3, (5 * pxPerPt).round());
 
     bool dark(int x, int y) {
-      final i = (y * w + x) * 4;
-      if (rgba[i + 3] < 128) return false;
-      return (rgba[i] + rgba[i + 1] + rgba[i + 2]) < 3 * 185;
+      return samples[y * w + x] < 185;
     }
 
     final open = <_Chain>[];
@@ -211,6 +207,44 @@ class PdfLineFieldDetector {
       final y = m.f + m.d * (1 - row / h);
       out.add(_Seg(m.e + m.a * chain.x0 / w, m.e + m.a * (chain.x1 + 1) / w, y));
     }
+  }
+
+  /// The page image as one gray byte per pixel. Most scans are plain RGB JPEGs,
+  /// which [decodePdfImagePixels] leaves to the platform codec, so those are
+  /// decoded here directly.
+  static ({Uint8List samples, int width, int height})? _grayPixels(
+      PdfDocument document, PdfImageRequest request, int sourceW, int sourceH) {
+    final targetW = math.min(sourceW, 2000);
+    final targetH = math.max(1, (sourceH * targetW / sourceW).round());
+    final pixels = targetW < sourceW
+        ? decodePdfImagePixelsScaled(
+            document.cos, request.stream, targetW, targetH)
+        : decodePdfImagePixels(document.cos, request.stream);
+    if (pixels != null) {
+      final rgba = pixels.rgba;
+      final n = pixels.width * pixels.height;
+      final out = Uint8List(n);
+      for (var i = 0; i < n; i++) {
+        final j = i * 4;
+        out[i] = rgba[j + 3] < 128
+            ? 255
+            : (rgba[j] + rgba[j + 1] + rgba[j + 2]) ~/ 3;
+      }
+      return (samples: out, width: pixels.width, height: pixels.height);
+    }
+    final filters = pdfImageFilters(document.cos, request.stream.dictionary);
+    if (!filters.contains('DCTDecode')) return null;
+    final jpeg = document.cos
+        .decodeStreamData(request.stream, stopBeforeFilter: 'DCTDecode');
+    final image = img.decodeJpg(jpeg);
+    if (image == null) return null;
+    final w = image.width, h = image.height;
+    final rgb = image.getBytes(order: img.ChannelOrder.rgb);
+    final out = Uint8List(w * h);
+    for (var i = 0, j = 0; i < out.length; i++, j += 3) {
+      out[i] = (rgb[j] + rgb[j + 1] + rgb[j + 2]) ~/ 3;
+    }
+    return (samples: out, width: w, height: h);
   }
 
   static void _fromFill(
