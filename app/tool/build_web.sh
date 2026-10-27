@@ -30,7 +30,9 @@ BUILD_VERSION="${PDF_BUILD_VERSION:-}"
 BUILD_NUMBER="${PDF_BUILD_NUMBER:-}"
 if [ -z "$BUILD_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
   if [ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
-    git -C "$REPO_ROOT" fetch --unshallow origin
+    git_remote="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+    git_remote="${git_remote:-https://github.com/tesonepdf/dart-pdf.git}"
+    git -C "$REPO_ROOT" fetch --unshallow "$git_remote" main
   fi
 
   commit_epoch="$(git -C "$REPO_ROOT" log -1 --format=%ct HEAD)"
