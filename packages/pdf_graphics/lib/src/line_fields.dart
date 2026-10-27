@@ -42,12 +42,16 @@ class PdfLineField {
 
 class _Chain {
   _Chain(this.x0, this.x1, int row)
-      : firstRow = row,
+      : lastA = x0,
+        lastB = x1,
+        firstRow = row,
         lastRow = row,
         sumRow = row.toDouble(),
         n = 1;
   int x0;
   int x1;
+  int lastA;
+  int lastB;
   final int firstRow;
   int lastRow;
   double sumRow;
@@ -247,10 +251,12 @@ class PdfLineFieldDetector {
       }
     }
 
-    final minRun = math.max(6, (14 * pxPerPt).round());
-    final minChain = (minLength * pxPerPt).round();
+    // Pages much wider than a normal sheet (a scan stored 1 px per point at
+    // 1200+ pt) carry proportionally larger glyphs: scale the length limits.
+    final scale = math.max(1.0, imageWidth / 700);
+    final minRun = math.max(6, (14 * scale * pxPerPt).round());
+    final minChain = (minLength * scale * pxPerPt).round();
     final maxRun = (w * 0.92).round();
-    final maxRows = math.max(3, (5 * pxPerPt).round());
     final maxMarkWidth = math.max(2, (4 * pxPerPt).round());
     final maxMarkGap = math.max(3, (8 * pxPerPt).round());
 
@@ -312,8 +318,10 @@ class PdfLineFieldDetector {
       for (final (a, b) in runs) {
         _Chain? hit;
         for (final chain in open) {
-          final overlap = math.min(b, chain.x1) - math.max(a, chain.x0);
-          if (overlap > 0.5 * (b - a)) {
+          // follow the previous row's run, not the chain's whole extent, so
+          // neighbouring letters are not glued into one long strip
+          final overlap = math.min(b, chain.lastB) - math.max(a, chain.lastA);
+          if (overlap > 0.5 * math.max(b - a, chain.lastB - chain.lastA)) {
             hit = chain;
             break;
           }
@@ -323,6 +331,8 @@ class PdfLineFieldDetector {
         } else {
           hit.x0 = math.min(hit.x0, a);
           hit.x1 = math.max(hit.x1, b);
+          hit.lastA = a;
+          hit.lastB = b;
           hit.lastRow = y;
           hit.sumRow += y;
           hit.n++;
@@ -335,7 +345,25 @@ class PdfLineFieldDetector {
       if (width < minChain) continue;
       if (chain.x1 >= w - 3) continue; // the scan's own edge
       final rows = chain.lastRow - chain.firstRow + 1;
-      if (rows > maxRows + 0.08 * width) continue; // a bar or a blot
+      if (rows > math.max(3.0, 0.06 * width + 2) ||
+          rows > 0.012 * w + 2) {
+        continue; // a bar or a blot
+      }
+      var inked = 0;
+      for (var yy = chain.firstRow; yy <= chain.lastRow; yy++) {
+        for (var xx = chain.x0; xx <= chain.x1 && xx < w; xx++) {
+          if (yy >= 0 && yy < h && dark(xx, yy)) inked++;
+        }
+      }
+      if (inked < 0.85 * width * rows) continue; // glyph strokes are patchy
+      var below = 0, belowTotal = 0;
+      for (var yy = chain.lastRow + 1; yy <= chain.lastRow + 3 && yy < h; yy++) {
+        for (var xx = chain.x0; xx <= chain.x1 && xx < w; xx++) {
+          belowTotal++;
+          if (dark(xx, yy)) below++;
+        }
+      }
+      if (belowTotal > 0 && below > 0.3 * belowTotal) continue; // text body
       final row = chain.sumRow / chain.n + 0.5;
       if (row < 0.01 * h || row > 0.99 * h) continue;
       (double, double) toPage(double x, double deskewedY) {
