@@ -9,7 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
-import 'package:pdf_graphics/pdf_graphics.dart' show PdfTextMatch;
+import 'package:pdf_graphics/pdf_graphics.dart'
+    show PdfLineField, PdfLineFieldDetector, PdfTextMatch;
 
 import '../page_geometry.dart';
 import '../renderer.dart';
@@ -2320,6 +2321,48 @@ class PdfEditingController extends ChangeNotifier {
   ///
   /// Text-markup tools are exposed separately through [markupTool]. They
   /// leave this value null so normal text-selection gestures remain active.
+  bool _lineFieldsMode = false;
+  PdfDocument? _lineFieldsDocument;
+  final Map<int, List<PdfLineField>> _lineFieldCache = {};
+
+  /// Whether the page's fill-in strips (drawn rules, underscore runs) are
+  /// highlighted and tapping one opens a text box across its whole width.
+  bool get lineFieldsMode => _lineFieldsMode;
+
+  set lineFieldsMode(bool value) {
+    if (_lineFieldsMode == value) return;
+    _lineFieldsMode = value;
+    _lineFieldCache.clear();
+    if (value && _tool == null) tool = PdfEditTool.select;
+    notifyListeners();
+  }
+
+  /// The strips of [pageIndex] still free of a text box, top to bottom.
+  List<PdfLineField> lineFieldsFor(int pageIndex) {
+    if (!identical(_lineFieldsDocument, _document)) {
+      _lineFieldsDocument = _document;
+      _lineFieldCache.clear();
+    }
+    if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
+    final all = _lineFieldCache.putIfAbsent(
+      pageIndex,
+      () => PdfLineFieldDetector.detect(_document, pageIndex),
+    );
+    final taken = [
+      for (final a in _page(pageIndex).annotations)
+        if (a.subtype == 'FreeText') a.rect,
+    ];
+    return [
+      for (final f in all)
+        if (!taken.any((r) =>
+            r.bottom <= f.y + 2 &&
+            r.top >= f.y &&
+            math.min(r.right, f.right) - math.max(r.left, f.left) >
+                f.width * 0.5))
+          f,
+    ];
+  }
+
   PdfEditTool? get tool => _tool;
 
   set tool(PdfEditTool? value) {
