@@ -3286,6 +3286,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void dispose() {
     _polyLastTapTimer?.cancel();
     _selectTapTimer?.cancel();
+    _lineCursorEntry?.remove();
+    _lineCursorEntry = null;
     _lineCursorRepeatTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
     if (_textEditRect != null) _controller.setEditingText(false);
@@ -3944,105 +3946,31 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     });
   }
 
-  Widget _buildLineCursorPad() {
-    const directions = <(LogicalKeyboardKey, IconData, String, String)>[
-      (LogicalKeyboardKey.arrowUp, Icons.keyboard_arrow_up, 'Up', 'up'),
-      (LogicalKeyboardKey.arrowLeft, Icons.keyboard_arrow_left, 'Left', 'left'),
-      (
-        LogicalKeyboardKey.arrowRight,
-        Icons.keyboard_arrow_right,
-        'Right',
-        'right'
-      ),
-      (LogicalKeyboardKey.arrowDown, Icons.keyboard_arrow_down, 'Down', 'down'),
-    ];
-    const buttonSize = 44.0;
-    const padSize = buttonSize * 3;
-    const edgeInset = 8.0;
-    final rect = _textEditRect!;
-    final maxLeft =
-        math.max(edgeInset, _geometry.viewSize.width - padSize - edgeInset);
-    final maxTop =
-        math.max(edgeInset, _geometry.viewSize.height - padSize - edgeInset);
-    final left = (rect.right - padSize).clamp(edgeInset, maxLeft).toDouble();
-    final below = rect.bottom + edgeInset;
-    final top = (below + padSize <= _geometry.viewSize.height - edgeInset
-            ? below
-            : rect.top - padSize - edgeInset)
-        .clamp(edgeInset, maxTop)
-        .toDouble();
+  OverlayEntry? _lineCursorEntry;
 
-    Widget button(
-      LogicalKeyboardKey direction,
-      IconData icon,
-      String label,
-      String key,
-    ) {
-      return Semantics(
-        button: true,
-        label: 'Move cursor $label',
-        onTap: () => _moveLineFieldCursor(direction),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {},
-          onLongPress: () {},
-          child: Listener(
-            key: ValueKey('pdf-line-cursor-$key'),
-            behavior: HitTestBehavior.opaque,
-            onPointerDown: (_) => _startLineCursorMove(direction),
-            onPointerUp: (_) => _stopLineCursorMove(),
-            onPointerCancel: (_) => _stopLineCursorMove(),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: SizedBox(
-                width: buttonSize,
-                height: buttonSize,
-                child: Icon(icon,
-                    size: 26, color: Theme.of(context).colorScheme.onSurface),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Positioned(
-      left: left,
-      top: top,
-      child: Material(
-        elevation: 5,
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12 * _chromeScale),
-        child: SizedBox(
-          width: padSize,
-          height: padSize,
-          child: Stack(
-            children: [
-              Positioned(
-                  left: buttonSize,
-                  top: 0,
-                  child: button(directions[0].$1, directions[0].$2,
-                      directions[0].$3, directions[0].$4)),
-              Positioned(
-                  left: 0,
-                  top: buttonSize,
-                  child: button(directions[1].$1, directions[1].$2,
-                      directions[1].$3, directions[1].$4)),
-              Positioned(
-                  left: buttonSize * 2,
-                  top: buttonSize,
-                  child: button(directions[2].$1, directions[2].$2,
-                      directions[2].$3, directions[2].$4)),
-              Positioned(
-                  left: buttonSize,
-                  top: buttonSize * 2,
-                  child: button(directions[3].$1, directions[3].$2,
-                      directions[3].$3, directions[3].$4)),
-            ],
-          ),
-        ),
+  /// Floats the arrow pad above the whole app (not inside the page, which a
+  /// zoom would carry off screen): small, draggable, and it holds the text
+  /// field's focus while a key is down so a press never closes the editor.
+  void _showLineCursorPad() {
+    if (_lineCursorEntry != null) return;
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    final entry = OverlayEntry(
+      builder: (_) => _LineCursorPad(
+        onPress: _startLineCursorMove,
+        onRelease: _stopLineCursorMove,
+        onHold: _holdChipFocus,
+        onUnhold: _releaseChipFocus,
       ),
     );
+    _lineCursorEntry = entry;
+    overlay.insert(entry);
+  }
+
+  void _hideLineCursorPad() {
+    final entry = _lineCursorEntry;
+    _lineCursorEntry = null;
+    entry?.remove();
   }
 
   /// Opens the inline text editor over [viewRect] - empty for a fresh
@@ -4117,6 +4045,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // insertion point explicitly so it is always after the last glyph.
     _textEditText.selection =
         TextSelection.collapsed(offset: _textEditText.text.length);
+    if (lineField != null) {
+      _showLineCursorPad();
+    } else {
+      _hideLineCursorPad();
+    }
     setState(() {
       _textEditRect = rect;
       _textEditPageRect = pageRect ?? _geometry.toPageRect(rect);
@@ -4677,6 +4610,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _closeTextEditor() {
     if (_textEditRect == null) return;
     _stopLineCursorMove();
+    _hideLineCursorPad();
     // whether the editor still owned the keyboard: a close driven by Escape,
     // ⌘Enter, or a tap on the page arrives with focus still on the field; a
     // close because the user clicked another widget (e.g. a toolbar field)
@@ -8243,8 +8177,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     ),
                   ),
                 ),
-              if (_textEditRect != null && _textEditLineField != null)
-                _buildLineCursorPad(),
               if (_textEditRect != null &&
                   _controller.hasTouchInput &&
                   widget.showInlineTextStyleChip)
@@ -9055,6 +8987,130 @@ class _HoverCursorPainter extends CustomPainter {
 
 /// Draws the page-space snapping grid above the page raster but below all
 /// live editing previews and selection chrome.
+/// The small, draggable arrow pad that nudges a line-field text box. It lives
+/// in the app's root overlay so it stays on screen at any zoom.
+class _LineCursorPad extends StatefulWidget {
+  const _LineCursorPad({
+    required this.onPress,
+    required this.onRelease,
+    required this.onHold,
+    required this.onUnhold,
+  });
+
+  final void Function(LogicalKeyboardKey direction) onPress;
+  final VoidCallback onRelease;
+  final VoidCallback onHold;
+  final VoidCallback onUnhold;
+
+  @override
+  State<_LineCursorPad> createState() => _LineCursorPadState();
+}
+
+class _LineCursorPadState extends State<_LineCursorPad> {
+  static Offset? _memory; // where the user last left the pad
+  static const double _key = 34;
+  static const double _size = _key * 3;
+  Offset? _position;
+
+  Widget _arrow(LogicalKeyboardKey direction, IconData icon, Color color) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) {
+        widget.onHold();
+        widget.onPress(direction);
+      },
+      onPointerUp: (_) {
+        widget.onRelease();
+        widget.onUnhold();
+      },
+      onPointerCancel: (_) {
+        widget.onRelease();
+        widget.onUnhold();
+      },
+      child: SizedBox(
+        width: _key,
+        height: _key,
+        child: Icon(icon, size: 20, color: color),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final screen = media.size;
+    final minTop = media.padding.top;
+    final maxTop = math.max(minTop, screen.height - _size - media.padding.bottom);
+    final maxLeft = math.max(0.0, screen.width - _size);
+    final start = _position ??
+        _memory ??
+        Offset(screen.width - _size - 12, screen.height * 0.38);
+    final at = Offset(
+      start.dx.clamp(0.0, maxLeft).toDouble(),
+      start.dy.clamp(minTop, maxTop).toDouble(),
+    );
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      left: at.dx,
+      top: at.dy,
+      child: Material(
+        elevation: 4,
+        color: scheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: _size,
+          height: _size,
+          child: Stack(
+            children: [
+              Positioned(
+                left: _key,
+                top: 0,
+                child: _arrow(LogicalKeyboardKey.arrowUp,
+                    Icons.keyboard_arrow_up, scheme.onSurface),
+              ),
+              Positioned(
+                left: 0,
+                top: _key,
+                child: _arrow(LogicalKeyboardKey.arrowLeft,
+                    Icons.keyboard_arrow_left, scheme.onSurface),
+              ),
+              Positioned(
+                left: _key * 2,
+                top: _key,
+                child: _arrow(LogicalKeyboardKey.arrowRight,
+                    Icons.keyboard_arrow_right, scheme.onSurface),
+              ),
+              Positioned(
+                left: _key,
+                top: _key * 2,
+                child: _arrow(LogicalKeyboardKey.arrowDown,
+                    Icons.keyboard_arrow_down, scheme.onSurface),
+              ),
+              Positioned(
+                left: _key,
+                top: _key,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanUpdate: (d) => setState(() {
+                    _position = at + d.delta;
+                    _memory = _position;
+                  }),
+                  child: SizedBox(
+                    width: _key,
+                    height: _key,
+                    child: Icon(Icons.open_with,
+                        size: 16, color: scheme.onSurfaceVariant),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LineFieldsPainter extends CustomPainter {
   _LineFieldsPainter({required this.rects, required this.color});
 
