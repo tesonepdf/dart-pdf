@@ -919,6 +919,7 @@ class PdfAnnotation {
     final cssCharSpacing = _cssPoints(cssValue('letter-spacing'));
     final cssHorizontalScale = _cssPercent(cssValue('font-stretch'));
     final cssDecoration = cssValue('text-decoration')?.toLowerCase();
+    final textInset = number(kPdfFreeTextInsetKey);
     return PdfFreeTextStyle(
       fontName: tf.group(1)!,
       fontSize: size,
@@ -946,6 +947,9 @@ class PdfAnnotation {
       underline: underlineFlag is CosBoolean
           ? underlineFlag.value
           : (cssDecoration?.contains('underline') ?? false),
+      textInset: textInset != null && textInset.isFinite && textInset >= 0
+          ? textInset
+          : 0,
     );
   }
 
@@ -1188,13 +1192,15 @@ String pdfFormatDate(DateTime time) {
 
 /// Dictionary keys where free-text styling that /DA and /Q cannot express
 /// is persisted (line height, character spacing, horizontal glyph scaling,
-/// whole-box underline). Non-standard PDF keys, written and read back only
-/// by this package so a resize/edit can regenerate the same appearance.
+/// whole-box underline, and the chosen text start inset). Non-standard PDF
+/// keys, written and read back only by this package so a resize/edit can
+/// regenerate the same appearance.
 const String kPdfFreeTextLineSpacingKey = 'LineSpacing';
 const String kPdfFreeTextCharSpacingKey = 'CharSpacing';
 const String kPdfFreeTextHScaleKey = 'HScale';
 const String kPdfFreeTextUnderlineKey = 'TextUnderline';
 const String kPdfFreeTextVerticalAlignKey = 'DartPdfTextVerticalAlignment';
+const String kPdfFreeTextInsetKey = 'DartPdfTextLeftInset';
 
 /// One leader of a callout: the page-space point its arrow points at, and
 /// optionally where it meets the text box (snapped onto the box perimeter;
@@ -1324,6 +1330,7 @@ class PdfFreeTextStyle {
     this.charSpacing = 0,
     this.horizontalScale = kPdfFreeTextDefaultHorizontalScale,
     this.underline = false,
+    this.textInset = 0,
   });
 
   /// The /DA font resource name (e.g. `Helv`), unresolved.
@@ -1362,6 +1369,9 @@ class PdfFreeTextStyle {
 
   /// Whether the whole box is drawn underlined.
   final bool underline;
+
+  /// Extra left inset in points, used to retain a chosen text start position.
+  final double textInset;
 }
 
 /// A /Link annotation: a clickable region with an action (§12.5.6.5).
