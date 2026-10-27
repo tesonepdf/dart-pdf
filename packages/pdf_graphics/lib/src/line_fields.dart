@@ -91,12 +91,20 @@ class PdfLineFieldDetector {
     } catch (_) {
       // a page the interpreter cannot walk still gets its text strips
     }
+    // Text strips (underscores, dots) only estimate the rule's height from the
+    // line box - and an OCR layer's boxes are loose - so a drawn or scanned
+    // rule at the same place always wins over its text twin.
     try {
       final text = PdfTextExtractor.extract(document, pageIndex);
       for (final match in text.findAll(r'_{3,}|\.{6,}', regex: true)) {
         for (final r in match.rects) {
           final y = r.bottom + (r.top - r.bottom) * 0.2;
-          segs.add(_Seg(r.left, r.right, y));
+          final width = r.right - r.left;
+          final twin = segs.any((g) =>
+              (g.y - y).abs() <= 16 &&
+              math.min(g.right, r.right) - math.max(g.left, r.left) >
+                  width * 0.4);
+          if (!twin) segs.add(_Seg(r.left, r.right, y));
         }
       }
     } catch (_) {}
