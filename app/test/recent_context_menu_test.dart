@@ -273,14 +273,18 @@ void main() {
 
     await rightClick(tester, listRow('/docs/a.pdf'));
 
-    final item = tester.widget<PopupMenuItem<dynamic>>(
-        find.byKey(const ValueKey('recent-menu-open')));
-    expect(
-      item.height,
-      defaultTargetPlatform == TargetPlatform.linux
-          ? 36
-          : kMinInteractiveDimension,
-    );
+    final itemFinder = find.byKey(const ValueKey('recent-menu-open'));
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      expect(tester.widget<ListTile>(itemFinder).enabled, isTrue);
+      expect(
+        tester.getSize(itemFinder).height,
+        greaterThanOrEqualTo(kMinInteractiveDimension),
+      );
+    } else {
+      final item = tester.widget<PopupMenuItem<dynamic>>(itemFinder);
+      expect(item.height, 36);
+    }
   },
       variant: const TargetPlatformVariant({
         TargetPlatform.linux,

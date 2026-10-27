@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -1518,6 +1520,9 @@ void _maybeCloseShellControls(BuildContext context) {
 }
 
 enum _ViewOption {
+  pages,
+  reflow,
+  pageGrid,
   annotations,
   scrollbarChapters,
   formHighlight,
@@ -1532,6 +1537,7 @@ Future<void> _selectViewOption(
   BuildContext context,
   _ViewOption option, {
   required PdfEditingPreferences preferences,
+  PdfViewModeHolder? viewMode,
   required bool pageColor,
   required VoidCallback? onAuthorPressed,
   Map<PdfEditTool, PdfToolShortcut>? toolShortcuts,
@@ -1539,6 +1545,12 @@ Future<void> _selectViewOption(
   Set<PdfEditTool>? tools,
 }) async {
   switch (option) {
+    case _ViewOption.pages:
+      (viewMode ?? preferences).viewMode = PdfViewMode.pages;
+    case _ViewOption.reflow:
+      (viewMode ?? preferences).viewMode = PdfViewMode.reflow;
+    case _ViewOption.pageGrid:
+      (viewMode ?? preferences).viewMode = PdfViewMode.pageGrid;
     case _ViewOption.annotations:
       preferences.showAnnotations = !preferences.showAnnotations;
     case _ViewOption.scrollbarChapters:
@@ -2033,17 +2045,6 @@ Future<void> showPdfShellViewOptionsSheet(
   );
 }
 
-/// How wide the view-options popup grows when it carries the view-mode
-/// segmented control: 6 of Flutter's 56pt menu steps.
-///
-/// Not a ceiling the content stops short of - a [SegmentedButton] fills the
-/// width it is offered, so this IS the menu's width whenever the modes are
-/// shown. 336 fits the English labels ("Reflow text" is the widest at ~79pt
-/// of 14pt Roboto, plus segment padding, times three); a verbose locale
-/// ellipsizes into the same frame rather than pushing the menu wider than a
-/// menu should be.
-const double _viewModeMenuMaxWidth = 6 * 56;
-
 /// The [PdfViewMode] to show as selected when the host does not offer every
 /// mode. A shell can turn reflow or the page grid off ([PdfEditorFeatures]),
 /// and a segmented control asserts if its selected value has no segment.
@@ -2100,86 +2101,12 @@ List<PdfShellControlItem> pdfShellViewModeControls(
   ];
 }
 
-/// The view-mode segmented control that opens the view-options popup.
-///
-/// A [PopupMenuEntry] rather than a [PopupMenuItem] because the modes are one
-/// exclusive choice, not independent commands - the same reason
-/// [_KeyboardShortcutMenuItem] is one. Drawn as checkmarks in a run of display
-/// toggles they read as three unrelated switches, and clearing one meant
-/// unticking it, since "pages" was only ever the absence of the other two.
-///
-/// Picking a mode closes the menu, matching the checked items it replaces (and
-/// there is nothing to see behind an open menu that covers the view anyway).
-class _ViewModeMenuItem extends PopupMenuEntry<_ViewOption> {
-  const _ViewModeMenuItem({
-    required this.viewMode,
-    required this.reflow,
-    required this.pageGrid,
-  });
-
-  final PdfViewModeHolder viewMode;
-  final bool reflow;
-  final bool pageGrid;
-
-  @override
-  double get height => kMinInteractiveDimension;
-
-  // it stands for no single _ViewOption - it handles its own taps and never
-  // travels through the menu's onSelected
-  @override
-  bool represents(_ViewOption? value) => false;
-
-  @override
-  State<_ViewModeMenuItem> createState() => _ViewModeMenuItemState();
-}
-
-class _ViewModeMenuItemState extends State<_ViewModeMenuItem> {
-  // Every segment is as wide as the widest one, so a verbose locale can ask
-  // for more than any menu should be - Ukrainian's "Переформатувати текст"
-  // alone runs to 21 characters. The label ellipsizes and keeps its full text
-  // in a tooltip rather than overflowing or forcing a menu wider than
-  // [_viewModeMenuMaxWidth].
-  ButtonSegment<PdfViewMode> _segment(PdfViewMode value, String label) =>
-      ButtonSegment(
-        value: value,
-        tooltip: label,
-        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = pdfL10n(context);
-    final mode = _effectiveViewMode(widget.viewMode.viewMode,
-        reflow: widget.reflow, pageGrid: widget.pageGrid);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      child: SegmentedButton<PdfViewMode>(
-        key: const ValueKey('pdf-shell-view-mode'),
-        // The filled segment already says which mode is on, and a checkmark
-        // here would be the same glyph the display toggles below use for a
-        // different question - plus it costs a whole 56pt menu step.
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: [
-          _segment(PdfViewMode.pages, l10n.shellViewPages),
-          if (widget.reflow) _segment(PdfViewMode.reflow, l10n.shellReflowText),
-          if (widget.pageGrid)
-            _segment(PdfViewMode.pageGrid, l10n.shellPageGrid),
-        ],
-        selected: {mode},
-        onSelectionChanged: (selection) {
-          widget.viewMode.viewMode = selection.first;
-          Navigator.of(context).maybePop();
-        },
-      ),
-    );
-  }
-}
-
 /// The "view options" popup both shells offer: the view mode, then
 /// display-only settings (annotation visibility, form-field highlight, paper
 /// color, and optional editing guides) that live in [PdfEditingPreferences]
 /// and never touch the document.
+const double _viewModeMenuMaxWidth = 6 * 56;
+
 class PdfShellViewOptionsButton extends StatelessWidget {
   const PdfShellViewOptionsButton({
     super.key,
@@ -2238,21 +2165,185 @@ class PdfShellViewOptionsButton extends StatelessWidget {
     return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
+  Future<void> _openViewOptions(BuildContext context) async {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+    final modeSource = viewMode ?? preferences;
+    final mode = _effectiveViewMode(
+      modeSource.viewMode,
+      reflow: reflow,
+      pageGrid: pageGrid,
+    );
+    final l10n = pdfL10n(context);
+    final entries = <PdfMenuEntry<_ViewOption>>[
+      if (reflow || pageGrid) ...[
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-view-mode-pages'),
+          value: _ViewOption.pages,
+          label: l10n.shellViewPages,
+          icon: Icons.description_outlined,
+          checked: mode == PdfViewMode.pages,
+        ),
+        if (reflow)
+          PdfMenuItem<_ViewOption>(
+            key: const ValueKey('pdf-shell-view-mode-reflow'),
+            value: _ViewOption.reflow,
+            label: l10n.shellReflowText,
+            icon: Icons.article_outlined,
+            checked: mode == PdfViewMode.reflow,
+          ),
+        if (pageGrid)
+          PdfMenuItem<_ViewOption>(
+            key: const ValueKey('pdf-shell-view-mode-page-grid'),
+            value: _ViewOption.pageGrid,
+            label: l10n.shellPageGrid,
+            icon: Icons.grid_view_outlined,
+            checked: mode == PdfViewMode.pageGrid,
+          ),
+        const PdfMenuDivider(),
+      ],
+      PdfMenuItem<_ViewOption>(
+        key: const ValueKey('pdf-shell-show-annotations'),
+        value: _ViewOption.annotations,
+        label: l10n.shellShowAnnotations,
+        icon: Icons.visibility_outlined,
+        checked: preferences.showAnnotations,
+      ),
+      PdfMenuItem<_ViewOption>(
+        key: const ValueKey('pdf-shell-show-scrollbar-chapters'),
+        value: _ViewOption.scrollbarChapters,
+        label: l10n.shellShowScrollbarChapters,
+        icon: Icons.bookmarks_outlined,
+        checked: preferences.showScrollbarChapters,
+      ),
+      PdfMenuItem<_ViewOption>(
+        key: const ValueKey('pdf-shell-highlight-forms'),
+        value: _ViewOption.formHighlight,
+        label: l10n.shellHighlightFormFields,
+        icon: Icons.highlight_alt_outlined,
+        checked: preferences.highlightFormFields,
+      ),
+      if (pageColor)
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-page-color'),
+          value: _ViewOption.pageColor,
+          label: l10n.shellPageColor,
+          icon: Icons.palette_outlined,
+          trailing: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: preferences.pageColor,
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          child: ListTile(
+            leading: Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: preferences.pageColor,
+                border:
+                    Border.all(color: Theme.of(context).colorScheme.outline),
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            title: Text(l10n.shellPageColor),
+            trailing: Text(_hex(preferences.pageColor)),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      if (pageColor)
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-bake-page-color'),
+          value: _ViewOption.bakePageColor,
+          label: l10n.shellBakePageColor,
+          icon: Icons.save_outlined,
+          checked: preferences.bakePageColor,
+        ),
+      if (editingGuides)
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-editing-guides'),
+          value: _ViewOption.editingGuides,
+          label: l10n.guidesDialogTitle,
+          icon: Icons.grid_4x4,
+        ),
+      if (author)
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-author'),
+          value: _ViewOption.author,
+          label: l10n.shellDefaultAuthor,
+          icon: Icons.person_outline,
+          subtitle: authorName == null || authorName!.trim().isEmpty
+              ? l10n.shellNotSet
+              : authorName,
+          child: ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: Text(l10n.shellDefaultAuthor),
+            subtitle: Text(
+              authorName == null || authorName!.trim().isEmpty
+                  ? l10n.shellNotSet
+                  : authorName!,
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      if (toolShortcuts != null &&
+          onToolShortcutsChanged != null &&
+          PdfKeyboardAvailability.of(context))
+        PdfMenuItem<_ViewOption>(
+          key: const ValueKey('pdf-shell-shortcuts'),
+          value: _ViewOption.shortcuts,
+          label: l10n.shellKeyboardShortcutsMenu,
+          icon: Icons.keyboard_outlined,
+        ),
+    ];
+    final anchor =
+        renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    final selected = await PdfEditorPresenter.of(context).menu<_ViewOption>(
+      context,
+      PdfMenuRequest<_ViewOption>(anchor: anchor, entries: entries),
+    );
+    if (selected == null || !context.mounted) return;
+    await _selectViewOption(
+      context,
+      selected,
+      preferences: preferences,
+      viewMode: modeSource,
+      pageColor: pageColor,
+      onAuthorPressed: onAuthorPressed,
+      toolShortcuts: toolShortcuts,
+      onToolShortcutsChanged: onToolShortcutsChanged,
+      tools: tools,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final touchPlatform = defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    if (touchPlatform) {
+      return IconButton(
+        key: const ValueKey('pdf-shell-view-options'),
+        tooltip: pdfL10n(context).shellSettings,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        onPressed: () => unawaited(_openViewOptions(context)),
+        icon: Icon(
+          Icons.display_settings_outlined,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
     return PopupMenuButton<_ViewOption>(
       key: const ValueKey('pdf-shell-view-options'),
       tooltip: pdfL10n(context).shellSettings,
-      // A popup stops at 5 menu steps (280pt) by default, which is fine for a
-      // column of rows but squeezes three labelled segments. Raise the cap
-      // only when the modes are actually offered - IntrinsicWidth still sizes
-      // the menu to its content, in 56pt steps.
       constraints: reflow || pageGrid
           ? const BoxConstraints(minWidth: 112, maxWidth: _viewModeMenuMaxWidth)
           : null,
+      iconSize: 24,
       icon: const Icon(Icons.display_settings_outlined),
-      // match the bar's IconButtons; a PopupMenuButton icon otherwise
-      // defaults to black87 instead of onSurfaceVariant
       iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
       onSelected: (option) async {
@@ -2260,6 +2351,7 @@ class PdfShellViewOptionsButton extends StatelessWidget {
           context,
           option,
           preferences: preferences,
+          viewMode: viewMode ?? preferences,
           pageColor: pageColor,
           onAuthorPressed: onAuthorPressed,
           toolShortcuts: toolShortcuts,
@@ -2354,8 +2446,66 @@ class PdfShellViewOptionsButton extends StatelessWidget {
   }
 }
 
-// PopupMenuButton builds its entries only when opening. Read availability
-// inside the mounted entry so an open tablet menu also tracks keyboard changes.
+class _ViewModeMenuItem extends PopupMenuEntry<_ViewOption> {
+  const _ViewModeMenuItem({
+    required this.viewMode,
+    required this.reflow,
+    required this.pageGrid,
+  });
+
+  final PdfViewModeHolder viewMode;
+  final bool reflow;
+  final bool pageGrid;
+
+  @override
+  double get height => kMinInteractiveDimension;
+
+  @override
+  bool represents(_ViewOption? value) => false;
+
+  @override
+  State<_ViewModeMenuItem> createState() => _ViewModeMenuItemState();
+}
+
+class _ViewModeMenuItemState extends State<_ViewModeMenuItem> {
+  ButtonSegment<PdfViewMode> _segment(PdfViewMode value, String label) =>
+      ButtonSegment(
+        value: value,
+        tooltip: label,
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = pdfL10n(context);
+    final mode = _effectiveViewMode(
+      widget.viewMode.viewMode,
+      reflow: widget.reflow,
+      pageGrid: widget.pageGrid,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: SegmentedButton<PdfViewMode>(
+        key: const ValueKey('pdf-shell-view-mode'),
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        segments: [
+          _segment(PdfViewMode.pages, l10n.shellViewPages),
+          if (widget.reflow)
+            _segment(PdfViewMode.reflow, l10n.shellReflowText),
+          if (widget.pageGrid)
+            _segment(PdfViewMode.pageGrid, l10n.shellPageGrid),
+        ],
+        selected: {mode},
+        onSelectionChanged: (selection) {
+          widget.viewMode.viewMode = selection.first;
+          Navigator.of(context).maybePop();
+        },
+      ),
+    );
+  }
+}
+
 class _KeyboardShortcutMenuItem extends PopupMenuEntry<_ViewOption> {
   const _KeyboardShortcutMenuItem();
 
@@ -2370,7 +2520,8 @@ class _KeyboardShortcutMenuItem extends PopupMenuEntry<_ViewOption> {
       _KeyboardShortcutMenuItemState();
 }
 
-class _KeyboardShortcutMenuItemState extends State<_KeyboardShortcutMenuItem> {
+class _KeyboardShortcutMenuItemState
+    extends State<_KeyboardShortcutMenuItem> {
   @override
   Widget build(BuildContext context) => PdfKeyboardAvailability.of(context)
       ? PopupMenuItem<_ViewOption>(

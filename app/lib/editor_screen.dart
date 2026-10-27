@@ -3047,62 +3047,66 @@ class _EditorScreenState extends State<EditorScreen>
     VoidCallback? onChanged,
   }) async {
     final tab = _tabs[index];
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final selected = await showMenu<_TabMenuAction>(
-      context: context,
-      position: RelativeRect.fromRect(
-        position & const Size(40, 40),
-        Offset.zero & overlay.size,
+    final selected = await PdfEditorPresenter.of(context).menu<_TabMenuAction>(
+      context,
+      PdfMenuRequest<_TabMenuAction>.at(
+        position,
+        entries: [
+          // Match the app menu's tight rows on desktop
+          // (kMinInteractiveDimension stays on touch platforms).
+          if (supportsOpenContainingFolder && tab.originPath != null) ...[
+            PdfMenuItem(
+              key: const ValueKey('tab-menu-open-folder'),
+              value: _TabMenuAction.openFolder,
+              label: openContainingFolderLabel,
+              icon: Icons.folder_open_outlined,
+              height: _appMenuItemHeight(),
+            ),
+            const PdfMenuDivider(),
+          ],
+          if (widget.onNewWindow != null && tab.session != null) ...[
+            PdfMenuItem(
+              key: const ValueKey('tab-menu-move-window'),
+              value: _TabMenuAction.moveToNewWindow,
+              label: appL10n(context).editorMoveToNewWindow,
+              icon: Icons.open_in_new,
+              height: _appMenuItemHeight(),
+            ),
+            const PdfMenuDivider(),
+          ],
+          PdfMenuItem(
+            key: const ValueKey('tab-menu-close'),
+            value: _TabMenuAction.close,
+            label: appL10n(context).close,
+            icon: Icons.close,
+            height: _appMenuItemHeight(),
+          ),
+          PdfMenuItem(
+            key: const ValueKey('tab-menu-close-others'),
+            value: _TabMenuAction.closeOthers,
+            enabled: _tabs.length > 1,
+            label: appL10n(context).editorCloseOthers,
+            icon: Icons.tab_unselected,
+            height: _appMenuItemHeight(),
+          ),
+          PdfMenuItem(
+            key: const ValueKey('tab-menu-close-right'),
+            value: _TabMenuAction.closeRight,
+            enabled: index < _tabs.length - 1,
+            label: appL10n(context).editorCloseTabsToRight,
+            icon: Icons.last_page,
+            height: _appMenuItemHeight(),
+          ),
+          const PdfMenuDivider(),
+          PdfMenuItem(
+            key: const ValueKey('tab-menu-close-all'),
+            value: _TabMenuAction.closeAll,
+            label: appL10n(context).editorCloseAll,
+            icon: Icons.close_fullscreen,
+            height: _appMenuItemHeight(),
+          ),
+        ],
       ),
-      items: [
-        // Match the app menu's tight rows on desktop (kMinInteractiveDimension
-        // stays on touch platforms) so every popup reads at one size.
-        if (supportsOpenContainingFolder && tab.originPath != null) ...[
-          PopupMenuItem(
-            key: const ValueKey('tab-menu-open-folder'),
-            height: _appMenuItemHeight(),
-            value: _TabMenuAction.openFolder,
-            child: Text(openContainingFolderLabel),
-          ),
-          const PopupMenuDivider(),
-        ],
-        if (widget.onNewWindow != null && tab.session != null) ...[
-          PopupMenuItem(
-            key: const ValueKey('tab-menu-move-window'),
-            height: _appMenuItemHeight(),
-            value: _TabMenuAction.moveToNewWindow,
-            child: Text(appL10n(context).editorMoveToNewWindow),
-          ),
-          const PopupMenuDivider(),
-        ],
-        PopupMenuItem(
-          key: const ValueKey('tab-menu-close'),
-          height: _appMenuItemHeight(),
-          value: _TabMenuAction.close,
-          child: Text(appL10n(context).close),
-        ),
-        PopupMenuItem(
-          key: const ValueKey('tab-menu-close-others'),
-          height: _appMenuItemHeight(),
-          value: _TabMenuAction.closeOthers,
-          enabled: _tabs.length > 1,
-          child: Text(appL10n(context).editorCloseOthers),
-        ),
-        PopupMenuItem(
-          key: const ValueKey('tab-menu-close-right'),
-          height: _appMenuItemHeight(),
-          value: _TabMenuAction.closeRight,
-          enabled: index < _tabs.length - 1,
-          child: Text(appL10n(context).editorCloseTabsToRight),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          key: const ValueKey('tab-menu-close-all'),
-          height: _appMenuItemHeight(),
-          value: _TabMenuAction.closeAll,
-          child: Text(appL10n(context).editorCloseAll),
-        ),
-      ],
     );
     if (selected == null || !mounted) return;
     // Re-resolve the tab's current position - nothing reorders while the modal
