@@ -55,11 +55,13 @@ class _Chain {
 }
 
 class _Seg {
-  _Seg(this.left, this.right, this.y, {this.slope = 0});
+  _Seg(this.left, this.right, this.y,
+      {this.slope = 0, this.allowShort = false});
   double left;
   double right;
   double y;
   double slope;
+  bool allowShort;
 
   double yAt(double x) => y + slope * (x - (left + right) / 2);
 }
@@ -107,7 +109,11 @@ class PdfLineFieldDetector {
     // rule at the same place always wins over its text twin.
     try {
       final text = PdfTextExtractor.extract(document, pageIndex);
-      for (final match in text.findAll(r'_{3,}|\.{6,}', regex: true)) {
+      for (final match in text.findAll(r'_{2,}|\.{2,}', regex: true)) {
+        final before = match.start == 0 ? null : text.text[match.start - 1];
+        final after =
+            match.end == text.text.length ? null : text.text[match.end];
+        if (_isWordCharacter(before) || _isWordCharacter(after)) continue;
         for (final r in match.rects) {
           final y = r.bottom + (r.top - r.bottom) * 0.2;
           final width = r.right - r.left;
@@ -116,21 +122,32 @@ class PdfLineFieldDetector {
               (g.yAt(centerX) - y).abs() <= 16 &&
               math.min(g.right, r.right) - math.max(g.left, r.left) >
                   width * 0.4);
-          if (!twin) segs.add(_Seg(r.left, r.right, y));
+          if (!twin) {
+            segs.add(_Seg(r.left, r.right, y, allowShort: true));
+          }
         }
       }
     } catch (_) {}
     return _merge(segs, pageIndex, minLength);
   }
 
-  /// Scanned pages: finds long, thin dark runs in the page image itself.
-  /// A small global deskew lets rules on a rotated camera image join into
-  /// continuous runs before their endpoints are mapped back to page space.
+  static bool _isWordCharacter(String? character) {
+    if (character == null || character.isEmpty) return false;
+    final code = character.codeUnitAt(0);
+    return (code >= 0x30 && code <= 0x39) ||
+        (code >= 0x41 && code <= 0x5a) ||
+        (code >= 0x61 && code <= 0x7a);
+  }
+
+  /// Scanned pages: finds thin rules and repeated dash/dot marks in the image.
+  /// Local contrast suppresses uneven illumination and shadows; deskew then
+  /// brings camera-tilted marks back onto shared rows before joining them.
   static void _fromImage(PdfDocument document, PdfImageRequest request,
       List<_Seg> out, double minLength) {
     final m = request.transform;
     final imageWidth = math.sqrt(m.a * m.a + m.b * m.b);
-    if (imageWidth < 100) return; // icons and logos, not a page or a band of one
+    if (imageWidth < 100)
+      return; // icons and logos, not a page or a band of one
     final dict = request.stream.dictionary;
     final w0 = document.cos.resolve(dict['Width']);
     final h0 = document.cos.resolve(dict['Height']);
@@ -140,17 +157,18 @@ class PdfLineFieldDetector {
     final decoded = _grayPixels(document, request, sourceW, sourceH);
     if (decoded == null) return;
     final w = decoded.width, sourceHeight = decoded.height;
-    final deskewSlope = _estimateSkew(decoded.samples, w, sourceHeight);
+    final pxPerPt = w / imageWidth;
+    final ink = _adaptiveInk(decoded.samples, w, sourceHeight, pxPerPt);
+    final deskewSlope = _estimateSkew(ink, w, sourceHeight);
     final offset = (deskewSlope.abs() * w / 2).ceil() + 2;
     final h = sourceHeight + 2 * offset;
     final samples = Uint8List(w * h)..fillRange(0, w * h, 255);
-    final source = decoded.samples;
+    final source = ink;
     final centerX = (w - 1) / 2;
     for (var y = 0; y < sourceHeight; y++) {
       final row = y * w;
       for (var x = 0; x < w; x++) {
-        final targetY =
-            (y - deskewSlope * (x - centerX)).round() + offset;
+        final targetY = (y - deskewSlope * (x - centerX)).round() + offset;
         if (targetY >= 0 && targetY < h) {
           final index = targetY * w + x;
           samples[index] = math.min(samples[index], source[row + x]).toInt();
@@ -158,11 +176,12 @@ class PdfLineFieldDetector {
       }
     }
 
-    final pxPerPt = w / imageWidth;
     final minRun = math.max(6, (14 * pxPerPt).round());
     final minChain = (minLength * pxPerPt).round();
     final maxRun = (w * 0.92).round();
     final maxRows = math.max(3, (5 * pxPerPt).round());
+    final maxMarkWidth = math.max(2, (4 * pxPerPt).round());
+    final maxMarkGap = math.max(3, (8 * pxPerPt).round());
 
     bool dark(int x, int y) {
       return samples[y * w + x] < 185;
@@ -172,26 +191,45 @@ class PdfLineFieldDetector {
     final done = <_Chain>[];
     for (var y = 0; y < h; y++) {
       final runs = <(int, int)>[];
+      final marks = <(int, int)>[];
       var x = 0;
       while (x < w) {
-        if (!dark(x, y)) {
+        while (x < w && !dark(x, y)) {
           x++;
-          continue;
         }
+        if (x == w) break;
         final start = x;
-        var end = x;
-        var gap = 0;
-        while (x < w && gap <= 1) {
-          if (dark(x, y)) {
-            end = x;
-            gap = 0;
-          } else {
-            gap++;
-          }
+        while (x < w && dark(x, y)) {
           x++;
         }
+        final end = x - 1;
         final length = end - start + 1;
-        if (length >= minRun && length <= maxRun) runs.add((start, end));
+        if (length >= minRun && length <= maxRun) {
+          runs.add((start, end));
+        } else if (length <= maxMarkWidth) {
+          marks.add((start, end));
+        }
+      }
+      if (marks.length >= 3) {
+        var start = marks.first.$1;
+        var end = marks.first.$2;
+        var count = 1;
+        var inkWidth = end - start + 1;
+        for (final mark in marks.skip(1)) {
+          final gap = mark.$1 - end - 1;
+          if (gap <= maxMarkGap) {
+            end = mark.$2;
+            count++;
+            inkWidth += mark.$2 - mark.$1 + 1;
+          } else {
+            _addMarkRun(runs, start, end, count, inkWidth, minChain);
+            start = mark.$1;
+            end = mark.$2;
+            count = 1;
+            inkWidth = end - start + 1;
+          }
+        }
+        _addMarkRun(runs, start, end, count, inkWidth, minChain);
       }
       final stillOpen = <_Chain>[];
       for (final chain in open) {
@@ -230,10 +268,9 @@ class PdfLineFieldDetector {
       final row = chain.sumRow / chain.n + 0.5;
       if (row < 0.01 * h || row > 0.99 * h) continue;
       (double, double) toPage(double x, double deskewedY) {
-        final sourceY =
-            (deskewedY - offset + deskewSlope * (x - centerX))
-                .clamp(0.0, sourceHeight.toDouble())
-                .toDouble();
+        final sourceY = (deskewedY - offset + deskewSlope * (x - centerX))
+            .clamp(0.0, sourceHeight.toDouble())
+            .toDouble();
         final u = x / w;
         final v = 1 - sourceY / sourceHeight;
         return (m.e + m.a * u + m.c * v, m.f + m.b * u + m.d * v);
@@ -257,6 +294,65 @@ class PdfLineFieldDetector {
     }
   }
 
+  static void _addMarkRun(
+    List<(int, int)> runs,
+    int start,
+    int end,
+    int count,
+    int inkWidth,
+    int minChain,
+  ) {
+    final width = end - start + 1;
+    if (count >= 3 && width >= minChain && inkWidth / width <= 0.72) {
+      runs.add((start, end));
+    }
+  }
+
+  static Uint8List _adaptiveInk(
+      Uint8List samples, int width, int height, double pxPerPt) {
+    final radius = math.max(8, (4 * pxPerPt).round());
+    final horizontalMean = Uint8List(samples.length);
+    for (var y = 0; y < height; y++) {
+      final row = y * width;
+      var sum = 0;
+      for (var x = 0; x <= radius && x < width; x++) {
+        sum += samples[row + x];
+      }
+      for (var x = 0; x < width; x++) {
+        final left = math.max(0, x - radius);
+        final right = math.min(width - 1, x + radius);
+        final count = right - left + 1;
+        horizontalMean[row + x] = sum ~/ count;
+        final remove = x - radius;
+        final add = x + radius + 1;
+        if (remove >= 0) sum -= samples[row + remove];
+        if (add < width) sum += samples[row + add];
+      }
+    }
+
+    final result = Uint8List(samples.length)..fillRange(0, samples.length, 255);
+    for (var x = 0; x < width; x++) {
+      var sum = 0;
+      for (var y = 0; y <= radius && y < height; y++) {
+        sum += horizontalMean[y * width + x];
+      }
+      for (var y = 0; y < height; y++) {
+        final top = math.max(0, y - radius);
+        final bottom = math.min(height - 1, y + radius);
+        final localMean = sum ~/ (bottom - top + 1);
+        final index = y * width + x;
+        if (samples[index] < 248 && localMean - samples[index] >= 10) {
+          result[index] = 0;
+        }
+        final remove = y - radius;
+        final add = y + radius + 1;
+        if (remove >= 0) sum -= horizontalMean[remove * width + x];
+        if (add < height) sum += horizontalMean[add * width + x];
+      }
+    }
+    return result;
+  }
+
   static double _estimateSkew(Uint8List samples, int width, int height) {
     final stepX = math.max(1, (width / 400).ceil());
     final stepY = math.max(1, (height / 600).ceil());
@@ -269,8 +365,7 @@ class PdfLineFieldDetector {
         final row = y * width;
         for (var x = 0; x < width; x += stepX) {
           if (samples[row + x] >= 185) continue;
-          final deskewedY =
-              (y - slope * (x - centerX)).round() + offset;
+          final deskewedY = (y - slope * (x - centerX)).round() + offset;
           if (deskewedY >= 0 && deskewedY < rows.length) {
             rows[deskewedY]++;
           }
@@ -391,7 +486,8 @@ class PdfLineFieldDetector {
   static List<PdfLineField> _merge(
       List<_Seg> segs, int pageIndex, double minLength) {
     var current = [
-      for (final s in segs) _Seg(s.left, s.right, s.y, slope: s.slope)
+      for (final s in segs)
+        _Seg(s.left, s.right, s.y, slope: s.slope, allowShort: s.allowShort)
     ];
     var changed = true;
     while (changed) {
@@ -425,12 +521,12 @@ class PdfLineFieldDetector {
           final right = math.max(hit.right, s.right);
           final center = (left + right) / 2;
           final slope = (hit.slope * n + s.slope * k) / (n + k);
-          final y =
-              (hit.yAt(center) * n + s.yAt(center) * k) / (n + k);
+          final y = (hit.yAt(center) * n + s.yAt(center) * k) / (n + k);
           hit.left = math.min(hit.left, s.left);
           hit.right = math.max(hit.right, s.right);
           hit.y = y;
           hit.slope = slope;
+          hit.allowShort = hit.allowShort || s.allowShort;
           changed = true;
         }
       }
@@ -439,7 +535,7 @@ class PdfLineFieldDetector {
     final merged = current;
     final fields = [
       for (final m in merged)
-        if (m.right - m.left >= minLength)
+        if (m.right - m.left >= minLength || m.allowShort)
           PdfLineField(
               pageIndex: pageIndex,
               left: m.left,

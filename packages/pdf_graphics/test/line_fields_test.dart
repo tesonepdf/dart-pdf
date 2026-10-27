@@ -33,4 +33,30 @@ void main() {
       );
     }
   });
+
+  test('detects dotted rules under uneven lighting and blur', () {
+    final image = img.Image(width: 1000, height: 800, numChannels: 3);
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final shade = (175 + 75 * x / image.width).round();
+        image.setPixel(x, y, img.ColorRgb8(shade, shade, shade));
+      }
+    }
+
+    for (var x = 100; x < 900; x += 5) {
+      final y = 400 + ((x - 500) * 0.035).round();
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = 0; dx < 3; dx++) {
+          image.setPixel(x + dx, y + dy, img.ColorRgb8(65, 65, 65));
+        }
+      }
+    }
+
+    final blurred = img.gaussianBlur(image, radius: 1);
+    final bytes = Uint8List.fromList(img.encodeJpg(blurred, quality: 75));
+    final document = PdfDocument.open(PdfImageDocument.fromImageBytes([bytes]));
+    final fields = PdfLineFieldDetector.detect(document, 0);
+
+    expect(fields.any((field) => field.width > 600), isTrue);
+  });
 }

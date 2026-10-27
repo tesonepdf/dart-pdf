@@ -2325,7 +2325,8 @@ class PdfEditingController extends ChangeNotifier {
   PdfDocument? _lineFieldsDocument;
   final Map<int, List<PdfLineField>> _lineFieldCache = {};
 
-  /// Whether the page's fill-in strips (drawn rules, underscore runs) are
+  /// Whether the page's fill-in strips (drawn, dotted, or dashed rules and
+  /// underscore runs) are
   /// highlighted and tapping one opens a text box across the strip.
   bool get lineFieldsMode => _lineFieldsMode;
 
@@ -2337,30 +2338,18 @@ class PdfEditingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The strips of [pageIndex] still free of a text box, top to bottom.
+  /// The detected strips of [pageIndex], including strips with existing text
+  /// or text-box annotations, top to bottom.
   List<PdfLineField> lineFieldsFor(int pageIndex) {
     if (!identical(_lineFieldsDocument, _document)) {
       _lineFieldsDocument = _document;
       _lineFieldCache.clear();
     }
     if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
-    final all = _lineFieldCache.putIfAbsent(
+    return _lineFieldCache.putIfAbsent(
       pageIndex,
       () => PdfLineFieldDetector.detect(_document, pageIndex),
     );
-    final taken = [
-      for (final a in _page(pageIndex).annotations)
-        if (a.subtype == 'FreeText') a.rect,
-    ];
-    return [
-      for (final f in all)
-        if (!taken.any((r) =>
-            r.bottom <= f.y + 2 &&
-            r.top >= f.y &&
-            math.min(r.right, f.right) - math.max(r.left, f.left) >
-                f.width * 0.5))
-          f,
-    ];
   }
 
   PdfEditTool? get tool => _tool;
