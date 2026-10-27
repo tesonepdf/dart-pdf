@@ -1,7 +1,10 @@
 import 'dart:math' as math;
 
+import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
 
+import 'device.dart';
+import 'image_pixels.dart';
 import 'interpreter.dart';
 import 'path.dart';
 import 'recording_device.dart';
@@ -57,6 +60,11 @@ class PdfLineFieldDetector {
         device: device,
         resolveOverprint: false,
       ).drawPage(document.page(pageIndex));
+      for (final request in device.imageRequests) {
+        try {
+          _fromImage(document, request, segs, minLength);
+        } catch (_) {}
+      }
       for (final command in device.commands) {
         if (command is PdfFillPathCommand) {
           _fromFill(command.path, segs, minLength, maxThickness);
@@ -79,6 +87,104 @@ class PdfLineFieldDetector {
       }
     } catch (_) {}
     return _merge(segs, pageIndex, minLength);
+  }
+
+  /// Scanned pages: finds long, thin dark runs in the page image itself.
+  static void _fromImage(PdfDocument document, PdfImageRequest request,
+      List<_Seg> out, double minLength) {
+    final m = request.transform;
+    // only upright, unrotated placements
+    if (m.b.abs() > 1e-3 || m.c.abs() > 1e-3 || m.a <= 0 || m.d <= 0) return;
+    if (m.a < 100 || m.d < 100) return; // icons and logos, not a page
+    final dict = request.stream.dictionary;
+    final w0 = document.cos.resolve(dict['Width']);
+    final h0 = document.cos.resolve(dict['Height']);
+    if (w0 is! CosInteger || h0 is! CosInteger) return;
+    final sourceW = w0.value, sourceH = h0.value;
+    if (sourceW <= 0 || sourceH <= 0) return;
+    final targetW = math.min(sourceW, 1400);
+    final targetH = math.max(1, (sourceH * targetW / sourceW).round());
+    final pixels = targetW < sourceW
+        ? decodePdfImagePixelsScaled(
+            document.cos, request.stream, targetW, targetH)
+        : decodePdfImagePixels(document.cos, request.stream);
+    if (pixels == null) return;
+    final w = pixels.width, h = pixels.height;
+    final rgba = pixels.rgba;
+    final pxPerPt = w / m.a;
+    final minRun = (minLength * pxPerPt).round();
+    final maxRun = (w * 0.9).round();
+    final maxRows = math.max(3, (5 * pxPerPt).round());
+
+    bool dark(int x, int y) {
+      final i = (y * w + x) * 4;
+      if (rgba[i + 3] < 128) return false;
+      return (rgba[i] + rgba[i + 1] + rgba[i + 2]) < 3 * 130;
+    }
+
+    // open lines: [x0, x1, firstRow, lastRow]
+    final open = <List<int>>[];
+    final done = <List<int>>[];
+    for (var y = 0; y < h; y++) {
+      final runs = <(int, int)>[];
+      var x = 0;
+      while (x < w) {
+        if (!dark(x, y)) {
+          x++;
+          continue;
+        }
+        final start = x;
+        var end = x;
+        var gap = 0;
+        while (x < w && gap <= 2) {
+          if (dark(x, y)) {
+            end = x;
+            gap = 0;
+          } else {
+            gap++;
+          }
+          x++;
+        }
+        if (end - start + 1 >= minRun && end - start + 1 <= maxRun) {
+          runs.add((start, end));
+        }
+      }
+      final stillOpen = <List<int>>[];
+      for (final line in open) {
+        if (line[3] < y - 2) {
+          done.add(line);
+        } else {
+          stillOpen.add(line);
+        }
+      }
+      open
+        ..clear()
+        ..addAll(stillOpen);
+      for (final (a, b) in runs) {
+        List<int>? hit;
+        for (final line in open) {
+          final overlap = math.min(b, line[1]) - math.max(a, line[0]);
+          if (overlap > 0.5 * (b - a)) {
+            hit = line;
+            break;
+          }
+        }
+        if (hit == null) {
+          open.add([a, b, y, y]);
+        } else {
+          hit[0] = math.min(hit[0], a);
+          hit[1] = math.max(hit[1], b);
+          hit[3] = y;
+        }
+      }
+    }
+    done.addAll(open);
+    for (final line in done) {
+      if (line[3] - line[2] + 1 > maxRows) continue; // a bar or a blot
+      final rowCenter = (line[2] + line[3] + 1) / 2;
+      final y = m.f + m.d * (1 - rowCenter / h);
+      out.add(_Seg(m.e + m.a * line[0] / w, m.e + m.a * (line[1] + 1) / w, y));
+    }
   }
 
   static void _fromFill(
