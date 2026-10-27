@@ -135,6 +135,30 @@ class PdfLineFieldDetector {
     return _merge(segs, pageIndex, minLength);
   }
 
+  /// The whole page as an even stack of full-width rows, so a text box can be
+  /// opened anywhere. Row spacing follows the page size (a 1271 pt wide scan
+  /// gets proportionally taller rows than an A4 sheet).
+  static List<PdfLineField> pageGrid(PdfDocument document, int pageIndex) {
+    final fields = <PdfLineField>[];
+    try {
+      final box = document.page(pageIndex).cropBox;
+      final scale = math.max(1.0, (box.right - box.left) / 612);
+      final step = 16.0 * scale;
+      final margin = 12.0 * scale;
+      for (var y = box.top - margin - step;
+          y > box.bottom + margin - step / 2;
+          y -= step) {
+        fields.add(PdfLineField(
+          pageIndex: pageIndex,
+          left: box.left + margin,
+          right: box.right - margin,
+          y: y,
+        ));
+      }
+    } catch (_) {}
+    return fields;
+  }
+
   /// Fallback when no fill-in rule is found: one full-width strip per text
   /// row of the page (spanning the row including its printed words). When the
   /// page has no text at all, an even grid of rows covers the whole page so
