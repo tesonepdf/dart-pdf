@@ -1,2 +1,4 @@
 packages/pdf_ocr_ondevice/assets/ocr/*.onnx binary
 packages/pdf_ocr_ondevice/assets/ocr/*.txt text eol=lf
+
+.githooks/* text eol=lf
