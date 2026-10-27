@@ -22,6 +22,7 @@ export 'src/image_colorants.dart';
 export 'src/image_decode_cache.dart';
 export 'src/image_pixels.dart';
 export 'src/interpreter.dart';
+export 'src/line_fields.dart';
 export 'src/shading.dart';
 export 'src/struct_text.dart';
 export 'src/matrix.dart';

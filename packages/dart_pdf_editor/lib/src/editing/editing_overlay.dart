@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
+import 'package:pdf_graphics/pdf_graphics.dart' show PdfLineField;
 
 import '../annotation_display_filter.dart';
 import '../debug_overlays.dart';
@@ -3747,6 +3748,35 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return Rect.fromLTWH(left, top, w, h);
   }
 
+  /// The view-space box a text box takes on [field]: the strip's whole width,
+  /// one text line tall, sitting on the rule.
+  Rect _lineFieldViewRect(PdfLineField field) {
+    final h = _controller.preferences.fontSize * 1.5;
+    return _geometry
+        .toViewRect(PdfRect(field.left, field.y, field.right, field.y + h));
+  }
+
+  /// The free strip under [position] (a little slack above and below the
+  /// rule so a finger can hit it), or null.
+  PdfLineField? _lineFieldAt(Offset position) {
+    PdfLineField? best;
+    var bestDistance = double.infinity;
+    for (final field in _controller.lineFieldsFor(widget.pageIndex)) {
+      final box = _lineFieldViewRect(field).inflate(8);
+      if (!box.contains(position)) continue;
+      final distance = (position.dy - box.center.dy).abs();
+      if (distance < bestDistance) {
+        best = field;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  void _openLineFieldEditor(PdfLineField field) {
+    _openTextEditor(_lineFieldViewRect(field), existing: false);
+  }
+
   /// Opens the inline text editor over [viewRect] - empty for a fresh
   /// free-text box, prefilled from the selected annotation when
   /// [existing]. The editor renders with the same font, size, and color
@@ -6046,6 +6076,18 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_polyTool || _hybridPolyTool) {
       return; // vertices land from the raw pointer events ([_onPolyTap])
     }
+    if (_controller.lineFieldsMode &&
+        (_tool == PdfEditTool.select || _tool == PdfEditTool.freeText)) {
+      final (lx, ly) = _geometry.toPagePoint(details.localPosition);
+      if (_controller.selectableAnnotationAt(widget.pageIndex, lx, ly) ==
+          null) {
+        final field = _lineFieldAt(details.localPosition);
+        if (field != null) {
+          _openLineFieldEditor(field);
+          return;
+        }
+      }
+    }
     final (x, y) = _geometry.toPagePoint(details.localPosition);
     final placementPosition = _snapPointToGrid(details.localPosition);
     final (placementX, placementY) = _geometry.toPagePoint(placementPosition);
@@ -7361,6 +7403,23 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                         chromeScale: _chromeScale,
                         color: PdfViewerTheme.of(context)
                             .snapGrid(Theme.of(context).colorScheme.primary),
+                      ),
+                      size: Size.infinite,
+                    ),
+                  ),
+                ),
+              if (_controller.lineFieldsMode)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      key: const ValueKey('pdf-line-fields'),
+                      painter: _LineFieldsPainter(
+                        rects: [
+                          for (final f
+                              in _controller.lineFieldsFor(widget.pageIndex))
+                            _lineFieldViewRect(f),
+                        ],
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       size: Size.infinite,
                     ),
@@ -8686,6 +8745,30 @@ class _HoverCursorPainter extends CustomPainter {
 
 /// Draws the page-space snapping grid above the page raster but below all
 /// live editing previews and selection chrome.
+class _LineFieldsPainter extends CustomPainter {
+  _LineFieldsPainter({required this.rects, required this.color});
+
+  final List<Rect> rects;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = color.withValues(alpha: 0.16);
+    final edge = Paint()
+      ..color = color.withValues(alpha: 0.7)
+      ..strokeWidth = 1.5;
+    for (final r in rects) {
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(r, const Radius.circular(3)), fill);
+      canvas.drawLine(r.bottomLeft, r.bottomRight, edge);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LineFieldsPainter old) =>
+      old.color != color || !listEquals(old.rects, rects);
+}
+
 class _SnapGridPainter extends CustomPainter {
   const _SnapGridPainter({
     required this.geometry,

@@ -4788,6 +4788,23 @@ class _EditorScreenState extends State<EditorScreen>
                   },
                 ),
         ),
+      if (tab?.session != null)
+        ListenableBuilder(
+          listenable: tab!.session!,
+          builder: (context, _) {
+            final session = tab.session!;
+            return IconButton(
+              key: const ValueKey('line-fields-action'),
+              icon: Icon(session.lineFieldsMode
+                  ? Icons.edit_note
+                  : Icons.border_color_outlined),
+              isSelected: session.lineFieldsMode,
+              tooltip: 'Campi sulle righe',
+              onPressed: () =>
+                  session.lineFieldsMode = !session.lineFieldsMode,
+            );
+          },
+        ),
       if (compact && _tabs.isNotEmpty) _buildMobileTabsButton(),
     ];
   }
