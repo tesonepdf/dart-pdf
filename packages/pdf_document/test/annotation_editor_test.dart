@@ -67,6 +67,26 @@ void main() {
     }
   });
 
+  test('free-text insertion inset survives appearance regeneration', () {
+    final doc = roundTrip((editor) => editor.addFreeText(
+          0,
+          const PdfRect(72, 600, 300, 640),
+          'inserted at the chosen point',
+          textInset: 24,
+        ));
+    final annotation = doc.page(0).annotations.single;
+    expect(annotation.freeTextStyle?.textInset, 24);
+
+    final resized = PdfEditor(doc)
+      ..resizeAnnotation(
+        0,
+        annotation,
+        const PdfRect(72, 600, 360, 640),
+      );
+    final reopened = PdfDocument.open(resized.save());
+    expect(reopened.page(0).annotations.single.freeTextStyle?.textInset, 24);
+  });
+
   test('an annotation survives a reopen when /Size is past 2^32', () {
     // New objects take their numbers from /Size, so a junk one hands the
     // edit numbers past what the object cache's packed key holds.
