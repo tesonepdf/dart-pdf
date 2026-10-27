@@ -15,6 +15,7 @@ import 'ocr_lifecycle.dart';
 import 'ocr_job_store.dart';
 import 'ocr_status.dart';
 import 'ocr_web_budget.dart';
+import 'ocr_web_consent.dart';
 
 export 'ocr_status.dart';
 
@@ -87,11 +88,12 @@ class OnDeviceOcr {
     }
   }
 
-  /// Whether the user started browser OCR this session - an automatic run
-  /// then goes ahead without asking again. [_autoDeclined] is the opposite:
-  /// they turned down an automatic run, so later scans stay quiet.
+  /// Whether the user approved browser OCR, persisted across app launches.
+  /// [_autoDeclined] separately suppresses another automatic prompt after a
+  /// decline for the rest of this session.
   bool _approved = false;
   bool _autoDeclined = false;
+  final OcrWebConsent _consent = OcrWebConsent();
 
   /// Web OCR is supported by the browser-local onnxruntime-web bridge.
   static bool get isSupported => true;
@@ -159,21 +161,26 @@ class OnDeviceOcr {
     }
 
     _status(OcrJobStatus(phase: OcrPhase.preparing, title: title));
-    if (resume == null && (!automatic || !_approved)) {
-      if (automatic && _autoDeclined) {
-        _status(null);
-        return;
+    if (resume == null && !_approved) {
+      await _consent.load();
+      _approved = _consent.approved;
+      if (!_approved) {
+        if (automatic && _autoDeclined) {
+          _status(null);
+          return;
+        }
+        final approved = await showPdfDialog<bool>(
+          context: context,
+          builder: (_) => const _WebOcrConfirmDialog(),
+        );
+        if (approved != true) {
+          if (automatic) _autoDeclined = true;
+          _status(null);
+          return;
+        }
+        _approved = true;
+        await _consent.approve();
       }
-      final approved = await showPdfDialog<bool>(
-        context: context,
-        builder: (_) => const _WebOcrConfirmDialog(),
-      );
-      if (approved != true) {
-        if (automatic) _autoDeclined = true;
-        _status(null);
-        return;
-      }
-      _approved = true;
     }
     _cancelled = false;
 
