@@ -37,9 +37,16 @@ listing, use an explicitly reviewed `release_listing_policy: sync` bootstrap.
 
 ## Version source
 
-`app/pubspec.yaml` `version:` is the single source of truth (`X.Y.Z+build`).
-CI passes `--build-name`/`--build-number` derived from the tag and run number,
-so platform build files don't hardcode versions.
+GitHub Actions and the Vercel web build use the same commit-derived version:
+the version is based on the commit timestamp in Europe/Rome, and the build
+number is the commit's position in the full Git history. The web build script
+fetches full history when Vercel provides a shallow checkout. Both values are
+passed to Flutter as `--build-name` and `--build-number`, so the web app and
+Android APK from the same commit show the same version and build number.
+
+`app/pubspec.yaml` retains the package version as the fallback for local builds
+that do not pass explicit build values. Release workflows may provide explicit
+build values when needed.
 
 ## Cutting a release
 

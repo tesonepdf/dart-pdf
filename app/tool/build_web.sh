@@ -26,8 +26,40 @@ if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
   BUILD_COMMIT="$BUILD_COMMIT-dirty"
 fi
 
-echo "==> flutter build web (commit $BUILD_COMMIT) $*"
-$FLUTTER build web --dart-define=PDF_BUILD_COMMIT="$BUILD_COMMIT" "$@"
+BUILD_VERSION="${PDF_BUILD_VERSION:-}"
+BUILD_NUMBER="${PDF_BUILD_NUMBER:-}"
+if [ -z "$BUILD_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
+  if [ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository)" = "true" ]; then
+    git -C "$REPO_ROOT" fetch --unshallow origin
+  fi
+
+  commit_epoch="$(git -C "$REPO_ROOT" log -1 --format=%ct HEAD)"
+  read -r year day hour minute < <(
+    TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %-j %-H %-M'
+  )
+  BUILD_VERSION="${BUILD_VERSION:-$((year - 2020)).${day}.${hour}${minute}}"
+  BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$REPO_ROOT" rev-list --count HEAD)}"
+fi
+
+BUILD_ARGS=()
+HAS_BUILD_NAME=false
+HAS_BUILD_NUMBER=false
+for arg in "$@"; do
+  case "$arg" in
+    --build-name|--build-name=*) HAS_BUILD_NAME=true ;;
+    --build-number|--build-number=*) HAS_BUILD_NUMBER=true ;;
+  esac
+done
+if [ "$HAS_BUILD_NAME" = false ]; then
+  BUILD_ARGS+=(--build-name="$BUILD_VERSION")
+fi
+if [ "$HAS_BUILD_NUMBER" = false ]; then
+  BUILD_ARGS+=(--build-number="$BUILD_NUMBER")
+fi
+
+echo "==> flutter build web $BUILD_VERSION+$BUILD_NUMBER (commit $BUILD_COMMIT) $*"
+$FLUTTER build web "${BUILD_ARGS[@]}" \
+  --dart-define=PDF_BUILD_COMMIT="$BUILD_COMMIT" "$@"
 
 echo "==> Cache-busting web entrypoints and fonts"
 bash "$REPO_ROOT/tool/web_cache_bust.sh" build/web
