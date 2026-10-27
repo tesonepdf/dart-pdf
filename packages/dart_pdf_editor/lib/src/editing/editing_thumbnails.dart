@@ -1482,66 +1482,79 @@ class _PageActionsButton extends StatelessWidget {
     onSplit(outputs);
   }
 
+  Future<void> _openMenu(
+    BuildContext context,
+    List<PdfMenuEntry<_PageAction>> entries,
+  ) async {
+    final renderObject = context.findRenderObject()! as RenderBox;
+    final anchor =
+        renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    final action = await PdfEditorPresenter.of(context).menu<_PageAction>(
+      context,
+      PdfMenuRequest<_PageAction>(anchor: anchor, entries: entries),
+    );
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case _PageAction.paste:
+        _paste();
+      case _PageAction.insert:
+        _insert(context);
+      case _PageAction.export:
+        _export(context);
+      case _PageAction.split:
+        _split(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final canPaste = allowPageEditing && controller.hasPageClipboard;
     final canInsert =
         onPickPdfToInsert != null || onPickPdfFilesToInsert != null;
     final canExport = onExportPages != null;
-    return PopupMenuButton<_PageAction>(
+    final entries = <PdfMenuEntry<_PageAction>>[
+      if (canPaste)
+        PdfMenuItem(
+          key: const ValueKey('pdf-thumbnail-paste-pages'),
+          value: _PageAction.paste,
+          label: pdfL10n(context)
+              .thumbPastePages(controller.pageClipboard.pageCount),
+          icon: Icons.content_paste,
+          height: _densePopupMenuHeight,
+        ),
+      if (canInsert)
+        PdfMenuItem(
+          key: const ValueKey('pdf-thumbnail-insert-pdf'),
+          value: _PageAction.insert,
+          label: pdfL10n(context).thumbInsertPdf,
+          icon: Icons.picture_as_pdf_outlined,
+          height: _densePopupMenuHeight,
+        ),
+      if (onSplitPages != null)
+        PdfMenuItem(
+          key: const ValueKey('pdf-thumbnail-split-pages'),
+          value: _PageAction.split,
+          label: pdfL10n(context).splitTitle,
+          icon: Icons.call_split,
+          height: _densePopupMenuHeight,
+        ),
+      if (canExport)
+        PdfMenuItem(
+          key: const ValueKey('pdf-thumbnail-export-pages'),
+          value: _PageAction.export,
+          label: pdfL10n(context).thumbExportPagesEllipsis,
+          icon: Icons.ios_share_outlined,
+          height: _densePopupMenuHeight,
+        ),
+    ];
+    return IconButton(
       key: const ValueKey('pdf-thumbnail-page-actions'),
       tooltip: pdfL10n(context).thumbPageActions,
-      icon: const Icon(Icons.file_copy_outlined, size: 18),
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
-      onSelected: (action) {
-        switch (action) {
-          case _PageAction.paste:
-            _paste();
-          case _PageAction.insert:
-            _insert(context);
-          case _PageAction.export:
-            _export(context);
-          case _PageAction.split:
-            _split(context);
-        }
-      },
-      itemBuilder: (context) => [
-        if (canPaste)
-          PopupMenuItem(
-            key: const ValueKey('pdf-thumbnail-paste-pages'),
-            value: _PageAction.paste,
-            height: _densePopupMenuHeight,
-            child: Text(
-              pdfL10n(context)
-                  .thumbPastePages(controller.pageClipboard.pageCount),
-              style: _densePopupTextStyle(context),
-            ),
-          ),
-        if (canInsert)
-          PopupMenuItem(
-            key: const ValueKey('pdf-thumbnail-insert-pdf'),
-            value: _PageAction.insert,
-            height: _densePopupMenuHeight,
-            child: Text(pdfL10n(context).thumbInsertPdf,
-                style: _densePopupTextStyle(context)),
-          ),
-        if (onSplitPages != null)
-          PopupMenuItem(
-            key: const ValueKey('pdf-thumbnail-split-pages'),
-            value: _PageAction.split,
-            height: _densePopupMenuHeight,
-            child: Text(pdfL10n(context).splitTitle,
-                style: _densePopupTextStyle(context)),
-          ),
-        if (canExport)
-          PopupMenuItem(
-            key: const ValueKey('pdf-thumbnail-export-pages'),
-            value: _PageAction.export,
-            height: _densePopupMenuHeight,
-            child: Text(pdfL10n(context).thumbExportPagesEllipsis,
-                style: _densePopupTextStyle(context)),
-          ),
-      ],
+      onPressed: entries.isEmpty
+          ? null
+          : () => unawaited(_openMenu(context, entries)),
+      icon: const Icon(Icons.file_copy_outlined, size: 18),
     );
   }
 }

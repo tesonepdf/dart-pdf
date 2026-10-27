@@ -262,36 +262,53 @@ class _PdfAnnotationLibraryPanelState extends State<PdfAnnotationLibraryPanel> {
         overflow: TextOverflow.ellipsis,
       ),
       onTap: () => _activate(annotation),
-      trailing: PopupMenuButton<_LibraryItemAction>(
-        key: ValueKey('pdf-annotation-library-menu-${annotation.id}'),
-        tooltip: pdfL10n(context).sidebarMore,
-        onSelected: (action) => _itemAction(annotation, action),
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: _LibraryItemAction.rename,
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(pdfL10n(context).rename),
-            ),
-          ),
-          PopupMenuItem(
-            value: _LibraryItemAction.group,
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.drive_file_move_outline),
-              title: Text(pdfL10n(context).annotationLibraryChooseGroup),
-            ),
-          ),
-          PopupMenuItem(
-            value: _LibraryItemAction.delete,
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.delete_outline),
-              title: Text(pdfL10n(context).delete),
-            ),
-          ),
-        ],
+      trailing: Builder(
+        builder: (buttonContext) => IconButton(
+          key: ValueKey('pdf-annotation-library-menu-${annotation.id}'),
+          tooltip: pdfL10n(context).sidebarMore,
+          icon: const Icon(Icons.more_vert),
+          onPressed: () async {
+            final renderObject =
+                buttonContext.findRenderObject()! as RenderBox;
+            final anchor =
+                renderObject.localToGlobal(Offset.zero) & renderObject.size;
+            final action =
+                await PdfEditorPresenter.of(buttonContext).menu<
+                    _LibraryItemAction>(
+              buttonContext,
+              PdfMenuRequest<_LibraryItemAction>(
+                anchor: anchor,
+                entries: [
+                  PdfMenuItem(
+                    key: ValueKey(
+                        'pdf-annotation-library-rename-${annotation.id}'),
+                    value: _LibraryItemAction.rename,
+                    label: pdfL10n(context).rename,
+                    icon: Icons.edit_outlined,
+                  ),
+                  PdfMenuItem(
+                    key: ValueKey(
+                        'pdf-annotation-library-group-${annotation.id}'),
+                    value: _LibraryItemAction.group,
+                    label: pdfL10n(context).annotationLibraryChooseGroup,
+                    icon: Icons.drive_file_move_outline,
+                  ),
+                  PdfMenuItem(
+                    key: ValueKey(
+                        'pdf-annotation-library-delete-${annotation.id}'),
+                    value: _LibraryItemAction.delete,
+                    label: pdfL10n(context).delete,
+                    icon: Icons.delete_outline,
+                    destructive: true,
+                  ),
+                ],
+              ),
+            );
+            if (action != null && buttonContext.mounted && mounted) {
+              await _itemAction(annotation, action);
+            }
+          },
+        ),
       ),
     );
   }

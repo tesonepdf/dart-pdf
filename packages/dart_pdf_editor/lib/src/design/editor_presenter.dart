@@ -96,9 +96,10 @@ class PdfEditorPresenter {
   Future<T?> sheet<T>(BuildContext context, PdfSheetRequest<T> request) =>
       pdfStockSheet<T>(context, request);
 
-  /// Shows a popup menu at [PdfMenuRequest.anchor] and resolves to the
-  /// picked entry's value (null when dismissed). Default: a Material popup
-  /// menu that draws each [PdfMenuItem.child] when one is given.
+  /// Shows a popup menu at [PdfMenuRequest.anchor] on desktop, or a touch-sized
+  /// sheet on phone platforms when [PdfMenuRequest.adaptToTouch] is enabled.
+  /// Resolves to the picked entry's value (null when dismissed).
+  /// Default: the stock Material presenter.
   Future<T?> menu<T>(BuildContext context, PdfMenuRequest<T> request) =>
       pdfStockMenu<T>(context, request);
 
@@ -357,18 +358,31 @@ class PdfSheetRequest<T> {
 class PdfMenuRequest<T> {
   /// A menu anchored at [anchor], a rectangle in global coordinates (the
   /// control that opened it, or a zero-size rectangle at a pointer).
-  const PdfMenuRequest({required this.anchor, required this.entries});
+  const PdfMenuRequest({
+    required this.anchor,
+    required this.entries,
+    this.adaptToTouch = true,
+  });
 
   /// A menu at [globalPosition] (a right-click, say).
   factory PdfMenuRequest.at(Offset globalPosition,
-          {required List<PdfMenuEntry<T>> entries}) =>
-      PdfMenuRequest(anchor: globalPosition & Size.zero, entries: entries);
+          {required List<PdfMenuEntry<T>> entries, bool adaptToTouch = true}) =>
+      PdfMenuRequest(
+        anchor: globalPosition & Size.zero,
+        entries: entries,
+        adaptToTouch: adaptToTouch,
+      );
 
   /// Where the menu opens, in global coordinates.
   final Rect anchor;
 
   /// The rows, in order.
   final List<PdfMenuEntry<T>> entries;
+
+  /// Whether a stock presenter may use a touch-sized sheet instead of an
+  /// anchored popup on phone platforms. Set false for value pickers and
+  /// menus that contain embedded controls.
+  final bool adaptToTouch;
 }
 
 /// One row of a [PdfMenuRequest]: a [PdfMenuItem] or a [PdfMenuDivider].
@@ -400,6 +414,9 @@ class PdfMenuItem<T> extends PdfMenuEntry<T> {
     this.icon,
     this.enabled = true,
     this.checked,
+    this.destructive = false,
+    this.subtitle,
+    this.trailing,
     this.child,
     this.height,
     this.padding,
@@ -426,8 +443,17 @@ class PdfMenuItem<T> extends PdfMenuEntry<T> {
   /// null for an ordinary row.
   final bool? checked;
 
+  /// Whether this action removes or clears user content.
+  final bool destructive;
+
+  /// Optional secondary text for adaptive touch menus.
+  final String? subtitle;
+
+  /// Optional trailing content for adaptive touch menus.
+  final Widget? trailing;
+
   /// How the stock menu draws this row. Presenters drawing their own menus
-  /// use [label], [icon] and [checked] instead - except for a row whose
+  /// use [label], [icon], [checked], [subtitle] and [trailing] instead - except for a row whose
   /// [value] is null: that is content, not a choice (a section label, or an
   /// embedded control such as the form field text-style popup), so draw its
   /// [child] when there is one.

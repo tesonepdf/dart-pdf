@@ -1,7 +1,13 @@
 import 'dart:async';
 
 import 'package:dart_pdf_editor/dart_pdf_editor.dart'
-    show pdfFloatingToastMargin, pdfSearchFieldBorderRadius;
+    show
+        PdfEditorPresenter,
+        PdfMenuDivider,
+        PdfMenuItem,
+        PdfMenuRequest,
+        pdfFloatingToastMargin,
+        pdfSearchFieldBorderRadius;
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -444,16 +450,7 @@ enum _RecentMenuAction {
   clear,
 }
 
-/// Row height for the recents menu: the app menu's tight desktop rows, with
-/// the full tap target kept on touch platforms (mirrors the editor screen's
-/// `_appMenuItemHeight`).
-double _recentMenuItemHeight() => switch (defaultTargetPlatform) {
-      TargetPlatform.macOS ||
-      TargetPlatform.windows ||
-      TargetPlatform.linux =>
-        36.0,
-      _ => kMinInteractiveDimension,
-    };
+const _recentContextMenuItemHeight = 36.0;
 
 /// Adds the recents context menu to a row or tile: right-click on desktop,
 /// long-press on touch. Both gestures carry a global position, so the menu
@@ -510,70 +507,77 @@ Future<void> showRecentContextMenu(
   required void Function(RecentFile entry) onOpen,
   void Function(RecentFile entry)? onOpenInNewWindow,
 }) async {
-  final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
   final l10n = appL10n(context);
   // Everything the actions need from this context is resolved up front: the
   // menu is modal, so the rest of the work happens after an await.
   final messenger = ScaffoldMessenger.maybeOf(context);
   final toastMargin = pdfFloatingToastMargin(context);
   final path = entry.path;
-  final height = _recentMenuItemHeight();
-  final selected = await showMenu<_RecentMenuAction>(
-    context: context,
-    position: RelativeRect.fromRect(
-      position & const Size(40, 40),
-      Offset.zero & overlay.size,
+  final selected =
+      await PdfEditorPresenter.of(context).menu<_RecentMenuAction>(
+    context,
+    PdfMenuRequest<_RecentMenuAction>.at(
+      position,
+      entries: [
+        PdfMenuItem(
+          key: const ValueKey('recent-menu-open'),
+          value: _RecentMenuAction.open,
+          enabled: entry.isReopenable,
+          label: l10n.welcomeOpen,
+          icon: Icons.open_in_new,
+          height: _recentContextMenuItemHeight,
+        ),
+        if (onOpenInNewWindow != null && entry.isReopenable)
+          PdfMenuItem(
+            key: const ValueKey('recent-menu-new-window'),
+            value: _RecentMenuAction.openInNewWindow,
+            label: l10n.welcomeOpenInNewWindow,
+            icon: Icons.open_in_new,
+            height: _recentContextMenuItemHeight,
+          ),
+        const PdfMenuDivider(),
+        if (supportsOpenContainingFolder && path != null)
+          PdfMenuItem(
+            key: const ValueKey('recent-menu-open-folder'),
+            value: _RecentMenuAction.openFolder,
+            label: openContainingFolderLabel,
+            icon: Icons.folder_open_outlined,
+            height: _recentContextMenuItemHeight,
+          ),
+        if (path != null)
+          PdfMenuItem(
+            key: const ValueKey('recent-menu-copy-path'),
+            value: _RecentMenuAction.copyPath,
+            label: l10n.welcomeCopyPath,
+            icon: Icons.link,
+            height: _recentContextMenuItemHeight,
+          ),
+        PdfMenuItem(
+          key: const ValueKey('recent-menu-copy-name'),
+          value: _RecentMenuAction.copyName,
+          label: l10n.welcomeCopyName,
+          icon: Icons.badge_outlined,
+          height: _recentContextMenuItemHeight,
+        ),
+        const PdfMenuDivider(),
+        PdfMenuItem(
+          key: const ValueKey('recent-menu-remove'),
+          value: _RecentMenuAction.remove,
+          label: l10n.welcomeRemoveFromRecent,
+          icon: Icons.remove_circle_outline,
+          destructive: true,
+          height: _recentContextMenuItemHeight,
+        ),
+        PdfMenuItem(
+          key: const ValueKey('recent-menu-clear'),
+          value: _RecentMenuAction.clear,
+          label: l10n.editorClearRecentFiles,
+          icon: Icons.clear_all,
+          destructive: true,
+          height: _recentContextMenuItemHeight,
+        ),
+      ],
     ),
-    items: [
-      PopupMenuItem(
-        key: const ValueKey('recent-menu-open'),
-        height: height,
-        value: _RecentMenuAction.open,
-        enabled: entry.isReopenable,
-        child: Text(l10n.welcomeOpen),
-      ),
-      if (onOpenInNewWindow != null && entry.isReopenable)
-        PopupMenuItem(
-          key: const ValueKey('recent-menu-new-window'),
-          height: height,
-          value: _RecentMenuAction.openInNewWindow,
-          child: Text(l10n.welcomeOpenInNewWindow),
-        ),
-      const PopupMenuDivider(),
-      if (supportsOpenContainingFolder && path != null)
-        PopupMenuItem(
-          key: const ValueKey('recent-menu-open-folder'),
-          height: height,
-          value: _RecentMenuAction.openFolder,
-          child: Text(openContainingFolderLabel),
-        ),
-      if (path != null)
-        PopupMenuItem(
-          key: const ValueKey('recent-menu-copy-path'),
-          height: height,
-          value: _RecentMenuAction.copyPath,
-          child: Text(l10n.welcomeCopyPath),
-        ),
-      PopupMenuItem(
-        key: const ValueKey('recent-menu-copy-name'),
-        height: height,
-        value: _RecentMenuAction.copyName,
-        child: Text(l10n.welcomeCopyName),
-      ),
-      const PopupMenuDivider(),
-      PopupMenuItem(
-        key: const ValueKey('recent-menu-remove'),
-        height: height,
-        value: _RecentMenuAction.remove,
-        child: Text(l10n.welcomeRemoveFromRecent),
-      ),
-      PopupMenuItem(
-        key: const ValueKey('recent-menu-clear'),
-        height: height,
-        value: _RecentMenuAction.clear,
-        child: Text(l10n.editorClearRecentFiles),
-      ),
-    ],
   );
   if (selected == null) return;
   switch (selected) {
