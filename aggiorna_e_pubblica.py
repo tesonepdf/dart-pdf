@@ -75,6 +75,7 @@ def modo_apk():
     if git("status", "--porcelain"):
         git("add", "-A")
         git("commit", "-m", "Aggiornamento " + datetime.now().strftime("%d/%m/%Y %H:%M"))
+    git("pull", "--rebase")                        # allinea con GitHub prima del push
     git("push")
     sha = git("rev-parse", "HEAD")
     print(f"Pushato {sha[:7]}: attendo la build APK...")
