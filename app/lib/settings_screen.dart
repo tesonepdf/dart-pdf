@@ -267,6 +267,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   _TextRecognitionSection(setting: widget.autoOcr),
                 ],
                 const Divider(height: 32),
+                _ArrowStepsSection(prefs: widget.prefs),
+                const Divider(height: 32),
                 Text(appL10n(context).settingsSystem,
                     style: theme.textTheme.titleSmall),
                 ListTile(
@@ -360,6 +362,72 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               onPressed: () => Navigator.of(context).pop(),
               child: Text(appL10n(context).close),
             )),
+      ],
+    );
+  }
+}
+
+/// Settings block for the free-text cursor arrows: how many document pixels
+/// one tap moves the text box, separately for the horizontal and the vertical
+/// axis.
+class _ArrowStepsSection extends StatelessWidget {
+  const _ArrowStepsSection({required this.prefs});
+
+  final PdfEditingPreferences prefs;
+
+  Widget _slider({
+    required Key key,
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        SizedBox(width: 108, child: Text(label)),
+        Expanded(
+          child: Slider(
+            key: key,
+            min: 1,
+            max: 40,
+            divisions: 39,
+            value: value.clamp(1, 40).toDouble(),
+            label: '${value.round()} px',
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 44,
+          child: Text('${value.round()} px', textAlign: TextAlign.end),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Frecce di posizionamento testo',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Pixel di spostamento della casella a ogni tocco di freccia, '
+          'in unita del documento.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        _slider(
+          key: const ValueKey('settings-arrow-step-x'),
+          label: 'Orizzontale',
+          value: prefs.lineArrowStepX,
+          onChanged: (v) => prefs.lineArrowStepX = v.roundToDouble(),
+        ),
+        _slider(
+          key: const ValueKey('settings-arrow-step-y'),
+          label: 'Verticale',
+          value: prefs.lineArrowStepY,
+          onChanged: (v) => prefs.lineArrowStepY = v.roundToDouble(),
+        ),
       ],
     );
   }

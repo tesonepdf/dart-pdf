@@ -176,6 +176,8 @@ class PdfEditingPreferences extends ChangeNotifier
   bool _showSnapGrid = false;
   bool _snapToGrid = false;
   double _gridSpacing = 10;
+  double _lineArrowStepX = 4;
+  double _lineArrowStepY = 4;
   double _fontSize = 14;
   PdfStandardFont _fontFamily = PdfStandardFont.helvetica;
   String? _embeddedFontData;
@@ -315,6 +317,14 @@ class PdfEditingPreferences extends ChangeNotifier
       final gridSpacing = store.getDouble('${_prefix}gridSpacing');
       if (gridSpacing != null && gridSpacing.isFinite && gridSpacing > 0) {
         _gridSpacing = gridSpacing;
+      }
+      final arrowX = store.getDouble('${_prefix}lineArrowStepX');
+      if (arrowX != null && arrowX.isFinite && arrowX > 0) {
+        _lineArrowStepX = arrowX;
+      }
+      final arrowY = store.getDouble('${_prefix}lineArrowStepY');
+      if (arrowY != null && arrowY.isFinite && arrowY > 0) {
+        _lineArrowStepY = arrowY;
       }
       _fontSize = store.getDouble('${_prefix}fontSize') ?? _fontSize;
       final fontFamily = store.getString('${_prefix}fontFamily');
@@ -946,6 +956,33 @@ class PdfEditingPreferences extends ChangeNotifier
     if (value == _gridSpacing) return;
     _gridSpacing = value;
     _write((s) => s.setDouble('${_prefix}gridSpacing', value));
+    notifyListeners();
+  }
+
+  /// How far one tap on a horizontal cursor arrow moves the text box when
+  /// filling a sheet freely, in document units (PDF points).
+  double get lineArrowStepX => _lineArrowStepX;
+
+  set lineArrowStepX(double value) {
+    if (!value.isFinite || value <= 0) {
+      throw ArgumentError.value(value, 'lineArrowStepX', 'must be positive');
+    }
+    if (value == _lineArrowStepX) return;
+    _lineArrowStepX = value;
+    _write((s) => s.setDouble('${_prefix}lineArrowStepX', value));
+    notifyListeners();
+  }
+
+  /// Same as [lineArrowStepX] for the vertical arrows.
+  double get lineArrowStepY => _lineArrowStepY;
+
+  set lineArrowStepY(double value) {
+    if (!value.isFinite || value <= 0) {
+      throw ArgumentError.value(value, 'lineArrowStepY', 'must be positive');
+    }
+    if (value == _lineArrowStepY) return;
+    _lineArrowStepY = value;
+    _write((s) => s.setDouble('${_prefix}lineArrowStepY', value));
     notifyListeners();
   }
 
