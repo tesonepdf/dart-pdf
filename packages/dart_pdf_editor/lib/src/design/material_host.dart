@@ -448,7 +448,10 @@ class _PdfDropdownState<T> extends State<PdfDropdown<T>> {
     try {
       picked = await PdfEditorPresenter.of(context).menu<T>(
         context,
-        PdfMenuRequest<T>(anchor: anchor, entries: [
+        PdfMenuRequest<T>(
+          anchor: anchor,
+          adaptToTouch: false,
+          entries: [
           for (final item in widget.items)
             PdfMenuItem<T>(
               key: item.key,

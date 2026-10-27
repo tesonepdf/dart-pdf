@@ -5,6 +5,8 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:material_ui/material_ui.dart';
 
 import '../dialog.dart';
@@ -65,9 +67,32 @@ class _PdfSheetRoute<T> extends ModalBottomSheetRoute<T> {
 }
 
 /// [PdfEditorPresenter.menu]'s default: a Material popup menu anchored at
-/// the request's global rectangle (mapped into the receiving overlay, which
-/// a nested navigator may offset).
+/// the request's global rectangle on desktop, or a touch-sized sheet on
+/// phone platforms when the entries support it.
 Future<T?> pdfStockMenu<T>(BuildContext context, PdfMenuRequest<T> request) {
+  if (_usesTouchMenu(context, request)) {
+    return PdfEditorPresenter.of(context).sheet<T>(
+      context,
+      PdfSheetRequest<T>(
+        scrollControlled: true,
+        maxHeightFactor: 0.85,
+        builder: (context) => SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final entry in request.entries)
+                  _touchMenuEntry(context, entry),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final anchor = request.anchor;
   final local = Rect.fromPoints(
@@ -78,6 +103,58 @@ Future<T?> pdfStockMenu<T>(BuildContext context, PdfMenuRequest<T> request) {
     context: context,
     position: RelativeRect.fromRect(local, Offset.zero & overlay.size),
     items: [for (final entry in request.entries) _popupEntry(entry)],
+  );
+}
+
+bool _usesTouchMenu<T>(BuildContext context, PdfMenuRequest<T> request) {
+  if (!request.adaptToTouch ||
+      (defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.iOS)) {
+    return false;
+  }
+  return request.entries.every((entry) {
+    if (entry is PdfMenuDivider<T>) return true;
+    if (entry is! PdfMenuItem<T>) return false;
+    if (entry.value != null) return true;
+    return !entry.enabled && entry.child is Text;
+  });
+}
+
+Widget _touchMenuEntry<T>(BuildContext context, PdfMenuEntry<T> entry) {
+  if (entry is PdfMenuDivider<T>) {
+    return const Divider(height: 1, indent: 16, endIndent: 16);
+  }
+  final item = entry as PdfMenuItem<T>;
+  if (item.value == null) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 8),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          item.label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      ),
+    );
+  }
+  final value = item.value!;
+  final destructiveColor = item.destructive
+      ? Theme.of(context).colorScheme.error
+      : null;
+  return ListTile(
+    key: item.key,
+    enabled: item.enabled,
+    leading: item.icon == null
+        ? null
+        : Icon(item.icon, color: destructiveColor),
+    title: Text(item.label, style: TextStyle(color: destructiveColor)),
+    subtitle: item.subtitle == null ? null : Text(item.subtitle!),
+    trailing: item.trailing ??
+        (item.checked == true ? const Icon(Icons.check) : null),
+    onTap: item.enabled ? () => Navigator.of(context).pop<T>(value) : null,
   );
 }
 
@@ -119,10 +196,22 @@ Widget _defaultRow(PdfMenuItem<Object?> item) => Builder(
           // PopupMenuItem dims only its text when disabled; match it
           Icon(item.icon,
               size: 18,
-              color: item.enabled ? null : Theme.of(context).disabledColor),
+              color: !item.enabled
+                  ? Theme.of(context).disabledColor
+                  : item.destructive
+                      ? Theme.of(context).colorScheme.error
+                      : null),
           const SizedBox(width: 10),
         ],
-        Flexible(child: Text(item.label, overflow: TextOverflow.ellipsis)),
+        Flexible(
+          child: Text(
+            item.label,
+            overflow: TextOverflow.ellipsis,
+            style: item.destructive
+                ? TextStyle(color: Theme.of(context).colorScheme.error)
+                : null,
+          ),
+        ),
       ]),
     );
 
@@ -375,6 +464,7 @@ Future<List<String>?> pdfStockFormChoice(PdfEditorPresenter presenter,
     context,
     PdfMenuRequest<String>(
       anchor: request.anchor,
+      adaptToTouch: false,
       entries: [
         for (final (export, display) in request.options)
           PdfMenuItem<String>(

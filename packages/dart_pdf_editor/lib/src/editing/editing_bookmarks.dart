@@ -327,42 +327,55 @@ class _PdfBookmarkSidebarState extends State<PdfBookmarkSidebar> {
   /// keep the desktop buttons' keys.
   Widget _moreMenu(BuildContext context, _BookmarkRow row, String pathKey) {
     final l10n = pdfL10n(context);
-    Widget item(IconData icon, String label) => Row(children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 12),
-          Flexible(child: Text(label)),
-        ]);
-    return PopupMenuButton<_BookmarkAction>(
-      key: ValueKey('pdf-bookmark-more-$pathKey'),
-      icon: const Icon(Icons.more_vert, size: 20),
-      tooltip: l10n.sidebarMore,
-      onSelected: (action) {
-        switch (action) {
-          case _BookmarkAction.addChild:
-            _addBookmark(context, parentPath: row.path);
-          case _BookmarkAction.edit:
-            _editBookmark(context, row);
-          case _BookmarkAction.delete:
-            _deleteBookmark(row);
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          key: ValueKey('pdf-bookmark-add-child-$pathKey'),
-          value: _BookmarkAction.addChild,
-          child: item(Icons.subdirectory_arrow_right, l10n.bookmarkAddChild),
-        ),
-        PopupMenuItem(
-          key: ValueKey('pdf-bookmark-edit-$pathKey'),
-          value: _BookmarkAction.edit,
-          child: item(Icons.edit_outlined, l10n.bookmarkEdit),
-        ),
-        PopupMenuItem(
-          key: ValueKey('pdf-bookmark-delete-$pathKey'),
-          value: _BookmarkAction.delete,
-          child: item(Icons.delete_outline, l10n.bookmarkDelete),
-        ),
-      ],
+    final entries = <PdfMenuEntry<_BookmarkAction>>[
+      PdfMenuItem(
+        key: ValueKey('pdf-bookmark-add-child-$pathKey'),
+        value: _BookmarkAction.addChild,
+        label: l10n.bookmarkAddChild,
+        icon: Icons.subdirectory_arrow_right,
+      ),
+      PdfMenuItem(
+        key: ValueKey('pdf-bookmark-edit-$pathKey'),
+        value: _BookmarkAction.edit,
+        label: l10n.bookmarkEdit,
+        icon: Icons.edit_outlined,
+      ),
+      PdfMenuItem(
+        key: ValueKey('pdf-bookmark-delete-$pathKey'),
+        value: _BookmarkAction.delete,
+        label: l10n.bookmarkDelete,
+        icon: Icons.delete_outline,
+        destructive: true,
+      ),
+    ];
+    return Builder(
+      builder: (buttonContext) => IconButton(
+        key: ValueKey('pdf-bookmark-more-$pathKey'),
+        icon: const Icon(Icons.more_vert, size: 20),
+        tooltip: l10n.sidebarMore,
+        onPressed: () async {
+          final renderObject = buttonContext.findRenderObject()! as RenderBox;
+          final anchor =
+              renderObject.localToGlobal(Offset.zero) & renderObject.size;
+          final action =
+              await PdfEditorPresenter.of(buttonContext).menu<_BookmarkAction>(
+            buttonContext,
+            PdfMenuRequest<_BookmarkAction>(
+              anchor: anchor,
+              entries: entries,
+            ),
+          );
+          if (action == null || !buttonContext.mounted) return;
+          switch (action) {
+            case _BookmarkAction.addChild:
+              _addBookmark(buttonContext, parentPath: row.path);
+            case _BookmarkAction.edit:
+              _editBookmark(buttonContext, row);
+            case _BookmarkAction.delete:
+              _deleteBookmark(row);
+          }
+        },
+      ),
     );
   }
 

@@ -77,6 +77,8 @@ class PdfSignatureLibraryDialog extends StatefulWidget {
       _PdfSignatureLibraryDialogState();
 }
 
+enum _SignatureLibraryAction { rename, redraw, delete }
+
 class _PdfSignatureLibraryDialogState extends State<PdfSignatureLibraryDialog> {
   late final List<PdfSavedSignature> _signatures = [...widget.signatures];
   late String? _activeId = widget.activeId;
@@ -147,29 +149,60 @@ class _PdfSignatureLibraryDialogState extends State<PdfSignatureLibraryDialog> {
                       ),
                       title: Text(signature.name),
                       onTap: () => _select(signature),
-                      trailing: PopupMenuButton<String>(
-                        key: ValueKey('pdf-signature-library-menu-$index'),
-                        onSelected: (action) {
-                          switch (action) {
-                            case 'rename':
-                              _replace(signature, widget.onRename);
-                            case 'redraw':
-                              _replace(signature, widget.onRedraw);
-                            case 'delete':
-                              _delete(signature);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                              value: 'rename',
-                              child: Text(pdfL10n(context).rename)),
-                          PopupMenuItem(
-                              value: 'redraw',
-                              child: Text(pdfL10n(context).tbDrawNewSignature)),
-                          PopupMenuItem(
-                              value: 'delete',
-                              child: Text(pdfL10n(context).delete)),
-                        ],
+                      trailing: Builder(
+                        builder: (buttonContext) => IconButton(
+                          key:
+                              ValueKey('pdf-signature-library-menu-$index'),
+                          tooltip: pdfL10n(context).sidebarMore,
+                          icon: const Icon(Icons.more_vert),
+                          onPressed: () async {
+                            final renderObject =
+                                buttonContext.findRenderObject()! as RenderBox;
+                            final anchor = renderObject.localToGlobal(
+                                    Offset.zero) &
+                                renderObject.size;
+                            final action = await PdfEditorPresenter.of(
+                                    buttonContext)
+                                .menu<_SignatureLibraryAction>(
+                              buttonContext,
+                              PdfMenuRequest<_SignatureLibraryAction>(
+                                anchor: anchor,
+                                entries: [
+                                  PdfMenuItem(
+                                    value: _SignatureLibraryAction.rename,
+                                    label: pdfL10n(context).rename,
+                                    icon: Icons.edit_outlined,
+                                  ),
+                                  PdfMenuItem(
+                                    value: _SignatureLibraryAction.redraw,
+                                    label:
+                                        pdfL10n(context).tbDrawNewSignature,
+                                    icon: Icons.draw_outlined,
+                                  ),
+                                  PdfMenuItem(
+                                    value: _SignatureLibraryAction.delete,
+                                    label: pdfL10n(context).delete,
+                                    icon: Icons.delete_outline,
+                                    destructive: true,
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (action == null ||
+                                !buttonContext.mounted ||
+                                !mounted) {
+                              return;
+                            }
+                            switch (action) {
+                              case _SignatureLibraryAction.rename:
+                                await _replace(signature, widget.onRename);
+                              case _SignatureLibraryAction.redraw:
+                                await _replace(signature, widget.onRedraw);
+                              case _SignatureLibraryAction.delete:
+                                _delete(signature);
+                            }
+                          },
+                        ),
                       ),
                     );
                   },

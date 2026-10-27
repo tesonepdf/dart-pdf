@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart';
 
+import '../design/editor_presenter.dart';
 import '../design/editor_theme.dart';
 import '../design/material_host.dart';
 import '../l10n/pdf_l10n.dart';
@@ -760,78 +761,95 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
     final l10n = pdfL10n(context);
     final nm = annotation.name;
     final resolved = thread?.isResolved ?? false;
-    return PopupMenuButton<_RowAction>(
-      key: ValueKey('pdf-annotation-more-$pageIndex-$index'),
-      icon: const Icon(Icons.more_vert, size: 20),
-      tooltip: l10n.sidebarMore,
-      onSelected: (action) {
-        switch (action) {
-          case _RowAction.reply:
-            setState(() {
-              _replyingTo = nm;
-              _reply.text = '';
-            });
-          case _RowAction.resolve:
-            resolved
-                ? widget.controller.reopenThread(pageIndex, annotation)
-                : widget.controller.resolveThread(pageIndex, annotation);
-          case _RowAction.lock:
-            widget.controller.toggleAnnotationLock(pageIndex, index);
-          case _RowAction.delete:
-            if (signature != null) {
-              unawaited(_confirmRemoveSignature(context, signature));
-            } else {
-              widget.controller.deleteAnnotation(pageIndex, index);
-            }
-        }
-      },
-      itemBuilder: (context) => [
-        if (hostsThread) ...[
-          PopupMenuItem(
-            key: const ValueKey('pdf-reply-button'),
-            value: _RowAction.reply,
-            // a reply is matched to its root by /NM; without one there's
-            // no field to open
-            enabled: nm != null,
-            child: Text(l10n.sidebarReply),
-          ),
-          PopupMenuItem(
-            key: const ValueKey('pdf-resolve-button'),
-            value: _RowAction.resolve,
-            child: Text(resolved ? l10n.sidebarReopen : l10n.sidebarResolve),
-          ),
-        ],
-        if (lockable)
-          PopupMenuItem(
-            key: ValueKey('pdf-annotation-lock-$pageIndex-$index'),
-            value: _RowAction.lock,
-            child: _menuRow(
-                annotation.isLocked ? Icons.lock : Icons.lock_open_outlined,
-                annotation.isLocked
-                    ? l10n.sidebarUnlockAnnotation
-                    : l10n.sidebarLockAnnotation),
-          ),
-        if (signature != null)
-          PopupMenuItem(
-            key: ValueKey('pdf-signature-delete-$pageIndex-$index'),
-            value: _RowAction.delete,
-            child: _menuRow(Icons.delete_outline, l10n.sidebarDeleteSignature),
-          )
-        else if (deletable)
-          PopupMenuItem(
-            key: ValueKey('pdf-annotation-delete-$pageIndex-$index'),
-            value: _RowAction.delete,
-            child: _menuRow(Icons.delete_outline, l10n.delete),
-          ),
+    final entries = <PdfMenuEntry<_RowAction>>[
+      if (hostsThread) ...[
+        PdfMenuItem(
+          key: const ValueKey('pdf-reply-button'),
+          value: _RowAction.reply,
+          enabled: nm != null,
+          label: l10n.sidebarReply,
+          icon: Icons.reply_outlined,
+        ),
+        PdfMenuItem(
+          key: const ValueKey('pdf-resolve-button'),
+          value: _RowAction.resolve,
+          label: resolved ? l10n.sidebarReopen : l10n.sidebarResolve,
+          icon: resolved ? Icons.undo : Icons.check_circle_outline,
+        ),
       ],
+      if (lockable)
+        PdfMenuItem(
+          key: ValueKey('pdf-annotation-lock-$pageIndex-$index'),
+          value: _RowAction.lock,
+          label: annotation.isLocked
+              ? l10n.sidebarUnlockAnnotation
+              : l10n.sidebarLockAnnotation,
+          icon: annotation.isLocked ? Icons.lock : Icons.lock_open_outlined,
+        ),
+      if (signature != null)
+        PdfMenuItem(
+          key: ValueKey('pdf-signature-delete-$pageIndex-$index'),
+          value: _RowAction.delete,
+          label: l10n.sidebarDeleteSignature,
+          icon: Icons.delete_outline,
+          destructive: true,
+        )
+      else if (deletable)
+        PdfMenuItem(
+          key: ValueKey('pdf-annotation-delete-$pageIndex-$index'),
+          value: _RowAction.delete,
+          label: l10n.delete,
+          icon: Icons.delete_outline,
+          destructive: true,
+        ),
+    ];
+    return Builder(
+      builder: (buttonContext) => IconButton(
+        key: ValueKey('pdf-annotation-more-$pageIndex-$index'),
+        icon: const Icon(Icons.more_vert, size: 20),
+        tooltip: l10n.sidebarMore,
+        onPressed: entries.isEmpty
+            ? null
+            : () async {
+                final renderObject =
+                    buttonContext.findRenderObject()! as RenderBox;
+                final anchor =
+                    renderObject.localToGlobal(Offset.zero) & renderObject.size;
+                final action =
+                    await PdfEditorPresenter.of(buttonContext).menu<_RowAction>(
+                  buttonContext,
+                  PdfMenuRequest<_RowAction>(
+                    anchor: anchor,
+                    entries: entries,
+                  ),
+                );
+                if (action == null || !buttonContext.mounted) return;
+                switch (action) {
+                  case _RowAction.reply:
+                    setState(() {
+                      _replyingTo = nm;
+                      _reply.text = '';
+                    });
+                  case _RowAction.resolve:
+                    if (resolved) {
+                      widget.controller.reopenThread(pageIndex, annotation);
+                    } else {
+                      widget.controller.resolveThread(pageIndex, annotation);
+                    }
+                  case _RowAction.lock:
+                    widget.controller.toggleAnnotationLock(pageIndex, index);
+                  case _RowAction.delete:
+                    if (signature != null) {
+                      unawaited(
+                          _confirmRemoveSignature(buttonContext, signature));
+                    } else {
+                      widget.controller.deleteAnnotation(pageIndex, index);
+                    }
+                }
+              },
+      ),
     );
   }
-
-  static Widget _menuRow(IconData icon, String label) => Row(children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 12),
-        Flexible(child: Text(label)),
-      ]);
 
   /// A plain / ⌘-Ctrl / shift click on a row (outside checkbox mode).
   /// Plain click navigates the viewer to the annotation, selects it, and

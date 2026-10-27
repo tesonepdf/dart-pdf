@@ -67,6 +67,28 @@ void main() {
     });
   }
 
+  testWidgets('page actions use touch-sized rows on Android', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: PdfEditorView(
+      bytes: buildMultiPagePdf(2),
+      onSplitPages: (_) {},
+    ))));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('pdf-thumbnail-page-actions')),
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pumpAndSettle();
+
+    final splitItem = find.byKey(const ValueKey('pdf-thumbnail-split-pages'));
+    expect(tester.widget<ListTile>(splitItem).enabled, isTrue);
+    expect(
+      tester.getSize(splitItem).height,
+      greaterThanOrEqualTo(kMinInteractiveDimension),
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets(
       'invalid ranges stay open, correction succeeds, cancel emits nothing',
       (tester) async {
