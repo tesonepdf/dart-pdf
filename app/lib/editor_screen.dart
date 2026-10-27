@@ -376,6 +376,7 @@ class _EditorScreenState extends State<EditorScreen>
       UpdateService(
         currentVersion: AppInfo.version,
         currentBuildCommit: AppInfo.buildCommit,
+        currentBuildNumber: AppInfo.buildNumber,
         checkInterval: defaultTargetPlatform == TargetPlatform.android
             ? const Duration(hours: 6)
             : const Duration(hours: 24),
@@ -658,6 +659,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (_ownsUpdates) {
       await AppInfo.load();
       _updates.currentVersion = AppInfo.version;
+      _updates.currentBuildNumber = AppInfo.buildNumber;
     }
     if (!mounted) return;
     await _updates.ready;
