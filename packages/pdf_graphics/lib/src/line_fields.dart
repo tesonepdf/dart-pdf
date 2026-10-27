@@ -63,7 +63,7 @@ class PdfLineFieldDetector {
   static List<PdfLineField> detect(
     PdfDocument document,
     int pageIndex, {
-    double minLength = 24,
+    double minLength = 18,
     double maxThickness = 2.5,
   }) {
     final segs = <_Seg>[];
@@ -126,7 +126,7 @@ class PdfLineFieldDetector {
     if (w0 is! CosInteger || h0 is! CosInteger) return;
     final sourceW = w0.value, sourceH = h0.value;
     if (sourceW <= 0 || sourceH <= 0) return;
-    final targetW = math.min(sourceW, 1800);
+    final targetW = math.min(sourceW, 2000);
     final targetH = math.max(1, (sourceH * targetW / sourceW).round());
     final pixels = targetW < sourceW
         ? decodePdfImagePixelsScaled(
@@ -136,7 +136,7 @@ class PdfLineFieldDetector {
     final w = pixels.width, h = pixels.height;
     final rgba = pixels.rgba;
     final pxPerPt = w / m.a;
-    final minRun = math.max(6, (10 * pxPerPt).round());
+    final minRun = math.max(6, (14 * pxPerPt).round());
     final minChain = (minLength * pxPerPt).round();
     final maxRun = (w * 0.92).round();
     final maxRows = math.max(3, (5 * pxPerPt).round());
@@ -160,7 +160,7 @@ class PdfLineFieldDetector {
         final start = x;
         var end = x;
         var gap = 0;
-        while (x < w && gap <= 3) {
+        while (x < w && gap <= 1) {
           if (dark(x, y)) {
             end = x;
             gap = 0;
@@ -203,9 +203,11 @@ class PdfLineFieldDetector {
     for (final chain in done) {
       final width = chain.x1 - chain.x0 + 1;
       if (width < minChain) continue;
+      if (chain.x1 >= w - 3) continue; // the scan's own edge
       final rows = chain.lastRow - chain.firstRow + 1;
       if (rows > maxRows + 0.08 * width) continue; // a bar or a blot
       final row = chain.sumRow / chain.n + 0.5;
+      if (row < 0.01 * h || row > 0.99 * h) continue;
       final y = m.f + m.d * (1 - row / h);
       out.add(_Seg(m.e + m.a * chain.x0 / w, m.e + m.a * (chain.x1 + 1) / w, y));
     }
@@ -254,25 +256,38 @@ class PdfLineFieldDetector {
 
   static List<PdfLineField> _merge(
       List<_Seg> segs, int pageIndex, double minLength) {
-    segs.sort((p, q) {
-      final dy = q.y.compareTo(p.y);
-      return dy != 0 ? dy : p.left.compareTo(q.left);
-    });
-    final merged = <_Seg>[];
-    for (final s in segs) {
-      var joined = false;
-      for (final m in merged) {
-        if ((m.y - s.y).abs() <= 1.5 &&
-            s.left <= m.right + 6 &&
-            s.right >= m.left - 6) {
-          m.left = math.min(m.left, s.left);
-          m.right = math.max(m.right, s.right);
-          joined = true;
-          break;
+    var current = [for (final s in segs) _Seg(s.left, s.right, s.y)];
+    var changed = true;
+    while (changed) {
+      changed = false;
+      current.sort((p, q) {
+        final dy = q.y.compareTo(p.y);
+        return dy != 0 ? dy : p.left.compareTo(q.left);
+      });
+      final out = <_Seg>[];
+      for (final s in current) {
+        _Seg? hit;
+        for (final t in out) {
+          if ((t.y - s.y).abs() <= 2 &&
+              s.left <= t.right + 1.5 &&
+              s.right >= t.left - 1.5) {
+            hit = t;
+            break;
+          }
+        }
+        if (hit == null) {
+          out.add(s);
+        } else {
+          final n = hit.right - hit.left, k = s.right - s.left;
+          hit.y = (hit.y * n + s.y * k) / (n + k);
+          hit.left = math.min(hit.left, s.left);
+          hit.right = math.max(hit.right, s.right);
+          changed = true;
         }
       }
-      if (!joined) merged.add(_Seg(s.left, s.right, s.y));
+      current = out;
     }
+    final merged = current;
     final fields = [
       for (final m in merged)
         if (m.right - m.left >= minLength)
