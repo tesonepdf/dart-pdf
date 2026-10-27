@@ -3751,9 +3751,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// The view-space box a text box takes on [field]: the strip's whole width,
   /// one text line tall, sitting on the rule.
   Rect _lineFieldViewRect(PdfLineField field) {
-    final h = _controller.preferences.fontSize * 1.5;
-    return _geometry
-        .toViewRect(PdfRect(field.left, field.y, field.right, field.y + h));
+    final h = (_controller.preferences.fontSize * 1.4).clamp(14.0, 24.0);
+    return _geometry.toViewRect(
+        PdfRect(field.left, field.y + 1, field.right, field.y + 1 + h));
   }
 
   /// The free strip under [position] (a little slack above and below the
