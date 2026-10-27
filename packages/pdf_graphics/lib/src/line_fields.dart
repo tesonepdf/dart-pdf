@@ -32,6 +32,20 @@ class PdfLineField {
   double get width => right - left;
 }
 
+class _Chain {
+  _Chain(this.x0, this.x1, int row)
+      : firstRow = row,
+        lastRow = row,
+        sumRow = row.toDouble(),
+        n = 1;
+  int x0;
+  int x1;
+  final int firstRow;
+  int lastRow;
+  double sumRow;
+  int n;
+}
+
 class _Seg {
   _Seg(this.left, this.right, this.y);
   double left;
@@ -89,20 +103,22 @@ class PdfLineFieldDetector {
     return _merge(segs, pageIndex, minLength);
   }
 
-  /// Scanned pages: finds long, thin dark runs in the page image itself.
+  /// Scanned pages: finds long, thin dark runs in the page image itself. Runs
+  /// in consecutive rows are chained, so a slightly skewed scan still yields
+  /// its rules.
   static void _fromImage(PdfDocument document, PdfImageRequest request,
       List<_Seg> out, double minLength) {
     final m = request.transform;
     // only upright, unrotated placements
     if (m.b.abs() > 1e-3 || m.c.abs() > 1e-3 || m.a <= 0 || m.d <= 0) return;
-    if (m.a < 100 || m.d < 100) return; // icons and logos, not a page
+    if (m.a < 100) return; // icons and logos, not a page or a band of one
     final dict = request.stream.dictionary;
     final w0 = document.cos.resolve(dict['Width']);
     final h0 = document.cos.resolve(dict['Height']);
     if (w0 is! CosInteger || h0 is! CosInteger) return;
     final sourceW = w0.value, sourceH = h0.value;
     if (sourceW <= 0 || sourceH <= 0) return;
-    final targetW = math.min(sourceW, 1400);
+    final targetW = math.min(sourceW, 1800);
     final targetH = math.max(1, (sourceH * targetW / sourceW).round());
     final pixels = targetW < sourceW
         ? decodePdfImagePixelsScaled(
@@ -112,19 +128,19 @@ class PdfLineFieldDetector {
     final w = pixels.width, h = pixels.height;
     final rgba = pixels.rgba;
     final pxPerPt = w / m.a;
-    final minRun = (minLength * pxPerPt).round();
-    final maxRun = (w * 0.9).round();
+    final minRun = math.max(6, (10 * pxPerPt).round());
+    final minChain = (minLength * pxPerPt).round();
+    final maxRun = (w * 0.92).round();
     final maxRows = math.max(3, (5 * pxPerPt).round());
 
     bool dark(int x, int y) {
       final i = (y * w + x) * 4;
       if (rgba[i + 3] < 128) return false;
-      return (rgba[i] + rgba[i + 1] + rgba[i + 2]) < 3 * 130;
+      return (rgba[i] + rgba[i + 1] + rgba[i + 2]) < 3 * 185;
     }
 
-    // open lines: [x0, x1, firstRow, lastRow]
-    final open = <List<int>>[];
-    final done = <List<int>>[];
+    final open = <_Chain>[];
+    final done = <_Chain>[];
     for (var y = 0; y < h; y++) {
       final runs = <(int, int)>[];
       var x = 0;
@@ -136,7 +152,7 @@ class PdfLineFieldDetector {
         final start = x;
         var end = x;
         var gap = 0;
-        while (x < w && gap <= 2) {
+        while (x < w && gap <= 3) {
           if (dark(x, y)) {
             end = x;
             gap = 0;
@@ -145,45 +161,45 @@ class PdfLineFieldDetector {
           }
           x++;
         }
-        if (end - start + 1 >= minRun && end - start + 1 <= maxRun) {
-          runs.add((start, end));
-        }
+        final length = end - start + 1;
+        if (length >= minRun && length <= maxRun) runs.add((start, end));
       }
-      final stillOpen = <List<int>>[];
-      for (final line in open) {
-        if (line[3] < y - 2) {
-          done.add(line);
-        } else {
-          stillOpen.add(line);
-        }
+      final stillOpen = <_Chain>[];
+      for (final chain in open) {
+        (chain.lastRow < y - 2 ? done : stillOpen).add(chain);
       }
       open
         ..clear()
         ..addAll(stillOpen);
       for (final (a, b) in runs) {
-        List<int>? hit;
-        for (final line in open) {
-          final overlap = math.min(b, line[1]) - math.max(a, line[0]);
+        _Chain? hit;
+        for (final chain in open) {
+          final overlap = math.min(b, chain.x1) - math.max(a, chain.x0);
           if (overlap > 0.5 * (b - a)) {
-            hit = line;
+            hit = chain;
             break;
           }
         }
         if (hit == null) {
-          open.add([a, b, y, y]);
+          open.add(_Chain(a, b, y));
         } else {
-          hit[0] = math.min(hit[0], a);
-          hit[1] = math.max(hit[1], b);
-          hit[3] = y;
+          hit.x0 = math.min(hit.x0, a);
+          hit.x1 = math.max(hit.x1, b);
+          hit.lastRow = y;
+          hit.sumRow += y;
+          hit.n++;
         }
       }
     }
     done.addAll(open);
-    for (final line in done) {
-      if (line[3] - line[2] + 1 > maxRows) continue; // a bar or a blot
-      final rowCenter = (line[2] + line[3] + 1) / 2;
-      final y = m.f + m.d * (1 - rowCenter / h);
-      out.add(_Seg(m.e + m.a * line[0] / w, m.e + m.a * (line[1] + 1) / w, y));
+    for (final chain in done) {
+      final width = chain.x1 - chain.x0 + 1;
+      if (width < minChain) continue;
+      final rows = chain.lastRow - chain.firstRow + 1;
+      if (rows > maxRows + 0.08 * width) continue; // a bar or a blot
+      final row = chain.sumRow / chain.n + 0.5;
+      final y = m.f + m.d * (1 - row / h);
+      out.add(_Seg(m.e + m.a * chain.x0 / w, m.e + m.a * (chain.x1 + 1) / w, y));
     }
   }
 

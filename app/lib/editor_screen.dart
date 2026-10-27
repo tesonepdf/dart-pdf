@@ -4800,8 +4800,18 @@ class _EditorScreenState extends State<EditorScreen>
                   : Icons.border_color_outlined),
               isSelected: session.lineFieldsMode,
               tooltip: 'Campi sulle righe',
-              onPressed: () =>
-                  session.lineFieldsMode = !session.lineFieldsMode,
+              onPressed: () {
+                session.lineFieldsMode = !session.lineFieldsMode;
+                if (!session.lineFieldsMode) return;
+                var found = 0;
+                final pages = session.document.pageCount;
+                for (var i = 0; i < pages && i < 3; i++) {
+                  found += session.lineFieldsFor(i).length;
+                }
+                _toast(found == 0
+                    ? 'Nessuna riga trovata in questo PDF'
+                    : 'Righe trovate: $found');
+              },
             );
           },
         ),
