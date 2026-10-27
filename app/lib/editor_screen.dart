@@ -660,6 +660,8 @@ class _EditorScreenState extends State<EditorScreen>
       _updates.currentVersion = AppInfo.version;
     }
     if (!mounted) return;
+    await _updates.ready;
+    if (!mounted || !_updates.autoCheckAllowed(resume: false)) return;
     await _updates.checkForUpdates();
   }
 
@@ -799,7 +801,8 @@ class _EditorScreenState extends State<EditorScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed && widget.ownsApplicationSession) {
       _recoverOcr();
-      if (defaultTargetPlatform == TargetPlatform.android) {
+      if (defaultTargetPlatform == TargetPlatform.android &&
+          _updates.autoCheckAllowed(resume: true)) {
         unawaited(_updates.checkForUpdates());
       }
     }

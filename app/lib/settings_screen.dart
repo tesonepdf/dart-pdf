@@ -393,26 +393,68 @@ class _UpdateSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(appL10n(context).settingsUpdates,
-                      style: theme.textTheme.titleSmall),
-                ),
-                TextButton(
-                  key: const ValueKey('settings-check-updates'),
-                  onPressed: checking
-                      ? null
-                      : () => updates.checkForUpdates(force: true),
-                  child: checking
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(appL10n(context).settingsCheckNow),
-                ),
-              ],
+            Text(appL10n(context).settingsUpdates,
+                style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              _t(
+                context,
+                'Scegli quando l\'app controlla se c\'e\' una versione nuova. '
+                    'Se c\'e\', compare un avviso con la scelta di scaricarla.',
+                'Choose when the app checks for a new version. If there is '
+                    'one, a notice lets you download it.',
+              ),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            _modeOption(
+              context,
+              UpdateCheckMode.everyOpen,
+              _t(context, 'A ogni apertura', 'Every time the app opens'),
+              _t(
+                context,
+                'Controlla ogni volta che apri l\'app o la riporti in primo '
+                    'piano. Consigliata.',
+                'Checks every time you open the app or bring it to the '
+                    'foreground. Recommended.',
+              ),
+              checking,
+            ),
+            _modeOption(
+              context,
+              UpdateCheckMode.startOnly,
+              _t(context, 'Solo all\'avvio da zero', 'Only on a cold start'),
+              _t(
+                context,
+                'Controlla solo quando l\'app parte da chiusa del tutto.',
+                'Checks only when the app starts from fully closed.',
+              ),
+              checking,
+            ),
+            _modeOption(
+              context,
+              UpdateCheckMode.manual,
+              _t(context, 'Solo manuale', 'Manual only'),
+              _t(
+                context,
+                'Nessun controllo automatico: usa il pulsante qui sotto.',
+                'No automatic check: use the button below.',
+              ),
+              checking,
+            ),
+            const SizedBox(height: 4),
+            OutlinedButton(
+              key: const ValueKey('settings-check-updates'),
+              onPressed:
+                  checking ? null : () => updates.checkForUpdates(force: true),
+              child: checking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_t(context, 'Controlla aggiornamenti ora',
+                      'Check for updates now')),
             ),
             if (updates.nightlySupported)
               SwitchListTile(
@@ -445,6 +487,44 @@ class _UpdateSection extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  /// Italian or English text (the update options are not in the ARB files).
+  static String _t(BuildContext context, String it, String en) =>
+      Localizations.localeOf(context).languageCode == 'it' ? it : en;
+
+  Widget _modeOption(BuildContext context, UpdateCheckMode mode, String title,
+      String subtitle, bool busy) {
+    final theme = Theme.of(context);
+    final selected = updates.checkMode == mode;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: selected
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: ValueKey('settings-update-mode-${mode.name}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => updates.setCheckMode(mode),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${selected ? '\u25CF' : '\u25CB'} $title',
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(subtitle, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
