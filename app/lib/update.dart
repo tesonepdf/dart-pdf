@@ -208,6 +208,18 @@ class ReleaseInfo {
   }
 }
 
+/// When the app checks for updates by itself (Settings > Updates).
+enum UpdateCheckMode {
+  /// At every launch and whenever the app returns to the foreground.
+  everyOpen,
+
+  /// Only when the app starts from scratch.
+  startOnly,
+
+  /// Never automatically: only the "Check now" button.
+  manual,
+}
+
 /// Where an update check stands. Drives both the Settings UI and the
 /// startup banner.
 enum UpdateStatus {
@@ -256,7 +268,7 @@ class UpdateService extends ChangeNotifier {
     ReleaseFetcher? fetcher,
     AndroidAbisFetcher? androidAbisFetcher,
     http.Client Function()? clientFactory,
-    Duration checkInterval = const Duration(hours: 24),
+    Duration checkInterval = const Duration(minutes: 1),
     DateTime Function() now = DateTime.now,
     TargetPlatform? platform,
     bool? storeManagedBuild,
@@ -302,6 +314,7 @@ class UpdateService extends ChangeNotifier {
   static const _lastCheckedKey = 'dart_pdf_editor_app.update.lastChecked';
   static const _dismissedKey = 'dart_pdf_editor_app.update.dismissedTag';
   static const _nightlyKey = 'dart_pdf_editor_app.update.nightly';
+  static const _modeKey = 'dart_pdf_editor_app.update.mode';
 
   UpdateStatus _status = UpdateStatus.idle;
   UpdateStatus get status => _status;
@@ -321,6 +334,31 @@ class UpdateService extends ChangeNotifier {
 
   String? _dismissedTag;
   bool _nightlyUpdates = false;
+  UpdateCheckMode _checkMode = UpdateCheckMode.everyOpen;
+
+  /// When the app checks on its own (persisted).
+  UpdateCheckMode get checkMode => _checkMode;
+
+  /// Whether an automatic check is allowed now: [resume] is true when the app
+  /// comes back to the foreground, false at a cold start.
+  bool autoCheckAllowed({required bool resume}) => switch (_checkMode) {
+        UpdateCheckMode.everyOpen => true,
+        UpdateCheckMode.startOnly => !resume,
+        UpdateCheckMode.manual => false,
+      };
+
+  Future<void> setCheckMode(UpdateCheckMode mode) async {
+    await _restored;
+    if (mode == _checkMode) return;
+    _checkMode = mode;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_modeKey, mode.name);
+    } catch (_) {
+      // No storage - keep the in-memory choice for this session.
+    }
+  }
   List<String> _androidAbis = const [];
   Future<void> _restored = Future.value();
 
@@ -662,6 +700,11 @@ class UpdateService extends ChangeNotifier {
       _dismissedTag = prefs.getString(_dismissedKey);
       _nightlyUpdates =
           (prefs.getBool(_nightlyKey) ?? false) && nightlySupported;
+      final savedMode = prefs.getString(_modeKey);
+      _checkMode = UpdateCheckMode.values.firstWhere(
+        (m) => m.name == savedMode,
+        orElse: () => UpdateCheckMode.everyOpen,
+      );
       notifyListeners();
     } catch (_) {
       // No storage (tests) - keep the in-memory defaults.
