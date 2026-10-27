@@ -3764,7 +3764,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return PdfLineField(
       pageIndex: widget.pageIndex,
       left: x,
-      right: math.max(box.right - 12.0, x + 120.0),
+      // a compact box at the tapped spot, not a strip across the page
+      right: math.max(
+        math.min(box.right - 12.0, x + _controller.preferences.fontSize * 25),
+        x + _controller.preferences.fontSize * 6,
+      ),
       y: y - height / 2 - 1,
     );
   }
