@@ -131,6 +131,77 @@ class PdfLineFieldDetector {
     return _merge(segs, pageIndex, minLength);
   }
 
+  /// Fallback when no fill-in rule is found: one full-width strip per text
+  /// row of the page (spanning the row including its printed words). When the
+  /// page has no text at all, an even grid of rows covers the whole page so
+  /// every spot can take a text box.
+  static List<PdfLineField> detectRows(PdfDocument document, int pageIndex) {
+    final rows = <({double left, double right, double bottom, double top})>[];
+    try {
+      final text = PdfTextExtractor.extract(document, pageIndex);
+      final runs = [
+        for (final r in text.runs)
+          if (r.text.trim().isNotEmpty && r.bounds.top > r.bounds.bottom) r
+      ]..sort((a, b) => b.bounds.bottom.compareTo(a.bounds.bottom));
+      for (final run in runs) {
+        final b = run.bounds;
+        final height = b.top - b.bottom;
+        var merged = false;
+        for (var i = 0; i < rows.length; i++) {
+          final row = rows[i];
+          final midRow = (row.top + row.bottom) / 2;
+          final mid = (b.top + b.bottom) / 2;
+          if ((midRow - mid).abs() <= height * 0.5) {
+            rows[i] = (
+              left: math.min(row.left, b.left),
+              right: math.max(row.right, b.right),
+              bottom: math.min(row.bottom, b.bottom),
+              top: math.max(row.top, b.top),
+            );
+            merged = true;
+            break;
+          }
+        }
+        if (!merged) {
+          rows.add(
+              (left: b.left, right: b.right, bottom: b.bottom, top: b.top));
+        }
+      }
+    } catch (_) {}
+    final fields = <PdfLineField>[];
+    if (rows.isNotEmpty) {
+      for (final row in rows) {
+        if (row.right - row.left < 8) continue;
+        fields.add(PdfLineField(
+          pageIndex: pageIndex,
+          left: row.left,
+          right: row.right,
+          y: row.bottom,
+        ));
+      }
+    } else {
+      try {
+        final box = document.page(pageIndex).cropBox;
+        const step = 16.0, margin = 30.0;
+        for (var y = box.top - margin - step;
+            y > box.bottom + margin;
+            y -= step) {
+          fields.add(PdfLineField(
+            pageIndex: pageIndex,
+            left: box.left + margin,
+            right: box.right - margin,
+            y: y,
+          ));
+        }
+      } catch (_) {}
+    }
+    fields.sort((p, q) {
+      final dy = q.y.compareTo(p.y);
+      return dy != 0 ? dy : p.left.compareTo(q.left);
+    });
+    return fields;
+  }
+
   static bool _isWordCharacter(String? character) {
     if (character == null || character.isEmpty) return false;
     final code = character.codeUnitAt(0);

@@ -2348,7 +2348,12 @@ class PdfEditingController extends ChangeNotifier {
     if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
     return _lineFieldCache.putIfAbsent(
       pageIndex,
-      () => PdfLineFieldDetector.detect(_document, pageIndex),
+      () {
+        final found = PdfLineFieldDetector.detect(_document, pageIndex);
+        return found.isNotEmpty
+            ? found
+            : PdfLineFieldDetector.detectRows(_document, pageIndex);
+      },
     );
   }
 
