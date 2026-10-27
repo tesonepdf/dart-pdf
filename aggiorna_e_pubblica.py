@@ -71,6 +71,7 @@ def scarica(con_windows):
 
 
 def modo_apk():
+    git("config", "core.hooksPath", ".githooks")   # numero #N automatico nei commit
     if git("status", "--porcelain"):
         git("add", "-A")
         git("commit", "-m", "Aggiornamento " + datetime.now().strftime("%d/%m/%Y %H:%M"))
