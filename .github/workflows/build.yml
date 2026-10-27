@@ -42,7 +42,7 @@ jobs:
         run: |
           commit_epoch="$(git log -1 --format=%ct HEAD)"
           read -r year day hour minute < <(
-            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %-j %-H %-M'
+            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
           number="$(git rev-list --count HEAD)"
