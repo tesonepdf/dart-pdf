@@ -5584,7 +5584,6 @@ extension PdfAnnotationEditing on PdfEditor {
               charSpacing: style.charSpacing,
               horizontalScale: style.horizontalScale,
               underline: style.underline,
-              textInset: style.textInset,
               pageRotation: pageRotation,
             );
           } else {
@@ -5606,6 +5605,7 @@ extension PdfAnnotationEditing on PdfEditor {
               charSpacing: style.charSpacing,
               horizontalScale: style.horizontalScale,
               underline: style.underline,
+              textInset: style.textInset,
               pageRotation: pageRotation,
             );
           }
