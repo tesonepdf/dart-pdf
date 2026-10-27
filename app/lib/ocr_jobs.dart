@@ -174,7 +174,7 @@ class OcrJobs {
       }
     }
     final job = OcrSavedJob(
-      id: '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}',
+      id: '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(0x7fffffff)}',
       title: title,
       sourceHash: hash,
       pageCount: PdfDocument.open(source).pageCount,
