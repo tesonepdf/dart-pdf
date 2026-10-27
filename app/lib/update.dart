@@ -261,6 +261,7 @@ class UpdateService extends ChangeNotifier {
   UpdateService({
     required this.currentVersion,
     this.currentBuildCommit = 'unknown',
+    this.currentBuildNumber = '',
     this.repoOwner = AppInfo.repositoryOwner,
     this.repoName = AppInfo.repositoryName,
     this.tagPrefix = 'app-v',
@@ -292,6 +293,11 @@ class UpdateService extends ChangeNotifier {
   /// Rolling builds use this to avoid offering the exact build already
   /// installed even though they share one release tag.
   final String currentBuildCommit;
+
+  /// Progressive CI build number (the `#N` after the version) of the running
+  /// binary. It is the authoritative ordering for rolling builds: when both
+  /// the release and the running app carry one, only it decides.
+  String currentBuildNumber;
 
   final String repoOwner;
   final String repoName;
@@ -549,6 +555,11 @@ class UpdateService extends ChangeNotifier {
   }
 
   bool _isNewer(ReleaseInfo release, AppVersion current) {
+    final releaseBuild = int.tryParse(release.buildNumber ?? '');
+    final runningBuild = int.tryParse(currentBuildNumber.trim());
+    if (releaseBuild != null && runningBuild != null) {
+      return releaseBuild > runningBuild;
+    }
     final versionOrder = release.version.compareTo(current);
     if (versionOrder != 0) return versionOrder > 0;
     if (!release.isNightly && !release.isAndroidUpdate) return false;
