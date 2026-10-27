@@ -10,7 +10,7 @@ import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart'
-    show PdfLineField, PdfLineFieldDetector, PdfTextMatch;
+    show PdfLineField, PdfTextMatch;
 
 import '../page_geometry.dart';
 import '../renderer.dart';
@@ -2348,8 +2348,8 @@ class PdfEditingController extends ChangeNotifier {
     if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
     return _lineFieldCache.putIfAbsent(
       pageIndex,
-      // The whole sheet is editable: full-width rows over the entire page.
-      () => PdfLineFieldDetector.pageGrid(_document, pageIndex),
+      // The whole sheet is one editable area: no pre-drawn rows.
+      () => const <PdfLineField>[],
     );
   }
 

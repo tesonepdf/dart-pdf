@@ -3754,6 +3754,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return Rect.fromLTWH(left, top, w, h);
   }
 
+  /// A free text spot at page point ([x], [y]): the whole sheet is one
+  /// editable area, so a tap anywhere opens a box centred on that point.
+  PdfLineField _freeFieldAt(double x, double y) {
+    final box = _geometry.cropBox;
+    final probe =
+        PdfLineField(pageIndex: widget.pageIndex, left: x, right: x + 1, y: y);
+    final height = _lineFieldHeight(probe);
+    return PdfLineField(
+      pageIndex: widget.pageIndex,
+      left: x,
+      right: math.max(box.right - 12.0, x + 120.0),
+      y: y - height / 2 - 1,
+    );
+  }
+
   /// The height of the strip above [field], stopping just short of the next
   /// rule when one is present.
   double _lineFieldHeight(PdfLineField field) {
@@ -3772,9 +3787,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       if (normalDistance > 2 && normalDistance < gap) gap = normalDistance;
     }
     if (gap.isFinite) return math.max(4.0, gap - 2).toDouble();
-    return (_controller.preferences.fontSize * 1.4)
-        .clamp(14.0, 24.0)
-        .toDouble();
+    return math.max(14.0, _controller.preferences.fontSize * 1.4);
   }
 
   (Offset center, double rotation, double width, double height)
@@ -3885,136 +3898,46 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _lineCursorDesiredX = null;
   }
 
+  /// Moves the free text box by the step set in Settings (one value for the
+  /// horizontal arrows, one for the vertical ones), in document units.
   void _moveLineFieldCursor(LogicalKeyboardKey direction) {
-    if (_textEditLineField == null || _textEditRect == null) return;
+    final field = _textEditLineField;
+    final pageRect = _textEditPageRect;
+    if (field == null || _textEditRect == null || pageRect == null) return;
     _textEditFocus.requestFocus();
-    final value = _textEditText.value;
-    final selection = value.selection;
-    final length = value.text.length;
-    if (!selection.isValid) return;
-
-    final isLeft = direction == LogicalKeyboardKey.arrowLeft;
-    final isRight = direction == LogicalKeyboardKey.arrowRight;
-    if (length == 0 && (isLeft || isRight)) {
-      final field = _textEditLineField!;
-      final width = field.width * math.sqrt(1 + field.slope * field.slope);
-      final maxInset = math.max(0.0, width - _textEditSize - 6);
-      setState(() {
-        _textEditInset = (_textEditInset + (isRight ? 1 : -1) / _geometry.scale)
-            .clamp(0.0, maxInset)
-            .toDouble();
-      });
+    final prefs = _controller.preferences;
+    final scale = _geometry.scale;
+    var viewDx = 0.0, viewDy = 0.0;
+    if (direction == LogicalKeyboardKey.arrowLeft) {
+      viewDx = -prefs.lineArrowStepX * scale;
+    } else if (direction == LogicalKeyboardKey.arrowRight) {
+      viewDx = prefs.lineArrowStepX * scale;
+    } else if (direction == LogicalKeyboardKey.arrowUp) {
+      viewDy = -prefs.lineArrowStepY * scale;
+    } else if (direction == LogicalKeyboardKey.arrowDown) {
+      viewDy = prefs.lineArrowStepY * scale;
+    } else {
       return;
     }
-    if (length == 0) return;
-    final extent = selection.extentOffset.clamp(0, length).toInt();
-
-    if (isLeft || isRight) {
-      _lineCursorDesiredX = null;
-      var offset = extent;
-      if (!selection.isCollapsed) {
-        final base = selection.baseOffset.clamp(0, length).toInt();
-        offset = isLeft ? math.min(base, extent) : math.max(base, extent);
-      } else if (isLeft && offset > 0) {
-        offset--;
-        if (offset > 0 &&
-            value.text.codeUnitAt(offset) >= 0xDC00 &&
-            value.text.codeUnitAt(offset) <= 0xDFFF &&
-            value.text.codeUnitAt(offset - 1) >= 0xD800 &&
-            value.text.codeUnitAt(offset - 1) <= 0xDBFF) {
-          offset--;
-        }
-      } else if (isRight && offset < length) {
-        if (value.text.codeUnitAt(offset) >= 0xD800 &&
-            value.text.codeUnitAt(offset) <= 0xDBFF &&
-            offset + 1 < length &&
-            value.text.codeUnitAt(offset + 1) >= 0xDC00 &&
-            value.text.codeUnitAt(offset + 1) <= 0xDFFF) {
-          offset += 2;
-        } else {
-          offset++;
-        }
-      }
-      _textEditText.selection = TextSelection.collapsed(offset: offset);
-      return;
-    }
-
-    if (direction != LogicalKeyboardKey.arrowUp &&
-        direction != LogicalKeyboardKey.arrowDown) {
-      return;
-    }
-    final textDirection = _flutterTextDirection(value.text);
-    final font = _textEditText.defaultStyle.font;
-    final textStyle = TextStyle(
-      fontSize: _textEditText.maxStyleSize * _geometry.scale,
-      height: _textEditLineSpacing,
-      letterSpacing: _textEditCharSpacing * _geometry.scale,
-      fontFamily: _textEditUiFamily(font),
-      fontFamilyFallback: _textEditUiFallback(font),
-      fontWeight: _textEditWeight(font),
-      fontStyle: _textEditSlant(font),
-    );
-    final painter = TextPainter(
-      text: _textEditText.buildTextSpan(
-          context: context, style: textStyle, withComposing: true),
-      textDirection: textDirection,
-      textAlign: _textEditAlign == null
-          ? TextAlign.start
-          : _flutterTextAlign(_textEditAlign!),
-      strutStyle: StrutStyle(
-        fontFamily: textStyle.fontFamily,
-        fontFamilyFallback: textStyle.fontFamilyFallback,
-        fontSize: textStyle.fontSize,
-        height: _textEditLineSpacing,
-        leadingDistribution: TextLeadingDistribution.even,
-        forceStrutHeight: true,
-      ),
-      textScaler: TextScaler.noScaling,
-    );
-    final availableWidth = math
-        .max(
-          1.0,
-          _textEditRect!.width -
-              8 -
-              _textEditPad * 2 -
-              _textEditInset * _geometry.scale -
-              _textEditRightPad,
-        )
-        .toDouble();
-    painter.layout(maxWidth: availableWidth);
-    final caret = painter.getOffsetForCaret(
-      TextPosition(offset: extent),
-      Rect.zero,
-    );
-    _lineCursorDesiredX ??= caret.dx;
-    final lines = painter.computeLineMetrics();
-    if (lines.length > 1) {
-      var currentLine = 0;
-      var nearestDistance = double.infinity;
-      for (var i = 0; i < lines.length; i++) {
-        final line = lines[i];
-        final top = line.baseline - line.ascent;
-        final distance = (caret.dy - (top + line.height / 2)).abs();
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          currentLine = i;
-        }
-      }
-      final delta = direction == LogicalKeyboardKey.arrowDown ? 1 : -1;
-      final targetLine =
-          (currentLine + delta).clamp(0, lines.length - 1).toInt();
-      if (targetLine != currentLine) {
-        final line = lines[targetLine];
-        final targetY = line.baseline - line.ascent + line.height / 2;
-        final target = painter.getPositionForOffset(
-          Offset(_lineCursorDesiredX!, targetY),
-        );
-        _textEditText.selection = TextSelection.collapsed(
-          offset: target.offset.clamp(0, length).toInt(),
-        );
-      }
-    }
-    painter.dispose();
+    final origin = _geometry.toPagePoint(Offset.zero);
+    final moved = _geometry.toPagePoint(Offset(viewDx, viewDy));
+    final dx = moved.$1 - origin.$1;
+    final dy = moved.$2 - origin.$2;
+    setState(() {
+      _textEditLineField = PdfLineField(
+        pageIndex: field.pageIndex,
+        left: field.left + dx,
+        right: field.right + dx,
+        y: field.y + dy,
+        slope: field.slope,
+      );
+      _textEditPageRect = PdfRect(
+        pageRect.left + dx,
+        pageRect.bottom + dy,
+        pageRect.right + dx,
+        pageRect.top + dy,
+      );
+    });
   }
 
   Widget _buildLineCursorPad() {
@@ -4738,17 +4661,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         !HardwareKeyboard.instance.isMetaPressed &&
         !HardwareKeyboard.instance.isAltPressed &&
         (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-            event.logicalKey == LogicalKeyboardKey.arrowRight)) {
-      final step = 1 / _geometry.scale;
-      final direction =
-          event.logicalKey == LogicalKeyboardKey.arrowRight ? 1 : -1;
-      final field = _textEditLineField!;
-      final lineWidth = field.width * math.sqrt(1 + field.slope * field.slope);
-      final maxInset = math.max(0.0, lineWidth - _textEditSize - 6);
-      setState(() {
-        _textEditInset =
-            (_textEditInset + direction * step).clamp(0.0, maxInset).toDouble();
-      });
+            event.logicalKey == LogicalKeyboardKey.arrowRight ||
+            event.logicalKey == LogicalKeyboardKey.arrowUp ||
+            event.logicalKey == LogicalKeyboardKey.arrowDown)) {
+      _moveLineFieldCursor(event.logicalKey);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -6478,10 +6394,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       final (lx, ly) = _geometry.toPagePoint(details.localPosition);
       final annotation =
           _controller.selectableAnnotationAt(widget.pageIndex, lx, ly);
-      final field = _lineFieldAt(details.localPosition);
-      if (field != null &&
-          (annotation == null || _tool == PdfEditTool.freeText)) {
-        _openLineFieldEditor(field, details.localPosition);
+      if (annotation == null || _tool == PdfEditTool.freeText) {
+        _openLineFieldEditor(_freeFieldAt(lx, ly), details.localPosition);
         return;
       }
     }
@@ -7809,23 +7723,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                         chromeScale: _chromeScale,
                         color: PdfViewerTheme.of(context)
                             .snapGrid(Theme.of(context).colorScheme.primary),
-                      ),
-                      size: Size.infinite,
-                    ),
-                  ),
-                ),
-              if (_controller.lineFieldsMode)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      key: const ValueKey('pdf-line-fields'),
-                      painter: _LineFieldsPainter(
-                        rects: [
-                          for (final f
-                              in _controller.lineFieldsFor(widget.pageIndex))
-                            _lineFieldViewRect(f),
-                        ],
-                        color: Theme.of(context).colorScheme.primary,
                       ),
                       size: Size.infinite,
                     ),
