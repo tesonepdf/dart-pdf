@@ -2061,7 +2061,8 @@ extension PdfAnnotationEditing on PdfEditor {
   /// be regenerated (resize, text edits): text color and [borderColor]
   /// live in /DA (`rg` / `RG`), [fillColor] is /C (the free-text
   /// background per §12.5.6.6), [borderWidth] is /BS /W, and [opacity]
-  /// is baked into the appearance's graphics state.
+  /// is baked into the appearance's graphics state. [textInset] shifts the
+  /// text's start point while leaving the annotation's full box unchanged.
   void addFreeText(
     int pageIndex,
     PdfRect rect,
@@ -2080,6 +2081,7 @@ extension PdfAnnotationEditing on PdfEditor {
     double charSpacing = 0,
     double horizontalScale = _defaultHorizontalScale,
     bool underline = false,
+    double textInset = 0,
     int? pageRotation,
     String? author,
     String? name,
@@ -2120,6 +2122,7 @@ extension PdfAnnotationEditing on PdfEditor {
       charSpacing: charSpacing,
       horizontalScale: horizontalScale,
       underline: underline,
+      textInset: textInset,
       pageRotation: effectivePageRotation,
     );
 
@@ -2140,6 +2143,7 @@ extension PdfAnnotationEditing on PdfEditor {
         charSpacing: charSpacing,
         horizontalScale: horizontalScale,
         underline: underline);
+    _writeFreeTextInset(dict, textInset);
     if (borderColor != null && borderWidth > 0) {
       dict['BS'] = _borderStyle(borderWidth);
     }
@@ -2612,6 +2616,21 @@ extension PdfAnnotationEditing on PdfEditor {
       dict[kPdfFreeTextUnderlineKey] = const CosBoolean(true);
     } else {
       dict.entries.remove(kPdfFreeTextUnderlineKey);
+    }
+  }
+
+  static void _writeFreeTextInset(CosDictionary dict, double textInset) {
+    if (!textInset.isFinite || textInset < 0) {
+      throw ArgumentError.value(
+        textInset,
+        'textInset',
+        'must be finite and non-negative',
+      );
+    }
+    if (textInset == 0) {
+      dict.entries.remove(kPdfFreeTextInsetKey);
+    } else {
+      dict[kPdfFreeTextInsetKey] = CosReal(textInset);
     }
   }
 
@@ -3121,6 +3140,8 @@ extension PdfAnnotationEditing on PdfEditor {
   /// lists, sync payloads, and search-friendly metadata still see ordinary
   /// text. `/DA` records the first run as the fallback style for other
   /// viewers; the generated `/AP /N` appearance carries the per-run styling.
+  /// [textInset] shifts the text's start point while leaving the annotation's
+  /// full box unchanged.
   void addFreeTextRich(
     int pageIndex,
     PdfRect rect,
@@ -3135,6 +3156,7 @@ extension PdfAnnotationEditing on PdfEditor {
     double lineSpacing = _defaultLineSpacing,
     double charSpacing = 0,
     double horizontalScale = _defaultHorizontalScale,
+    double textInset = 0,
     int? pageRotation,
     String? author,
     String? name,
@@ -3181,6 +3203,7 @@ extension PdfAnnotationEditing on PdfEditor {
       lineSpacing: lineSpacing,
       charSpacing: charSpacing,
       horizontalScale: horizontalScale,
+      textInset: textInset,
       pageRotation: effectivePageRotation,
     );
 
@@ -3211,6 +3234,7 @@ extension PdfAnnotationEditing on PdfEditor {
         charSpacing: charSpacing,
         horizontalScale: horizontalScale,
         underline: nonEmpty.every((run) => run.underline));
+    _writeFreeTextInset(dict, textInset);
     if (borderColor != null && borderWidth > 0) {
       dict['BS'] = _borderStyle(borderWidth);
     }
@@ -3366,9 +3390,17 @@ extension PdfAnnotationEditing on PdfEditor {
     double charSpacing = 0,
     double horizontalScale = _defaultHorizontalScale,
     bool underline = false,
+    double textInset = 0,
     int pageRotation = 0,
   }) {
     const pad = 3.0;
+    if (!textInset.isFinite || textInset < 0) {
+      throw ArgumentError.value(
+        textInset,
+        'textInset',
+        'must be finite and non-negative',
+      );
+    }
     final w = ContentWriter();
     if (hasAlpha) w.extGState('GS0');
     final vr = _orientedVisualRect(rect, pageRotation);
@@ -3396,14 +3428,18 @@ extension PdfAnnotationEditing on PdfEditor {
         ..stroke();
       if (borderDash != null && borderDash.isNotEmpty) w.dash(const []);
     }
-    final lines = _wrap(text, fontSize, vr.width - 2 * pad,
+    final inset =
+        textInset.clamp(0.0, math.max(0.0, vr.width - 2 * pad)).toDouble();
+    final textRect =
+        PdfRect(vr.left + inset, vr.bottom, vr.right, vr.top);
+    final lines = _wrap(text, fontSize, textRect.width - 2 * pad,
         font: font, charSpacing: charSpacing, horizontalScale: horizontalScale);
     final resolvedDirection = textDirection.resolve(text);
     final effectiveAlign = align ?? _alignForDirection(resolvedDirection);
     w.save();
     writePdfTextBox(
       w,
-      vr,
+      textRect,
       lines,
       font: font,
       fontSize: fontSize,
@@ -3461,9 +3497,17 @@ extension PdfAnnotationEditing on PdfEditor {
     double lineSpacing = _defaultLineSpacing,
     double charSpacing = 0,
     double horizontalScale = _defaultHorizontalScale,
+    double textInset = 0,
     int pageRotation = 0,
   }) {
     const pad = 3.0;
+    if (!textInset.isFinite || textInset < 0) {
+      throw ArgumentError.value(
+        textInset,
+        'textInset',
+        'must be finite and non-negative',
+      );
+    }
     final w = ContentWriter();
     if (hasAlpha) w.extGState('GS0');
     final vr = _orientedVisualRect(rect, pageRotation);
@@ -3492,7 +3536,11 @@ extension PdfAnnotationEditing on PdfEditor {
     final plain = runs.map((run) => run.text).join();
     final resolvedDirection = textDirection.resolve(plain);
     final effectiveAlign = align ?? _alignForDirection(resolvedDirection);
-    final lines = _wrapRich(runs, vr.width - 2 * pad,
+    final inset =
+        textInset.clamp(0.0, math.max(0.0, vr.width - 2 * pad)).toDouble();
+    final textRect =
+        PdfRect(vr.left + inset, vr.bottom, vr.right, vr.top);
+    final lines = _wrapRich(runs, textRect.width - 2 * pad,
         charSpacing: charSpacing, horizontalScale: horizontalScale);
     // Count every wrapped line, including blank lines, using its largest
     // run. Trailing leading is not part of the visible block.
@@ -3540,7 +3588,7 @@ extension PdfAnnotationEditing on PdfEditor {
         0,
         (max, run) => math.max(max, run.style.fontSize * lineSpacing),
       );
-      var x = pdfTextBoxLineX(effectiveAlign, vr, line.width, pad);
+      var x = pdfTextBoxLineX(effectiveAlign, textRect, line.width, pad);
       final y = top - ascent;
       final drawRuns = resolvedDirection == PdfTextDirection.rtl
           ? line.runs.reversed
@@ -5468,6 +5516,7 @@ extension PdfAnnotationEditing on PdfEditor {
             lineSpacing: style.lineSpacing,
             charSpacing: style.charSpacing,
             horizontalScale: style.horizontalScale,
+            textInset: style.textInset,
             pageRotation: pageRotation,
           );
           fontResource = _richFontResources(effective);
@@ -5535,6 +5584,7 @@ extension PdfAnnotationEditing on PdfEditor {
               charSpacing: style.charSpacing,
               horizontalScale: style.horizontalScale,
               underline: style.underline,
+              textInset: style.textInset,
               pageRotation: pageRotation,
             );
           } else {

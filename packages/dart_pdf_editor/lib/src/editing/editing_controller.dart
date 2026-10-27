@@ -2326,7 +2326,7 @@ class PdfEditingController extends ChangeNotifier {
   final Map<int, List<PdfLineField>> _lineFieldCache = {};
 
   /// Whether the page's fill-in strips (drawn rules, underscore runs) are
-  /// highlighted and tapping one opens a text box across its whole width.
+  /// highlighted and tapping one opens a text box across the strip.
   bool get lineFieldsMode => _lineFieldsMode;
 
   set lineFieldsMode(bool value) {
@@ -3913,15 +3913,24 @@ class PdfEditingController extends ChangeNotifier {
     );
   }
 
-  void addFreeText(int pageIndex, PdfRect rect, String text) => apply(
-        (e) => e.addFreeText(
+  void addFreeText(
+    int pageIndex,
+    PdfRect rect,
+    String text, {
+    PdfTextAlign? align,
+    PdfTextVerticalAlign? verticalAlign,
+    double textInset = 0,
+    double rotation = 0,
+  }) =>
+      apply((e) {
+        e.addFreeText(
           pageIndex,
           rect,
           text,
           fontSize: preferences.fontSize,
           font: activeFont ?? preferences.fontFamily,
-          align: preferences.textAlign,
-          verticalAlign: preferences.textVerticalAlign,
+          align: align ?? preferences.textAlign,
+          verticalAlign: verticalAlign ?? preferences.textVerticalAlign,
           color: _colorValue,
           fillColor: _rgbOf(preferences.textFillColor),
           borderColor: _rgbOf(preferences.textBorderColor),
@@ -3931,10 +3940,18 @@ class PdfEditingController extends ChangeNotifier {
           charSpacing: _charSpacing,
           horizontalScale: _fontWidth,
           underline: _textUnderline,
+          textInset: textInset,
           pageRotation: _page(pageIndex).rotation,
           author: preferences.author,
-        ),
-      );
+        );
+        if (rotation != 0) {
+          final annotations = _page(pageIndex).annotations;
+          if (annotations.isNotEmpty) {
+            e.rotateAnnotation(
+                pageIndex, annotations.last, rotation * 180 / math.pi);
+          }
+        }
+      });
 
   /// Places a callout: a [text] box at [rect] with a leader line pointing at
   /// [target] on the page (both in page space). Mirrors [addFreeText] for the
@@ -4007,15 +4024,19 @@ class PdfEditingController extends ChangeNotifier {
   void addFreeTextRich(
     int pageIndex,
     PdfRect rect,
-    List<PdfFreeTextRun> runs,
-  ) =>
-      apply(
-        (e) => e.addFreeTextRich(
+    List<PdfFreeTextRun> runs, {
+    PdfTextAlign? align,
+    PdfTextVerticalAlign? verticalAlign,
+    double textInset = 0,
+    double rotation = 0,
+  }) =>
+      apply((e) {
+        e.addFreeTextRich(
           pageIndex,
           rect,
           runs,
-          align: preferences.textAlign,
-          verticalAlign: preferences.textVerticalAlign,
+          align: align ?? preferences.textAlign,
+          verticalAlign: verticalAlign ?? preferences.textVerticalAlign,
           fillColor: _rgbOf(preferences.textFillColor),
           borderColor: _rgbOf(preferences.textBorderColor),
           borderWidth: preferences.strokeWidth,
@@ -4023,10 +4044,18 @@ class PdfEditingController extends ChangeNotifier {
           lineSpacing: _lineSpacing,
           charSpacing: _charSpacing,
           horizontalScale: _fontWidth,
+          textInset: textInset,
           pageRotation: _page(pageIndex).rotation,
           author: preferences.author,
-        ),
-      );
+        );
+        if (rotation != 0) {
+          final annotations = _page(pageIndex).annotations;
+          if (annotations.isNotEmpty) {
+            e.rotateAnnotation(
+                pageIndex, annotations.last, rotation * 180 / math.pi);
+          }
+        }
+      });
 
   /// Places [text] as a default-sized FreeText annotation centered on
   /// ([x], [y]) in page space. This is used by keyboard paste from the
@@ -9790,6 +9819,7 @@ class PdfEditingController extends ChangeNotifier {
             lineSpacing: effectiveLineSpacing,
             charSpacing: effectiveCharSpacing,
             horizontalScale: effectiveFontWidth,
+            textInset: parsed?.textInset ?? 0,
             pageRotation: spec.pageRotation,
             author: annotation.author,
             name: annotation.name,
@@ -9814,6 +9844,7 @@ class PdfEditingController extends ChangeNotifier {
             charSpacing: effectiveCharSpacing,
             horizontalScale: effectiveFontWidth,
             underline: underline ?? parsed?.underline ?? false,
+            textInset: parsed?.textInset ?? 0,
             pageRotation: spec.pageRotation,
             author: annotation.author,
             name: annotation.name,
@@ -10290,6 +10321,7 @@ class PdfEditingController extends ChangeNotifier {
                   parsed?.horizontalScale ??
                   kPdfFreeTextDefaultHorizontalScale,
               underline: underline ?? parsed?.underline ?? false,
+              textInset: parsed?.textInset ?? 0,
               pageRotation: _page(page).rotation,
               author: by,
               name: nm,
@@ -10408,6 +10440,7 @@ class PdfEditingController extends ChangeNotifier {
           horizontalScale: fontWidth ??
               parsed?.horizontalScale ??
               kPdfFreeTextDefaultHorizontalScale,
+          textInset: parsed?.textInset ?? 0,
           pageRotation: _page(page).rotation,
           author: by,
           name: nm,

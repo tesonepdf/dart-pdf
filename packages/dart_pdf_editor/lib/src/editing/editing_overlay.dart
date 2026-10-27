@@ -1120,6 +1120,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   bool _textEditExisting = false;
   (int, int)? _textEditAnnotationSlot;
   PdfEditTool? _textEditTool;
+  PdfLineField? _textEditLineField;
+  double _textEditInset = 0;
+  double _textEditPageRotation = 0;
   // when non-null the open editor is a callout: this is the page-space point
   // (the terminus) the committed box's leader line will point at
   (double, double)? _textEditCalloutTarget;
@@ -3748,12 +3751,61 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return Rect.fromLTWH(left, top, w, h);
   }
 
-  /// The view-space box a text box takes on [field]: the strip's whole width,
-  /// one text line tall, sitting on the rule.
+  /// The height of the strip above [field], stopping just short of the next
+  /// rule when one is present.
+  double _lineFieldHeight(PdfLineField field) {
+    final centerX = (field.left + field.right) / 2;
+    final y = field.yAt(centerX);
+    var gap = double.infinity;
+    for (final other in _controller.lineFieldsFor(widget.pageIndex)) {
+      if (identical(other, field)) continue;
+      final overlapLeft = math.max(field.left, other.left);
+      final overlapRight = math.min(field.right, other.right);
+      if (overlapRight <= overlapLeft) continue;
+      final x = (overlapLeft + overlapRight) / 2;
+      final distance = other.yAt(x) - field.yAt(x);
+      final normalDistance =
+          distance / math.sqrt(1 + field.slope * field.slope);
+      if (normalDistance > 2 && normalDistance < gap) gap = normalDistance;
+    }
+    if (gap.isFinite) return math.max(4.0, gap - 2).toDouble();
+    return (_controller.preferences.fontSize * 1.4)
+        .clamp(14.0, 24.0)
+        .toDouble();
+  }
+
+  (Offset center, double rotation, double width, double height)
+      _lineFieldPlacement(PdfLineField field) {
+    final height = _lineFieldHeight(field);
+    final centerX = (field.left + field.right) / 2;
+    final slopeScale = math.sqrt(1 + field.slope * field.slope);
+    final normalOffset = 1 + height / 2;
+    final centerY = field.yAt(centerX);
+    final pageCenter = (
+      centerX - field.slope * normalOffset / slopeScale,
+      centerY + normalOffset / slopeScale,
+    );
+    final start = _geometry.toViewOffset(field.left, field.yAt(field.left));
+    final end = _geometry.toViewOffset(field.right, field.yAt(field.right));
+    return (
+      _geometry.toViewOffset(pageCenter.$1, pageCenter.$2),
+      math.atan2(end.dy - start.dy, end.dx - start.dx),
+      field.width * slopeScale * _geometry.scale,
+      height * _geometry.scale,
+    );
+  }
+
+  /// The rotated view-space box a text field takes on [field], spanning the
+  /// whole rule and the strip immediately above it.
   Rect _lineFieldViewRect(PdfLineField field) {
-    final h = (_controller.preferences.fontSize * 1.4).clamp(14.0, 24.0);
-    return _geometry.toViewRect(
-        PdfRect(field.left, field.y + 1, field.right, field.y + 1 + h));
+    final (center, rotation, width, height) = _lineFieldPlacement(field);
+    final cos = math.cos(rotation).abs();
+    final sin = math.sin(rotation).abs();
+    return Rect.fromCenter(
+      center: center,
+      width: width * cos + height * sin,
+      height: width * sin + height * cos,
+    );
   }
 
   /// The free strip under [position] (a little slack above and below the
@@ -3773,15 +3825,58 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return best;
   }
 
-  void _openLineFieldEditor(PdfLineField field) {
-    _openTextEditor(_lineFieldViewRect(field), existing: false);
+  void _openLineFieldEditor(PdfLineField field, Offset position) {
+    final (center, rotation, width, height) = _lineFieldPlacement(field);
+    final viewRect = Rect.fromCenter(
+      center: center,
+      width: width,
+      height: height,
+    );
+    final centerX = (field.left + field.right) / 2;
+    final slopeScale = math.sqrt(1 + field.slope * field.slope);
+    final normalOffset = 1 + height / (2 * _geometry.scale);
+    final pageCenterX =
+        centerX - field.slope * normalOffset / slopeScale;
+    final pageCenterY =
+        field.yAt(centerX) + normalOffset / slopeScale;
+    final lineWidth = field.width * slopeScale;
+    final pageRect = PdfRect(
+      pageCenterX - lineWidth / 2,
+      pageCenterY - height / (2 * _geometry.scale),
+      pageCenterX + lineWidth / 2,
+      pageCenterY + height / (2 * _geometry.scale),
+    );
+    final (tapX, tapY) = _geometry.toPagePoint(position);
+    final projectedX = centerX +
+        ((tapX - centerX) + field.slope * (tapY - field.yAt(centerX))) /
+            (1 + field.slope * field.slope);
+    final textInset = ((projectedX - field.left) * slopeScale - 3)
+        .clamp(0.0, math.max(0.0, lineWidth - 6))
+        .toDouble();
+    _openTextEditor(
+      viewRect,
+      existing: false,
+      rotation: rotation,
+      pageRect: pageRect,
+      textInset: textInset,
+      annotationRotation: math.atan(field.slope),
+      lineField: field,
+    );
   }
 
   /// Opens the inline text editor over [viewRect] - empty for a fresh
   /// free-text box, prefilled from the selected annotation when
   /// [existing]. The editor renders with the same font, size, and color
   /// the committed annotation will use.
-  void _openTextEditor(Rect viewRect, {required bool existing}) {
+  void _openTextEditor(
+    Rect viewRect, {
+    required bool existing,
+    double rotation = 0,
+    PdfRect? pageRect,
+    double textInset = 0,
+    double annotationRotation = 0,
+    PdfLineField? lineField,
+  }) {
     // the field takes focus a frame from now (below), after the opening tap
     // has been handled - too late for iOS web to raise the keyboard, so catch
     // it now, inside the gesture (a no-op off the web)
@@ -3798,12 +3893,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // un-rotated box + resting angle so the editor (and the committed
     // afterimage) ride the artwork, not its axis-aligned bounds
     var rect = viewRect;
-    var rotation = 0.0;
+    var editorRotation = rotation;
     if (existing) {
       final chrome = _selectionChrome;
       if (chrome != null && chrome.$2 != 0) {
         rect = chrome.$1;
-        rotation = chrome.$2;
+        editorRotation = chrome.$2;
       }
     }
     // an existing box's real face: its embedded font recovered from the
@@ -3843,8 +3938,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         TextSelection.collapsed(offset: _textEditText.text.length);
     setState(() {
       _textEditRect = rect;
-      _textEditPageRect = _geometry.toPageRect(rect);
-      _textEditRotation = rotation;
+      _textEditPageRect = pageRect ?? _geometry.toPageRect(rect);
+      _textEditRotation = editorRotation;
+      _textEditPageRotation = existing ? 0 : annotationRotation;
+      _textEditInset = existing ? (parsed?.textInset ?? 0) : textInset;
+      _textEditLineField = lineField;
       _textEditExisting = existing;
       _textEditAnnotationSlot = annotationSlot;
       _textEditTool = _tool;
@@ -3853,10 +3951,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _textEditSize = defaultSize;
       _textEditColor = defaultColor;
       _textEditAlign =
-          existing ? parsed?.alignment : _controller.preferences.textAlign;
-      _textEditVerticalAlign = existing
-          ? parsed?.verticalAlignment ?? PdfTextVerticalAlign.top
-          : _controller.preferences.textVerticalAlign;
+          lineField != null
+              ? PdfTextAlign.left
+              : existing
+                  ? parsed?.alignment
+                  : _controller.preferences.textAlign;
+      _textEditVerticalAlign = lineField != null
+          ? PdfTextVerticalAlign.bottom
+          : existing
+              ? parsed?.verticalAlignment ?? PdfTextVerticalAlign.top
+              : _controller.preferences.textVerticalAlign;
       _textEditLineSpacing = existing
           ? (parsed?.lineSpacing ?? kPdfFreeTextDefaultLineSpacing)
           : _controller.lineSpacing;
@@ -4238,6 +4342,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final fill = _textEditFill;
     final opacity = _textEditOpacity;
     final rotation = _textEditRotation;
+    final annotationRotation = _textEditPageRotation;
+    final textInset = _textEditInset;
+    final pageRect = _textEditPageRect;
     final calloutTarget = _textEditCalloutTarget;
     final cloudRegion = _textEditCloudRegion;
     _closeTextEditor();
@@ -4275,10 +4382,24 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             widget.pageIndex, _geometry.toPageRect(rect), text, calloutTarget);
       } else if (richRuns != null) {
         _controller.addFreeTextRich(
-            widget.pageIndex, _geometry.toPageRect(rect), richRuns);
+          widget.pageIndex,
+          pageRect ?? _geometry.toPageRect(rect),
+          richRuns,
+          align: _textEditAlign,
+          verticalAlign: _textEditVerticalAlign,
+          textInset: textInset,
+          rotation: annotationRotation,
+        );
       } else {
         _controller.addFreeText(
-            widget.pageIndex, _geometry.toPageRect(rect), text);
+          widget.pageIndex,
+          pageRect ?? _geometry.toPageRect(rect),
+          text,
+          align: _textEditAlign,
+          verticalAlign: _textEditVerticalAlign,
+          textInset: textInset,
+          rotation: annotationRotation,
+        );
       }
     }
     if (before == _controller.revisionId) return;
@@ -4356,6 +4477,27 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         return KeyEventResult.handled;
       }
     }
+    if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+        _textEditLineField != null &&
+        _textEditRect != null &&
+        _textEditText.text.isEmpty &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isMetaPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+            event.logicalKey == LogicalKeyboardKey.arrowRight)) {
+      final step = 1 / _geometry.scale;
+      final direction =
+          event.logicalKey == LogicalKeyboardKey.arrowRight ? 1 : -1;
+      final field = _textEditLineField!;
+      final lineWidth = field.width * math.sqrt(1 + field.slope * field.slope);
+      final maxInset = math.max(0.0, lineWidth - _textEditSize - 6);
+      setState(() {
+        _textEditInset =
+            (_textEditInset + direction * step).clamp(0.0, maxInset).toDouble();
+      });
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
 
@@ -4368,6 +4510,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final ownedFocus = _textEditFocus.hasFocus;
     _textEditCalloutTarget = null;
     _textEditCloudRegion = null;
+    _textEditLineField = null;
     if (mounted) {
       setState(() {
         _textEditRect = null;
@@ -6083,7 +6226,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           null) {
         final field = _lineFieldAt(details.localPosition);
         if (field != null) {
-          _openLineFieldEditor(field);
+          _openLineFieldEditor(field, details.localPosition);
           return;
         }
       }
@@ -7126,7 +7269,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // can re-lay-out the page (_layoutZoom) between open and now, so a
     // cached view rect would have drifted across the page content
     if (_textEditPageRect != null) {
-      _textEditRect = _geometry.toViewRect(_textEditPageRect!);
+      final lineField = _textEditLineField;
+      if (lineField == null) {
+        _textEditRect = _geometry.toViewRect(_textEditPageRect!);
+      } else {
+        final (center, rotation, width, height) =
+            _lineFieldPlacement(lineField);
+        _textEditRect =
+            Rect.fromCenter(center: center, width: width, height: height);
+        _textEditRotation = rotation;
+      }
     }
     // switching tools mid-edit commits the text, like leaving the ink tool
     if (_textEditRect != null && _tool != _textEditTool) {
@@ -7910,7 +8062,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                                     // the measured first-baseline shift
                                     // (a negative one is a translate below)
                                     contentPadding: EdgeInsets.fromLTRB(
-                                      _textEditPad,
+                                      _textEditPad +
+                                          _textEditInset * _geometry.scale,
                                       math.max(0.0, baselineShift),
                                       // the caret gutter, handed back so
                                       // centred and right-aligned glyphs land
