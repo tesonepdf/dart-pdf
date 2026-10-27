@@ -1,16 +1,17 @@
-name: Build APK e Windows
+name: Build APK (Windows a comando)
 
 run-name: ${{ github.event.head_commit.message }}
 
-# Parte a ogni push su main.
-# Produce un APK Android universale e windows-x64.zip (Windows, portatile),
+# A ogni push su main produce l'APK Android (solo arm64, piu' leggero),
 # pubblica la build numerata e aggiorna il prerelease Android rolling.
+# Windows (windows-x64.zip) si compila solo a comando: Actions > Run workflow.
 # La firma Android permanente richiede i quattro Secrets documentati in
 # app/RELEASING.md.
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -158,7 +159,7 @@ jobs:
       - name: Compila l'APK
         working-directory: app
         run: |
-          flutter build apk --release \
+          flutter build apk --release --target-platform android-arm64 \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
             --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA"
@@ -180,6 +181,7 @@ jobs:
 
   windows:
     needs: version
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -221,6 +223,7 @@ jobs:
 
   release:
     needs: [apk, windows, version]
+    if: ${{ !cancelled() && needs.apk.result == 'success' && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -235,6 +238,7 @@ jobs:
           path: dl/apk
 
       - uses: actions/download-artifact@v8
+        if: needs.windows.result == 'success'
         with:
           name: windows
           path: dl/windows
@@ -246,13 +250,17 @@ jobs:
           NUMERO: ${{ needs.version.outputs.number }}
         run: |
           cp dl/apk/app-release.apk DartPDF-Android.apk
-          cp dl/windows/windows-x64.zip windows-x64.zip
+          assets=(DartPDF-Android.apk)
+          if [[ -f dl/windows/windows-x64.zip ]]; then
+            cp dl/windows/windows-x64.zip windows-x64.zip
+            assets+=(windows-x64.zip)
+          fi
           build_tag="build-${NUMERO}"
           build_title="Build #${NUMERO} - versione ${VERSIONE}"
           build_notes="Commit ${GITHUB_SHA}"
           if gh release view "$build_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$build_tag" \
-              DartPDF-Android.apk windows-x64.zip \
+              "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$build_tag" \
               --repo "$GITHUB_REPOSITORY" \
@@ -260,7 +268,7 @@ jobs:
               --notes "$build_notes"
           else
             gh release create "$build_tag" \
-              DartPDF-Android.apk windows-x64.zip \
+              "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "$build_title" \
