@@ -139,12 +139,14 @@ enables nightly updates; it must provide the source markers and the
 assets documented above. The Android rolling prerelease must include only the
 universal `DartPDF-Android.apk`, plus `main-sha`, `app-version`, and `app-build`
 markers in its notes. The build number equals the commit count and is included
-in the displayed version. To refresh the local archive after a release, double-click
-`scarica_ultima_build.bat` (APK only) or `scarica_ultima_build_windows.bat`
-(APK and Windows ZIP); both call `tool\sync_local_builds.py`. Only the latest
-build is downloaded (skipped if already present) into `apk\android` and
-`apk\windows`; beyond the four newest builds per folder the oldest is deleted.
-The Windows ZIP is built only on demand (Actions > Run workflow), and the
+in the displayed version. Command buttons in the repository root (double-click, they call
+`aggiorna_e_pubblica.py`): `aggiorna_e_pubblica_apk.bat` commits and pushes,
+waits for the APK build and downloads it; `aggiorna_e_pubblica_windows.bat`
+starts the on-demand Windows build (needs GitHub CLI `gh`), waits and downloads
+APK and ZIP. `scarica_ultima_build.bat` / `scarica_ultima_build_windows.bat`
+only download the latest build via `tool\sync_local_builds.py` into
+`apk\android` and `apk\windows`, deleting beyond the four newest per folder.
+The Windows ZIP is built only on demand (Actions > Run workflow) and the
 Android APK is arm64-only to keep it small.
 
 Android releases require the same permanent signing keystore on every build.
