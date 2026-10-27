@@ -2348,12 +2348,8 @@ class PdfEditingController extends ChangeNotifier {
     if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
     return _lineFieldCache.putIfAbsent(
       pageIndex,
-      () {
-        final found = PdfLineFieldDetector.detect(_document, pageIndex);
-        return found.isNotEmpty
-            ? found
-            : PdfLineFieldDetector.detectRows(_document, pageIndex);
-      },
+      // The whole sheet is editable: full-width rows over the entire page.
+      () => PdfLineFieldDetector.pageGrid(_document, pageIndex),
     );
   }
 
