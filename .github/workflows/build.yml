@@ -282,9 +282,12 @@ jobs:
               --latest
           fi
 
-          latest_main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
-          if [[ "$latest_main_sha" == "$GITHUB_SHA" ]]; then
-            android_tag="app-android-latest"
+          android_tag="app-android-latest"
+          # Il canale Android avanza solo con numero build piu' alto di quello
+          # gia' pubblicato: cosi' una build non viene saltata perche' nel
+          # frattempo e' arrivato un altro push.
+          current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
+          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
             android_notes="$(printf 'Nuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -313,5 +316,5 @@ jobs:
                 --prerelease
             fi
           else
-            echo "Main advanced to $latest_main_sha; keeping this build release without moving the rolling Android tag."
+            echo "Il canale Android e' gia' alla build $current_build (>= $NUMERO): non lo sposto."
           fi
