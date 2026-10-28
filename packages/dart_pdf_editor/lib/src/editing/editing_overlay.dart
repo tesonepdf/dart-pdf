@@ -4271,6 +4271,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           ? (annotation?.appearanceOpacity ?? 1)
           : _controller.preferences.opacity;
     });
+    _controller.takeEditingBoxColors();
     _beginInteraction(PdfEditingInteractionIntent.text, _lastPointerKind);
     _controller.setEditingText(true);
     // the field's autofocus is ignored: the creating gesture's
@@ -4668,6 +4669,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                 : style.underline);
       } else if (text.isNotEmpty && text != _controller.selectedText) {
         _controller.setSelectedText(text);
+      }
+      final picked = _controller.takeEditingBoxColors();
+      if (picked.fill != null || picked.border != null) {
+        _controller.restyleSelectedText(
+          fill: picked.fill,
+          border: picked.border,
+          borderWidth: picked.border == null || picked.border!.$1 == null
+              ? null
+              : _controller.preferences.strokeWidth,
+        );
       }
     } else if (text.isNotEmpty) {
       if (cloudRegion != null) {
@@ -7594,6 +7605,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           _commitTextEdit();
         }
       });
+    }
+    if (_textEditRect != null) {
+      // colours and spacing picked in the text menu show on the open editor
+      // at once (a new box also commits with them)
+      if (_textEditExisting) {
+        final request = _controller.editingFillRequest;
+        if (request != null) {
+          _textEditFill =
+              request.$1 == null ? null : Color(0xFF000000 | request.$1!);
+        }
+      } else {
+        _textEditFill = _controller.preferences.textFillColor;
+        _textEditLineSpacing = _controller.lineSpacing;
+        _textEditCharSpacing = _controller.charSpacing;
+      }
     }
     _syncSelectionPad();
     final selected = _selectedViewRect;

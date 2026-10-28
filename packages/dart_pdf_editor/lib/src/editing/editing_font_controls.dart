@@ -269,16 +269,16 @@ class PdfColorSwatchRow extends StatelessWidget {
       required bool selected,
       required VoidCallback onTap,
     }) =>
-        Padding(
-          // 1px keeps six swatches + the picker inside the menu's width
-          padding: const EdgeInsets.symmetric(horizontal: 1),
-          child: InkWell(
-            key: key,
-            onTap: onTap,
-            customBorder: const CircleBorder(),
+        InkWell(
+          key: key,
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          // a finger-sized target around the 22px dot
+          child: Padding(
+            padding: const EdgeInsets.all(5),
             child: Container(
-              width: 20,
-              height: 20,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 color: color ?? const Color(0xFFFFFFFF),
                 shape: BoxShape.circle,
@@ -295,37 +295,47 @@ class PdfColorSwatchRow extends StatelessWidget {
         );
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Row(children: [
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         SizedBox(width: labelWidth, child: Text(label)),
-        if (allowNone)
-          swatch(
-            key: ValueKey('$keyPrefix-none'),
-            color: null,
-            selected: value == null,
-            onTap: () => onChanged(null),
+        // wraps instead of overflowing: a row that runs past the menu's edge
+        // leaves its last swatches unreachable
+        Expanded(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (allowNone)
+                swatch(
+                  key: ValueKey('$keyPrefix-none'),
+                  color: null,
+                  selected: value == null,
+                  onTap: () => onChanged(null),
+                ),
+              for (var i = 0; i < palette.length; i++)
+                swatch(
+                  key: ValueKey('$keyPrefix-$i'),
+                  color: palette[i],
+                  selected: value != null &&
+                      (value!.toARGB32() & 0xFFFFFF) ==
+                          (palette[i].toARGB32() & 0xFFFFFF),
+                  onTap: () => onChanged(palette[i]),
+                ),
+              IconButton(
+                key: ValueKey('$keyPrefix-more'),
+                icon: const Icon(Icons.palette_outlined, size: 20),
+                tooltip: pdfL10n(context).propMoreColors,
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  final initial = value ?? const Color(0xFFFFFFFF);
+                  final picked = pickColor != null
+                      ? await pickColor!(context, initial)
+                      : await pdfPresentColor(
+                          context, PdfColorRequest(initial: initial));
+                  if (picked != null) onChanged(picked);
+                },
+              ),
+            ],
           ),
-        for (var i = 0; i < palette.length; i++)
-          swatch(
-            key: ValueKey('$keyPrefix-$i'),
-            color: palette[i],
-            selected: value != null &&
-                (value!.toARGB32() & 0xFFFFFF) ==
-                    (palette[i].toARGB32() & 0xFFFFFF),
-            onTap: () => onChanged(palette[i]),
-          ),
-        IconButton(
-          key: ValueKey('$keyPrefix-more'),
-          icon: const Icon(Icons.palette_outlined, size: 18),
-          tooltip: pdfL10n(context).propMoreColors,
-          visualDensity: VisualDensity.compact,
-          onPressed: () async {
-            final initial = value ?? const Color(0xFFFFFFFF);
-            final picked = pickColor != null
-                ? await pickColor!(context, initial)
-                : await pdfPresentColor(
-                    context, PdfColorRequest(initial: initial));
-            if (picked != null) onChanged(picked);
-          },
         ),
       ]),
     );
