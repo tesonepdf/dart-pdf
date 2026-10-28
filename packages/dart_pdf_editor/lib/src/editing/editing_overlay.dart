@@ -3557,7 +3557,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   _Handle? _handleAt(Rect rect, Offset position) {
-    if (!_controller.canResizeSelected) return null;
+    if (!_controller.canResizeSelected || _selectedPlainText) return null;
     return _handleLayout(rect).handleAt(position);
   }
 
@@ -3855,10 +3855,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _stopLineCursorMove();
     _moveTextEditBox(direction);
     _lineCursorRepeatTimer = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted || _textEditRect == null) return;
+      if (!mounted || (_textEditRect == null && !_padForSelection)) return;
       _moveTextEditBox(direction);
       _lineCursorRepeatTimer = Timer.periodic(
-        const Duration(milliseconds: 75),
+        const Duration(milliseconds: 90),
         (_) => _moveTextEditBox(direction),
       );
     });
@@ -3869,14 +3869,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _lineCursorRepeatTimer = null;
   }
 
-  /// Nudges the open text box by the step set in Settings (one value for the
-  /// horizontal arrows, one for the vertical ones). Moving toward a rule
-  /// snaps the box onto it; moving along a rule keeps it on the rule; moving
-  /// away from it just leaves.
-  void _moveTextEditBox(LogicalKeyboardKey direction) {
-    final pageRect = _textEditPageRect;
-    if (pageRect == null || _textEditRect == null) return;
-    _textEditFocus.requestFocus();
+  /// Whether the pad is up for a selected box (not for an open editor).
+  bool _padForSelection = false;
+
+  /// One arrow press as a page-space move (page y runs up): the Settings step
+  /// for the horizontal or vertical arrows, carried through zoom and /Rotate.
+  (double dx, double dy) _arrowPageDelta(LogicalKeyboardKey direction) {
     final prefs = _controller.preferences;
     final scale = _geometry.scale;
     var viewDx = 0.0, viewDy = 0.0;
@@ -3889,19 +3887,26 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     } else if (direction == LogicalKeyboardKey.arrowDown) {
       viewDy = prefs.lineArrowStepY * scale;
     } else {
-      return;
+      return (0, 0);
     }
     final origin = _geometry.toPagePoint(Offset.zero);
     final moved = _geometry.toPagePoint(Offset(viewDx, viewDy));
-    final dx = moved.$1 - origin.$1;
-    final dy = moved.$2 - origin.$2;
-    final height = pageRect.top - pageRect.bottom;
-    var rect = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
-        pageRect.right + dx, pageRect.top + dy);
-    var line = _textEditLineField;
-    final centerX = (rect.left + rect.right) / 2;
+    return (moved.$1 - origin.$1, moved.$2 - origin.$2);
+  }
+
+  /// [rect] moved by ([dx], [dy]) page points, against the page's rules.
+  /// Moving up or down toward a rule snaps the box onto it once the rule is
+  /// within a step (and a little) ahead; moving sideways keeps a box that
+  /// sits on a rule on it (and lets go at the rule's end); moving away from
+  /// a rule just leaves it.
+  ({PdfRect rect, PdfLineField? line}) _nudgeAgainstLines(
+      PdfRect rect, double dx, double dy, PdfLineField? on) {
+    final height = rect.top - rect.bottom;
+    var moved = PdfRect(
+        rect.left + dx, rect.bottom + dy, rect.right + dx, rect.top + dy);
+    var line = on;
+    final centerX = (moved.left + moved.right) / 2;
     if (dy != 0) {
-      // toward a rule: snap once it is within a step (and a little) ahead
       line = null;
       final heading = dy > 0 ? 1.0 : -1.0;
       var nearest = double.infinity;
@@ -3910,7 +3915,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           continue;
         }
         final target = candidate.yAt(centerX) - _lineSnapGap;
-        final ahead = (target - pageRect.bottom) * heading;
+        final ahead = (target - rect.bottom) * heading;
         if (ahead <= 0.01 || ahead > dy.abs() + 3 || ahead >= nearest) {
           continue;
         }
@@ -3919,23 +3924,109 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       }
       if (line != null) {
         final target = line.yAt(centerX) - _lineSnapGap;
-        rect = PdfRect(rect.left, target, rect.right, target + height);
+        moved = PdfRect(moved.left, target, moved.right, target + height);
       }
     } else if (line != null) {
       if (centerX < line.left - 6 || centerX > line.right + 6) {
-        line = null; // slid off the end of the rule
+        line = null;
       } else {
         final target = line.yAt(centerX) - _lineSnapGap;
-        rect = PdfRect(rect.left, target, rect.right, target + height);
+        moved = PdfRect(moved.left, target, moved.right, target + height);
       }
     }
-    final (viewRotation, pageRotation) = _lineTilt(line);
+    return (rect: moved, line: line);
+  }
+
+  /// The rule [rect] already sits exactly on (snapped there), if any.
+  PdfLineField? _lineOf(PdfRect rect) {
+    final centerX = (rect.left + rect.right) / 2;
+    for (final line in _controller.lineFieldsFor(widget.pageIndex)) {
+      if (centerX < line.left - 6 || centerX > line.right + 6) continue;
+      if ((rect.bottom - (line.yAt(centerX) - _lineSnapGap)).abs() < 0.05) {
+        return line;
+      }
+    }
+    return null;
+  }
+
+  /// Nudges the open text box - or, with a box selected instead of open,
+  /// the selected box - by one arrow step.
+  void _moveTextEditBox(LogicalKeyboardKey direction) {
+    if (_textEditRect == null) {
+      if (_padForSelection) _nudgeSelectedBox(direction);
+      return;
+    }
+    final pageRect = _textEditPageRect;
+    if (pageRect == null) return;
+    _textEditFocus.requestFocus();
+    final (dx, dy) = _arrowPageDelta(direction);
+    if (dx == 0 && dy == 0) return;
+    final result =
+        _nudgeAgainstLines(pageRect, dx, dy, _textEditLineField);
+    final (viewRotation, pageRotation) = _lineTilt(result.line);
     setState(() {
-      _textEditLineField = line;
-      _textEditPageRect = rect;
+      _textEditLineField = result.line;
+      _textEditPageRect = result.rect;
       _textEditRotation = viewRotation;
       _textEditPageRotation = pageRotation;
     });
+  }
+
+  /// One arrow step for the selected plain text box (one revision each).
+  void _nudgeSelectedBox(LogicalKeyboardKey direction) {
+    final annotation = _controller.selectedAnnotation;
+    if (annotation == null || _controller.selectedPage != widget.pageIndex) {
+      return;
+    }
+    final (dx, dy) = _arrowPageDelta(direction);
+    if (dx == 0 && dy == 0) return;
+    final rect = annotation.rect;
+    final result = _nudgeAgainstLines(rect, dx, dy, _lineOf(rect));
+    _controller.moveSelected(
+        result.rect.left - rect.left, result.rect.bottom - rect.bottom);
+  }
+
+  /// A lone plain text box (not a callout) is selected. It is placed with
+  /// the arrow pad, so it carries no resize squares.
+  bool get _selectedPlainText =>
+      _controller.primarySelectedGroupBounds == null &&
+      _controller.selectedAnnotationSlots.length == 1 &&
+      _controller.selectedAnnotation?.subtype == 'FreeText' &&
+      _controller.selectedAnnotation?.isCallout != true;
+
+  bool get _selectionPadWanted =>
+      _textEditRect == null &&
+      _selectedPlainText &&
+      _controller.selectedPage == widget.pageIndex &&
+      !_controller.isCroppingImage;
+
+  /// Raises or drops the pad as a plain text box is selected or deselected.
+  void _syncSelectionPad() {
+    final shown = _lineCursorEntry != null;
+    final want = _selectionPadWanted;
+    if (want == (shown && _padForSelection)) return;
+    if (shown && !_padForSelection) return; // an open editor owns the pad
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_selectionPadWanted) {
+        if (_lineCursorEntry == null) {
+          _padForSelection = true;
+          _showLineCursorPad();
+        }
+      } else if (_padForSelection) {
+        _padForSelection = false;
+        _hideLineCursorPad();
+      }
+    });
+  }
+
+  /// The pad's close button: finishes the open editor, or deselects the box.
+  void _closeCursorPad() {
+    if (_textEditRect != null) {
+      _commitTextEdit();
+    } else {
+      _controller.clearAnnotationSelection();
+    }
   }
 
   OverlayEntry? _lineCursorEntry;
@@ -3953,6 +4044,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         onRelease: _stopLineCursorMove,
         onHold: _holdChipFocus,
         onUnhold: _releaseChipFocus,
+        onClose: _closeCursorPad,
       ),
     );
     _lineCursorEntry = entry;
@@ -3960,6 +4052,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   void _hideLineCursorPad() {
+    _padForSelection = false;
     final entry = _lineCursorEntry;
     _lineCursorEntry = null;
     entry?.remove();
@@ -4037,6 +4130,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // insertion point explicitly so it is always after the last glyph.
     _textEditText.selection =
         TextSelection.collapsed(offset: _textEditText.text.length);
+    _padForSelection = false;
     if (existing) {
       _hideLineCursorPad();
     } else {
@@ -4656,6 +4750,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       return;
     }
     if (_controller.isEditingTextFocusCommitHeld) return;
+    // a new box with its arrow pad up stays open when the screen is moved or
+    // zoomed (which takes the focus); the pad's close button, a tap on the
+    // page, or switching tool ends it
+    if (!_textEditExisting && _lineCursorEntry != null) return;
     _commitTextEdit();
   }
 
@@ -4722,7 +4820,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_pointers.gestureBailed || _rawDrives(details.kind)) return;
     final position = details.localPosition;
     if (_textEditRect != null) {
-      // a drag outside the open editor commits it, like a tap
+      // a drag outside an existing box's editor commits it, like a tap; a new
+      // box stays open so the screen can be moved around it
+      if (!_textEditExisting) return;
       _commitTextEdit();
       return;
     }
@@ -7379,6 +7479,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         }
       });
     }
+    _syncSelectionPad();
     final selected = _selectedViewRect;
     final chrome = _selectionChrome;
     final restingRotation = chrome?.$2 ?? 0;
@@ -7762,6 +7863,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     showHandles: selected != null &&
                         !cropping &&
                         _controller.canResizeSelected &&
+                        !_selectedPlainText &&
                         !_selectedLineFamily &&
                         _moveStart == null,
                     selectionOutline: !_selectedCalloutNodesOnly,
@@ -8981,8 +9083,10 @@ class _LineCursorPad extends StatefulWidget {
     required this.onRelease,
     required this.onHold,
     required this.onUnhold,
+    required this.onClose,
   });
 
+  final VoidCallback onClose;
   final void Function(LogicalKeyboardKey direction) onPress;
   final VoidCallback onRelease;
   final VoidCallback onHold;
@@ -8995,7 +9099,8 @@ class _LineCursorPad extends StatefulWidget {
 class _LineCursorPadState extends State<_LineCursorPad> {
   static Offset? _memory; // where the user last left the pad
   static const double _key = 34;
-  static const double _size = _key * 3;
+  static const double _width = _key * 3;
+  static const double _height = _key * 4;
   Offset? _position;
 
   Widget _arrow(LogicalKeyboardKey direction, IconData icon, Color color) {
@@ -9026,11 +9131,12 @@ class _LineCursorPadState extends State<_LineCursorPad> {
     final media = MediaQuery.of(context);
     final screen = media.size;
     final minTop = media.padding.top;
-    final maxTop = math.max(minTop, screen.height - _size - media.padding.bottom);
-    final maxLeft = math.max(0.0, screen.width - _size);
+    final maxTop =
+        math.max(minTop, screen.height - _height - media.padding.bottom);
+    final maxLeft = math.max(0.0, screen.width - _width);
     final start = _position ??
         _memory ??
-        Offset(screen.width - _size - 12, screen.height * 0.38);
+        Offset(screen.width - _width - 12, screen.height * 0.34);
     final at = Offset(
       start.dx.clamp(0.0, maxLeft).toDouble(),
       start.dy.clamp(minTop, maxTop).toDouble(),
@@ -9044,37 +9150,55 @@ class _LineCursorPadState extends State<_LineCursorPad> {
         color: scheme.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          width: _size,
-          height: _size,
+          width: _width,
+          height: _height,
           child: Stack(
             children: [
               Positioned(
                 left: _key,
                 top: 0,
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (_) => widget.onHold(),
+                  onPointerUp: (_) {
+                    widget.onClose();
+                    widget.onUnhold();
+                  },
+                  onPointerCancel: (_) => widget.onUnhold(),
+                  child: SizedBox(
+                    width: _key,
+                    height: _key,
+                    child: Icon(Icons.close, size: 18, color: scheme.error),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: _key,
+                top: _key,
                 child: _arrow(LogicalKeyboardKey.arrowUp,
                     Icons.keyboard_arrow_up, scheme.onSurface),
               ),
               Positioned(
                 left: 0,
-                top: _key,
+                top: _key * 2,
                 child: _arrow(LogicalKeyboardKey.arrowLeft,
                     Icons.keyboard_arrow_left, scheme.onSurface),
               ),
               Positioned(
                 left: _key * 2,
-                top: _key,
+                top: _key * 2,
                 child: _arrow(LogicalKeyboardKey.arrowRight,
                     Icons.keyboard_arrow_right, scheme.onSurface),
               ),
               Positioned(
                 left: _key,
-                top: _key * 2,
+                top: _key * 3,
                 child: _arrow(LogicalKeyboardKey.arrowDown,
                     Icons.keyboard_arrow_down, scheme.onSurface),
               ),
               Positioned(
                 left: _key,
-                top: _key,
+                top: _key * 2,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onPanUpdate: (d) => setState(() {
