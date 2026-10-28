@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 1 # il numero build arriva dal job version
           persist-credentials: false
 
       - uses: actions/setup-java@v6
@@ -74,6 +74,23 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+
+      # Riusa tra una build e l'altra cio' che non cambia: dipendenze Gradle,
+      # pacchetti Cargo e la compilazione nativa/Android gia' fatta. Chiave
+      # legata ai file che la invalidano (pubspec.lock, gradle), cosi' una
+      # dipendenza nuova rifa' tutto da zero.
+      - name: Cache Gradle, Cargo e compilazione Android
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.cargo/registry
+            ~/.cargo/git
+            app/build
+          key: apk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('app/pubspec.lock', 'pubspec.lock', 'app/android/**/*.gradle', 'app/android/**/*.kts', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            apk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
 
       - run: flutter pub get
 
