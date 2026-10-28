@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/rendering.dart' show RenderViewportBase;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf_cos/pdf_cos.dart';
@@ -4073,7 +4074,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 30.0, gap = 4.0;
+    const d = 20.0, gap = 2.0, closeGap = 52.0;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
@@ -4093,20 +4094,29 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       return Positioned(
         left: left.toDouble(),
         top: top.toDouble(),
-        child: Listener(
+        // the empty handlers win the gesture arena over the page's own tap
+        // and pan, which would otherwise close the editor under the arrow
+        child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPointerDown: (_) => down(),
-          onPointerUp: (_) => up(close: true),
-          onPointerCancel: (_) => up(close: false),
-          child: Container(
-            width: d,
-            height: d,
-            decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.9),
-              shape: BoxShape.circle,
-              boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black26)],
+          onTap: () {},
+          onPanStart: (_) {},
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (_) => down(),
+            onPointerUp: (_) => up(close: true),
+            onPointerCancel: (_) => up(close: false),
+            child: Container(
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                color: scheme.surface.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(blurRadius: 2, color: Colors.black26)
+                ],
+              ),
+              child: Icon(icon, size: 14, color: color),
             ),
-            child: Icon(icon, size: 20, color: color),
           ),
         ),
       );
@@ -4115,7 +4125,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final c = rect.center;
     final up = Offset(c.dx, rect.top - gap - d / 2);
     return [
-      button(Offset(c.dx, up.dy - d - gap), Icons.close, scheme.error),
+      button(Offset(c.dx, up.dy - closeGap), Icons.close, scheme.error),
       button(up, Icons.keyboard_arrow_up, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowUp),
       button(Offset(c.dx, rect.bottom + gap + d / 2),
@@ -7103,18 +7113,40 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   final _inlineTextStyleChipKey = GlobalKey();
 
+  /// Where the style chip's bottom-centre goes: the bottom of the viewport
+  /// this page scrolls in (falling back to the screen), in this overlay's own
+  /// coordinates, kept inside the page.
+  Offset _dockedChipAnchor(double s, double width, Rect editorRect) {
+    final box = context.findRenderObject();
+    final media = MediaQuery.of(context);
+    var globalBottom = media.size.height - media.padding.bottom - 150;
+    var globalCenterX = media.size.width / 2;
+    final viewport = context.findAncestorRenderObjectOfType<RenderViewportBase>();
+    if (viewport != null && viewport.attached && viewport.hasSize) {
+      final rect = MatrixUtils.transformRect(
+          viewport.getTransformTo(null), Offset.zero & viewport.size);
+      globalBottom = rect.bottom;
+      globalCenterX = rect.center.dx;
+    }
+    if (box is RenderBox && box.attached && box.hasSize) {
+      final local = box.globalToLocal(Offset(globalCenterX, globalBottom - 6));
+      final halfChip = 108 * s;
+      final dx = width <= 2 * halfChip
+          ? width / 2
+          : local.dx.clamp(halfChip, width - halfChip).toDouble();
+      final dy = local.dy.clamp(0.0, _geometry.viewSize.height).toDouble();
+      return Offset(dx, dy);
+    }
+    return Offset(width / 2, editorRect.bottom + 10 * s);
+  }
+
   Widget _buildInlineTextStyleChip(Rect editorRect) {
     final s = _chromeScale;
     final current = _currentInlineTextStyle();
-    final above = editorRect.top - 54 * s >= 0;
+    // docked at the bottom of the visible viewer, just above the toolbar
+    // with the colours, so it never covers the box or its arrows
     final width = _geometry.viewSize.width;
-    final halfChip = 108 * s;
-    final anchor = Offset(
-      width <= 2 * halfChip
-          ? width / 2
-          : editorRect.center.dx.clamp(halfChip, width - halfChip),
-      above ? editorRect.top - 10 * s : editorRect.bottom + 10 * s,
-    );
+    final anchor = _dockedChipAnchor(s, width, editorRect);
     // font and size restyle the selected run; colour (like underline) works
     // with a bare caret too, restyling the whole box
     final enabled = _canStyleInlineTextSelection;
@@ -7123,10 +7155,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       left: anchor.dx,
       top: anchor.dy,
       child: FractionalTranslation(
-        translation: Offset(-0.5, above ? -1 : 0),
+        translation: const Offset(-0.5, -1),
         child: Transform.scale(
           scale: s,
-          alignment: above ? Alignment.bottomCenter : Alignment.topCenter,
+          alignment: Alignment.bottomCenter,
           // pin the editor's focus while a chip button is pressed - on mobile
           // the tap otherwise blurs the field and the focus-loss listener
           // commits/deselects the box before the button's action runs
