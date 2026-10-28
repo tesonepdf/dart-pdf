@@ -1145,7 +1145,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   Color? _textEditFill; // the box background the commit will paint
   double _textEditOpacity = 1;
   Timer? _lineCursorRepeatTimer;
-  double? _lineCursorDesiredX;
   // box-level layout the inline editor previews so the live text matches
   // what commits: alignment (/Q), line height, character spacing, and
   // horizontal glyph scaling
@@ -3746,154 +3745,121 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// into pixels they cannot see. Only the size is the editor's guess - a
   /// box the user drags out themselves keeps the bounds they drew, off the
   /// page edge included.
-  Rect _defaultPlacementRect(Offset tap) {
+  Rect _defaultPlacementRect(Offset tap, {bool oneLine = false}) {
     final scale = _geometry.scale;
     final w = 200.0 * scale;
-    final h = (_controller.preferences.fontSize * 1.6 + 8) * scale;
+    final h = oneLine
+        ? _oneLineBoxHeight * scale
+        : (_controller.preferences.fontSize * 1.6 + 8) * scale;
     final size = _geometry.viewSize;
     final left = tap.dx.clamp(0.0, math.max(0.0, size.width - w)).toDouble();
-    final top = tap.dy.clamp(0.0, math.max(0.0, size.height - h)).toDouble();
+    final top = (oneLine ? tap.dy - h / 2 : tap.dy)
+        .clamp(0.0, math.max(0.0, size.height - h))
+        .toDouble();
     return Rect.fromLTWH(left, top, w, h);
   }
 
-  /// A free text spot at page point ([x], [y]): the whole sheet is one
-  /// editable area, so a tap anywhere opens a box centred on that point.
-  PdfLineField _freeFieldAt(double x, double y) {
-    final box = _geometry.cropBox;
-    final probe =
-        PdfLineField(pageIndex: widget.pageIndex, left: x, right: x + 1, y: y);
-    final height = _lineFieldHeight(probe);
-    return PdfLineField(
-      pageIndex: widget.pageIndex,
-      left: x,
-      // a compact box at the tapped spot, not a strip across the page
-      right: math.max(
-        math.min(box.right - 12.0, x + _controller.preferences.fontSize * 25),
-        x + _controller.preferences.fontSize * 6,
-      ),
-      y: y - height / 2 - 1,
-    );
-  }
+  /// How far below a rule a one-line box's bottom edge sits, in page points.
+  /// The appearance keeps 3pt clear under the text, so this leaves the lowest
+  /// part of the glyphs about 1.5pt above the rule.
+  static const double _lineSnapGap = 1.5;
 
-  /// The height of the strip above [field], stopping just short of the next
-  /// rule when one is present.
-  double _lineFieldHeight(PdfLineField field) {
-    final centerX = (field.left + field.right) / 2;
-    final y = field.yAt(centerX);
-    var gap = double.infinity;
-    for (final other in _controller.lineFieldsFor(widget.pageIndex)) {
-      if (identical(other, field)) continue;
-      final overlapLeft = math.max(field.left, other.left);
-      final overlapRight = math.min(field.right, other.right);
-      if (overlapRight <= overlapLeft) continue;
-      final x = (overlapLeft + overlapRight) / 2;
-      final distance = other.yAt(x) - field.yAt(x);
-      final normalDistance =
-          distance / math.sqrt(1 + field.slope * field.slope);
-      if (normalDistance > 2 && normalDistance < gap) gap = normalDistance;
-    }
-    if (gap.isFinite) return math.max(4.0, gap - 2).toDouble();
-    return math.max(14.0, _controller.preferences.fontSize * 1.4);
-  }
+  /// The height of a one-line text box: the font's line plus the 3pt the
+  /// appearance keeps clear above and below the text.
+  double get _oneLineBoxHeight =>
+      _controller.preferences.fontSize * _controller.lineSpacing + 6;
 
-  (Offset center, double rotation, double width, double height)
-      _lineFieldPlacement(PdfLineField field) {
-    final height = _lineFieldHeight(field);
-    final centerX = (field.left + field.right) / 2;
-    final slopeScale = math.sqrt(1 + field.slope * field.slope);
-    final normalOffset = 1 + height / 2;
-    final centerY = field.yAt(centerX);
-    final pageCenter = (
-      centerX - field.slope * normalOffset / slopeScale,
-      centerY + normalOffset / slopeScale,
-    );
-    final start = _geometry.toViewOffset(field.left, field.yAt(field.left));
-    final end = _geometry.toViewOffset(field.right, field.yAt(field.right));
-    return (
-      _geometry.toViewOffset(pageCenter.$1, pageCenter.$2),
-      math.atan2(end.dy - start.dy, end.dx - start.dx),
-      field.width * slopeScale * _geometry.scale,
-      height * _geometry.scale,
-    );
-  }
-
-  /// The rotated view-space box a text field takes on [field], spanning the
-  /// whole rule and the strip immediately above it.
-  Rect _lineFieldViewRect(PdfLineField field) {
-    final (center, rotation, width, height) = _lineFieldPlacement(field);
-    final cos = math.cos(rotation).abs();
-    final sin = math.sin(rotation).abs();
-    return Rect.fromCenter(
-      center: center,
-      width: width * cos + height * sin,
-      height: width * sin + height * cos,
-    );
-  }
-
-  /// The free strip under [position] (a little slack above and below the
-  /// rule so a finger can hit it), or null.
-  PdfLineField? _lineFieldAt(Offset position) {
+  /// The rule a box at page point ([x], [y]) belongs to - one the point sits
+  /// on or just above (within about a line's height) - or null.
+  PdfLineField? _lineNear(double x, double y) {
+    final h = _oneLineBoxHeight;
     PdfLineField? best;
     var bestDistance = double.infinity;
-    for (final field in _controller.lineFieldsFor(widget.pageIndex)) {
-      final box = _lineFieldViewRect(field).inflate(8);
-      if (!box.contains(position)) continue;
-      final distance = (position.dy - box.center.dy).abs();
-      if (distance < bestDistance) {
-        best = field;
-        bestDistance = distance;
+    for (final line in _controller.lineFieldsFor(widget.pageIndex)) {
+      if (x < line.left - 6 || x > line.right + 6) continue;
+      final d = y - line.yAt(x); // positive: above the rule
+      if (d < -0.6 * h || d > 1.6 * h) continue;
+      if (d.abs() < bestDistance) {
+        best = line;
+        bestDistance = d.abs();
       }
     }
     return best;
   }
 
-  void _openLineFieldEditor(PdfLineField field, Offset position) {
-    final (center, rotation, width, height) = _lineFieldPlacement(field);
-    final viewRect = Rect.fromCenter(
-      center: center,
-      width: width,
-      height: height,
+  /// The view-space angle of [line] (the page may be rotated) and its page-space
+  /// tilt, both 0 for a level rule.
+  (double viewRotation, double pageRotation) _lineTilt(PdfLineField? line) {
+    if (line == null || line.slope.abs() < 0.002) return (0, 0);
+    final start = _geometry.toViewOffset(line.left, line.yAt(line.left));
+    final end = _geometry.toViewOffset(line.right, line.yAt(line.right));
+    return (
+      math.atan2(end.dy - start.dy, end.dx - start.dx),
+      math.atan(line.slope),
     );
-    final centerX = (field.left + field.right) / 2;
-    final slopeScale = math.sqrt(1 + field.slope * field.slope);
-    final normalOffset = 1 + height / (2 * _geometry.scale);
-    final pageCenterX = centerX - field.slope * normalOffset / slopeScale;
-    final pageCenterY = field.yAt(centerX) + normalOffset / slopeScale;
-    final lineWidth = field.width * slopeScale;
-    final pageRect = PdfRect(
-      pageCenterX - lineWidth / 2,
-      pageCenterY - height / (2 * _geometry.scale),
-      pageCenterX + lineWidth / 2,
-      pageCenterY + height / (2 * _geometry.scale),
+  }
+
+  /// A one-line box sitting on [line] from page x [left], [length] long
+  /// along the rule. Returns its page rect, its view rect and the two tilts.
+  ({PdfRect page, Rect view, double viewRotation, double pageRotation})
+      _boxOnLine(PdfLineField line, double left, double length) {
+    final h = _oneLineBoxHeight;
+    final (viewRotation, pageRotation) = _lineTilt(line);
+    final across = length / math.sqrt(1 + line.slope * line.slope);
+    final cx = left + across / 2;
+    final cy = line.yAt(cx) - _lineSnapGap + h / 2;
+    final page = PdfRect(cx - length / 2, cy - h / 2, cx + length / 2, cy + h / 2);
+    final view = pageRotation == 0
+        ? _geometry.toViewRect(page)
+        : Rect.fromCenter(
+            center: _geometry.toViewOffset(cx, cy),
+            width: length * _geometry.scale,
+            height: h * _geometry.scale,
+          );
+    return (
+      page: page,
+      view: view,
+      viewRotation: viewRotation,
+      pageRotation: pageRotation,
     );
-    final (tapX, tapY) = _geometry.toPagePoint(position);
-    final projectedX = centerX +
-        ((tapX - centerX) + field.slope * (tapY - field.yAt(centerX))) /
-            (1 + field.slope * field.slope);
-    final textInset = ((projectedX - field.left) * slopeScale - 3)
-        .clamp(0.0, math.max(0.0, lineWidth - 6))
-        .toDouble();
+  }
+
+  /// Opens the text editor for a tap with the Text tool: a one-line box that
+  /// snaps onto a rule when the tap is on or just above one, else a compact
+  /// box centred on the tap.
+  void _openFreeTextAt(Offset position) {
+    final (px, py) = _geometry.toPagePoint(position);
+    final line = _lineNear(px, py);
+    if (line == null) {
+      _openTextEditor(_defaultPlacementRect(position, oneLine: true),
+          existing: false);
+      return;
+    }
+    final fontSize = _controller.preferences.fontSize;
+    final slopeScale = math.sqrt(1 + line.slope * line.slope);
+    final room = (math.min(line.right, _geometry.cropBox.right - 6) - px) *
+        slopeScale;
+    final length = math.max(fontSize * 6, room);
+    final box = _boxOnLine(line, math.max(px, line.left), length);
     _openTextEditor(
-      viewRect,
+      box.view,
       existing: false,
-      rotation: rotation,
-      pageRect: pageRect,
-      textInset: textInset,
-      annotationRotation: math.atan(field.slope),
-      lineField: field,
+      rotation: box.viewRotation,
+      pageRect: box.page,
+      annotationRotation: box.pageRotation,
+      lineField: line,
     );
   }
 
   void _startLineCursorMove(LogicalKeyboardKey direction) {
     _stopLineCursorMove();
-    _lineCursorDesiredX = null;
-    _moveLineFieldCursor(direction);
+    _moveTextEditBox(direction);
     _lineCursorRepeatTimer = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted || _textEditLineField == null) return;
-      _moveLineFieldCursor(direction);
+      if (!mounted || _textEditRect == null) return;
+      _moveTextEditBox(direction);
       _lineCursorRepeatTimer = Timer.periodic(
         const Duration(milliseconds: 75),
-        (_) => _moveLineFieldCursor(direction),
+        (_) => _moveTextEditBox(direction),
       );
     });
   }
@@ -3901,15 +3867,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _stopLineCursorMove() {
     _lineCursorRepeatTimer?.cancel();
     _lineCursorRepeatTimer = null;
-    _lineCursorDesiredX = null;
   }
 
-  /// Moves the free text box by the step set in Settings (one value for the
-  /// horizontal arrows, one for the vertical ones), in document units.
-  void _moveLineFieldCursor(LogicalKeyboardKey direction) {
-    final field = _textEditLineField;
+  /// Nudges the open text box by the step set in Settings (one value for the
+  /// horizontal arrows, one for the vertical ones). Moving toward a rule
+  /// snaps the box onto it; moving along a rule keeps it on the rule; moving
+  /// away from it just leaves.
+  void _moveTextEditBox(LogicalKeyboardKey direction) {
     final pageRect = _textEditPageRect;
-    if (field == null || _textEditRect == null || pageRect == null) return;
+    if (pageRect == null || _textEditRect == null) return;
     _textEditFocus.requestFocus();
     final prefs = _controller.preferences;
     final scale = _geometry.scale;
@@ -3929,20 +3895,46 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final moved = _geometry.toPagePoint(Offset(viewDx, viewDy));
     final dx = moved.$1 - origin.$1;
     final dy = moved.$2 - origin.$2;
+    final height = pageRect.top - pageRect.bottom;
+    var rect = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
+        pageRect.right + dx, pageRect.top + dy);
+    var line = _textEditLineField;
+    final centerX = (rect.left + rect.right) / 2;
+    if (dy != 0) {
+      // toward a rule: snap once it is within a step (and a little) ahead
+      line = null;
+      final heading = dy > 0 ? 1.0 : -1.0;
+      var nearest = double.infinity;
+      for (final candidate in _controller.lineFieldsFor(widget.pageIndex)) {
+        if (centerX < candidate.left - 6 || centerX > candidate.right + 6) {
+          continue;
+        }
+        final target = candidate.yAt(centerX) - _lineSnapGap;
+        final ahead = (target - pageRect.bottom) * heading;
+        if (ahead <= 0.01 || ahead > dy.abs() + 3 || ahead >= nearest) {
+          continue;
+        }
+        nearest = ahead;
+        line = candidate;
+      }
+      if (line != null) {
+        final target = line.yAt(centerX) - _lineSnapGap;
+        rect = PdfRect(rect.left, target, rect.right, target + height);
+      }
+    } else if (line != null) {
+      if (centerX < line.left - 6 || centerX > line.right + 6) {
+        line = null; // slid off the end of the rule
+      } else {
+        final target = line.yAt(centerX) - _lineSnapGap;
+        rect = PdfRect(rect.left, target, rect.right, target + height);
+      }
+    }
+    final (viewRotation, pageRotation) = _lineTilt(line);
     setState(() {
-      _textEditLineField = PdfLineField(
-        pageIndex: field.pageIndex,
-        left: field.left + dx,
-        right: field.right + dx,
-        y: field.y + dy,
-        slope: field.slope,
-      );
-      _textEditPageRect = PdfRect(
-        pageRect.left + dx,
-        pageRect.bottom + dy,
-        pageRect.right + dx,
-        pageRect.top + dy,
-      );
+      _textEditLineField = line;
+      _textEditPageRect = rect;
+      _textEditRotation = viewRotation;
+      _textEditPageRotation = pageRotation;
     });
   }
 
@@ -4045,10 +4037,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // insertion point explicitly so it is always after the last glyph.
     _textEditText.selection =
         TextSelection.collapsed(offset: _textEditText.text.length);
-    if (lineField != null) {
-      _showLineCursorPad();
-    } else {
+    if (existing) {
       _hideLineCursorPad();
+    } else {
+      _showLineCursorPad();
     }
     setState(() {
       _textEditRect = rect;
@@ -4591,7 +4583,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       }
     }
     if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-        _textEditLineField != null &&
         _textEditRect != null &&
         _textEditText.text.isEmpty &&
         !HardwareKeyboard.instance.isControlPressed &&
@@ -4601,7 +4592,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             event.logicalKey == LogicalKeyboardKey.arrowRight ||
             event.logicalKey == LogicalKeyboardKey.arrowUp ||
             event.logicalKey == LogicalKeyboardKey.arrowDown)) {
-      _moveLineFieldCursor(event.logicalKey);
+      _moveTextEditBox(event.logicalKey);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -6327,16 +6318,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_polyTool || _hybridPolyTool) {
       return; // vertices land from the raw pointer events ([_onPolyTap])
     }
-    if (_controller.lineFieldsMode &&
-        (_tool == PdfEditTool.select || _tool == PdfEditTool.freeText)) {
-      final (lx, ly) = _geometry.toPagePoint(details.localPosition);
-      final annotation =
-          _controller.selectableAnnotationAt(widget.pageIndex, lx, ly);
-      if (annotation == null || _tool == PdfEditTool.freeText) {
-        _openLineFieldEditor(_freeFieldAt(lx, ly), details.localPosition);
-        return;
-      }
-    }
     final (x, y) = _geometry.toPagePoint(details.localPosition);
     final placementPosition = _snapPointToGrid(details.localPosition);
     final (placementX, placementY) = _geometry.toPagePoint(placementPosition);
@@ -6412,8 +6393,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           _placeSignature(placementPosition);
         case PdfEditTool.freeText:
           // tapping without dragging out a box opens a default-sized one
-          _openTextEditor(_defaultPlacementRect(placementPosition),
-              existing: false);
+          _openFreeTextAt(placementPosition);
         case PdfEditTool.cloudCallout:
           // a tap drops a default-size cloud there and opens its note
           _openCloudCalloutEditor(_defaultCloudRegion(placementPosition));
@@ -7375,15 +7355,20 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // can re-lay-out the page (_layoutZoom) between open and now, so a
     // cached view rect would have drifted across the page content
     if (_textEditPageRect != null) {
-      final lineField = _textEditLineField;
-      if (lineField == null) {
-        _textEditRect = _geometry.toViewRect(_textEditPageRect!);
+      final pageRect = _textEditPageRect!;
+      if (_textEditPageRotation == 0) {
+        _textEditRect = _geometry.toViewRect(pageRect);
       } else {
-        final (center, rotation, width, height) =
-            _lineFieldPlacement(lineField);
-        _textEditRect =
-            Rect.fromCenter(center: center, width: width, height: height);
-        _textEditRotation = rotation;
+        // a box tilted onto a skewed rule: centred on its page rect, its
+        // length along the rule
+        _textEditRect = Rect.fromCenter(
+          center: _geometry.toViewOffset(
+            (pageRect.left + pageRect.right) / 2,
+            (pageRect.bottom + pageRect.top) / 2,
+          ),
+          width: (pageRect.right - pageRect.left) * _geometry.scale,
+          height: (pageRect.top - pageRect.bottom) * _geometry.scale,
+        );
       }
     }
     // switching tools mid-edit commits the text, like leaving the ink tool
@@ -8011,8 +7996,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                         // so the old rendering doesn't ghost through and read
                         // as a misaligned shadow behind the live text
                         color: _textEditFill ??
-                            widget.pageColor
-                                .withValues(alpha: _textEditExisting ? 1 : 0.3),
+                            (_textEditExisting
+                                ? widget.pageColor
+                                : Colors.transparent),
                         foregroundDecoration: BoxDecoration(
                           border: Border.all(
                               color: PdfViewerTheme.of(context).chrome,
@@ -9109,30 +9095,6 @@ class _LineCursorPadState extends State<_LineCursorPad> {
       ),
     );
   }
-}
-
-class _LineFieldsPainter extends CustomPainter {
-  _LineFieldsPainter({required this.rects, required this.color});
-
-  final List<Rect> rects;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = color.withValues(alpha: 0.16);
-    final edge = Paint()
-      ..color = color.withValues(alpha: 0.7)
-      ..strokeWidth = 1.5;
-    for (final r in rects) {
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(r, const Radius.circular(3)), fill);
-      canvas.drawLine(r.bottomLeft, r.bottomRight, edge);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_LineFieldsPainter old) =>
-      old.color != color || !listEquals(old.rects, rects);
 }
 
 class _SnapGridPainter extends CustomPainter {

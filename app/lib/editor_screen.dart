@@ -4790,33 +4790,6 @@ class _EditorScreenState extends State<EditorScreen>
                   },
                 ),
         ),
-      if (tab?.session != null)
-        ListenableBuilder(
-          listenable: tab!.session!,
-          builder: (context, _) {
-            final session = tab.session!;
-            return IconButton(
-              key: const ValueKey('line-fields-action'),
-              icon: Icon(session.lineFieldsMode
-                  ? Icons.edit_note
-                  : Icons.border_color_outlined),
-              isSelected: session.lineFieldsMode,
-              tooltip: 'Campi sulle righe',
-              onPressed: () {
-                session.lineFieldsMode = !session.lineFieldsMode;
-                if (!session.lineFieldsMode) return;
-                var found = 0;
-                final pages = session.document.pageCount;
-                for (var i = 0; i < pages && i < 3; i++) {
-                  found += session.lineFieldsFor(i).length;
-                }
-                _toast(found == 0
-                    ? 'Nessuna riga trovata in questo PDF'
-                    : 'Righe trovate: $found');
-              },
-            );
-          },
-        ),
       if (compact && _tabs.isNotEmpty) _buildMobileTabsButton(),
     ];
   }
