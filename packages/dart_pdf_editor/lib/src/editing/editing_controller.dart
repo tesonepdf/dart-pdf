@@ -10,7 +10,7 @@ import 'package:flutter/widgets.dart' show BuildContext;
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart'
-    show PdfLineField, PdfTextMatch;
+    show PdfLineField, PdfLineFieldDetector, PdfTextMatch;
 
 import '../page_geometry.dart';
 import '../renderer.dart';
@@ -2317,42 +2317,33 @@ class PdfEditingController extends ChangeNotifier {
 
   static const Set<String> _colorLockedFields = {'color'};
 
+  int _lineFieldsPageCount = -1;
+  final Map<int, List<PdfLineField>> _lineFieldCache = {};
+
+  /// The ruled lines of [pageIndex] (drawn, dotted or dashed rules, scanned
+  /// rules, underscore runs), top to bottom. A text box placed or nudged near
+  /// one snaps onto it. Found lazily, once per page.
+  List<PdfLineField> lineFieldsFor(int pageIndex) {
+    // annotations never change a page's rules, so the cache survives edits;
+    // only a change in the page count (pages added or removed) resets it
+    if (_lineFieldsPageCount != _document.pageCount) {
+      _lineFieldsPageCount = _document.pageCount;
+      _lineFieldCache.clear();
+    }
+    if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
+    return _lineFieldCache.putIfAbsent(pageIndex, () {
+      try {
+        return PdfLineFieldDetector.detect(_document, pageIndex);
+      } catch (_) {
+        return const <PdfLineField>[];
+      }
+    });
+  }
+
   /// The armed tool, or null when the viewer behaves as a plain reader.
   ///
   /// Text-markup tools are exposed separately through [markupTool]. They
   /// leave this value null so normal text-selection gestures remain active.
-  bool _lineFieldsMode = false;
-  PdfDocument? _lineFieldsDocument;
-  final Map<int, List<PdfLineField>> _lineFieldCache = {};
-
-  /// Whether the page's fill-in strips (drawn, dotted, or dashed rules and
-  /// underscore runs) are
-  /// highlighted and tapping one opens a text box across the strip.
-  bool get lineFieldsMode => _lineFieldsMode;
-
-  set lineFieldsMode(bool value) {
-    if (_lineFieldsMode == value) return;
-    _lineFieldsMode = value;
-    _lineFieldCache.clear();
-    if (value && _tool == null) tool = PdfEditTool.select;
-    notifyListeners();
-  }
-
-  /// The detected strips of [pageIndex], including strips with existing text
-  /// or text-box annotations, top to bottom.
-  List<PdfLineField> lineFieldsFor(int pageIndex) {
-    if (!identical(_lineFieldsDocument, _document)) {
-      _lineFieldsDocument = _document;
-      _lineFieldCache.clear();
-    }
-    if (pageIndex < 0 || pageIndex >= _document.pageCount) return const [];
-    return _lineFieldCache.putIfAbsent(
-      pageIndex,
-      // The whole sheet is one editable area: no pre-drawn rows.
-      () => const <PdfLineField>[],
-    );
-  }
-
   PdfEditTool? get tool => _tool;
 
   set tool(PdfEditTool? value) {
