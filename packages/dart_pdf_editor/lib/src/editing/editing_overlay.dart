@@ -3557,7 +3557,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   _Handle? _handleAt(Rect rect, Offset position) {
-    if (!_controller.canResizeSelected || _selectedPlainText) return null;
+    if (!_controller.canResizeSelected) return null;
     return _handleLayout(rect).handleAt(position);
   }
 
@@ -3753,7 +3753,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         : (_controller.preferences.fontSize * 1.6 + 8) * scale;
     final size = _geometry.viewSize;
     final left = tap.dx.clamp(0.0, math.max(0.0, size.width - w)).toDouble();
-    final top = (oneLine ? tap.dy - h / 2 : tap.dy)
+    // the top stays where a full-height box put it; only the bottom comes up
+    final top = (oneLine ? tap.dy - (h + _boxTrim * scale) / 2 : tap.dy)
         .clamp(0.0, math.max(0.0, size.height - h))
         .toDouble();
     return Rect.fromLTWH(left, top, w, h);
@@ -3767,7 +3768,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// The height of a one-line text box: the font's line plus the 3pt the
   /// appearance keeps clear above and below the text.
   double get _oneLineBoxHeight =>
-      _controller.preferences.fontSize * _controller.lineSpacing + 6;
+      _controller.preferences.fontSize * _controller.lineSpacing + 6 - _boxTrim;
+
+  /// Room under the capitals the box no longer keeps (the baseline sits close
+  /// to the bottom edge): a few points of air above and below the glyphs.
+  double get _boxTrim => _controller.preferences.fontSize * 0.22;
 
   /// The rule a box at page point ([x], [y]) belongs to - one the point sits
   /// on or just above (within about a line's height) - or null.
@@ -3995,6 +4000,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _controller.selectedAnnotation?.isCallout != true;
 
   bool get _selectionPadWanted =>
+      false &&
       _textEditRect == null &&
       _selectedPlainText &&
       _controller.selectedPage == widget.pageIndex &&
@@ -4035,6 +4041,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// zoom would carry off screen): small, draggable, and it holds the text
   /// field's focus while a key is down so a press never closes the editor.
   void _showLineCursorPad() {
+    return; // the arrows now sit on the box's sides ([_buildEditArrows])
+  }
+
+  void _showLineCursorPadFloating() {
     if (_lineCursorEntry != null) return;
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
@@ -4056,6 +4066,68 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final entry = _lineCursorEntry;
     _lineCursorEntry = null;
     entry?.remove();
+  }
+
+  /// The four arrows on the sides of the open text box (up above, down
+  /// below, left and right) and the close cross above the up arrow. They
+  /// ride the box, so a zoom or a move carries them along.
+  List<Widget> _buildEditArrows(Rect rect) {
+    final scheme = Theme.of(context).colorScheme;
+    const d = 30.0, gap = 4.0;
+    final size = _geometry.viewSize;
+    Widget button(Offset center, IconData icon, Color color,
+        {LogicalKeyboardKey? direction}) {
+      final left = (center.dx - d / 2).clamp(0.0, math.max(0.0, size.width - d));
+      final top = (center.dy - d / 2).clamp(0.0, math.max(0.0, size.height - d));
+      void down() {
+        _holdChipFocus();
+        if (direction != null) _startLineCursorMove(direction);
+      }
+
+      void up({required bool close}) {
+        _stopLineCursorMove();
+        _releaseChipFocus();
+        if (close && direction == null) _closeCursorPad();
+      }
+
+      return Positioned(
+        left: left.toDouble(),
+        top: top.toDouble(),
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => down(),
+          onPointerUp: (_) => up(close: true),
+          onPointerCancel: (_) => up(close: false),
+          child: Container(
+            width: d,
+            height: d,
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+              boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black26)],
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+        ),
+      );
+    }
+
+    final c = rect.center;
+    final up = Offset(c.dx, rect.top - gap - d / 2);
+    return [
+      button(Offset(c.dx, up.dy - d - gap), Icons.close, scheme.error),
+      button(up, Icons.keyboard_arrow_up, scheme.onSurface,
+          direction: LogicalKeyboardKey.arrowUp),
+      button(Offset(c.dx, rect.bottom + gap + d / 2),
+          Icons.keyboard_arrow_down, scheme.onSurface,
+          direction: LogicalKeyboardKey.arrowDown),
+      button(Offset(rect.left - gap - d / 2, c.dy),
+          Icons.keyboard_arrow_left, scheme.onSurface,
+          direction: LogicalKeyboardKey.arrowLeft),
+      button(Offset(rect.right + gap + d / 2, c.dy),
+          Icons.keyboard_arrow_right, scheme.onSurface,
+          direction: LogicalKeyboardKey.arrowRight),
+    ];
   }
 
   /// Opens the inline text editor over [viewRect] - empty for a fresh
@@ -4753,7 +4825,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // a new box with its arrow pad up stays open when the screen is moved or
     // zoomed (which takes the focus); the pad's close button, a tap on the
     // page, or switching tool ends it
-    if (!_textEditExisting && _lineCursorEntry != null) return;
+    if (!_textEditExisting && _textEditRect != null) return;
     _commitTextEdit();
   }
 
@@ -7863,7 +7935,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     showHandles: selected != null &&
                         !cropping &&
                         _controller.canResizeSelected &&
-                        !_selectedPlainText &&
                         !_selectedLineFamily &&
                         _moveStart == null,
                     selectionOutline: !_selectedCalloutNodesOnly,
@@ -8265,6 +8336,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     ),
                   ),
                 ),
+              if (_textEditRect != null) ..._buildEditArrows(_textEditRect!),
               if (_textEditRect != null &&
                   _controller.hasTouchInput &&
                   widget.showInlineTextStyleChip)
