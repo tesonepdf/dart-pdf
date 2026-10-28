@@ -43,6 +43,17 @@ XTypeGroup imageTypeGroup(String label) => XTypeGroup(
       uniformTypeIdentifiers: const ['public.png', 'public.jpeg'],
     );
 
+/// PDFs and every common photo/bitmap format, for the "open" picker.
+XTypeGroup documentTypeGroup(String label) => XTypeGroup(
+      label: label,
+      extensions: const [
+        'pdf', 'jpg', 'jpeg', 'jpe', 'png', 'bmp', 'gif', 'webp', 'tif',
+        'tiff', 'heic', 'heif', //
+      ],
+      mimeTypes: const ['application/pdf', 'image/*'],
+      uniformTypeIdentifiers: const ['com.adobe.pdf', 'public.image'],
+    );
+
 /// Custom stamp bundles exported from the Manage Stamps dialog.
 XTypeGroup stampBundleTypeGroup(String label) => XTypeGroup(
       label: label,
@@ -159,6 +170,12 @@ PdfByteSource pdfByteSourceForMobileToken(
 Future<XFile?> pickPdfFile(String pdfLabel) => kIsWeb
     ? pickPdfFileWeb()
     : openFile(acceptedTypeGroups: [pdfTypeGroup(pdfLabel)]);
+
+/// Like [pickPdfFiles], but also accepts photos and bitmaps (they open as a
+/// one-page PDF).
+Future<List<XFile>> pickDocumentFiles(String label) => kIsWeb
+    ? pickDocumentFilesWeb()
+    : openFiles(acceptedTypeGroups: [documentTypeGroup(label)]);
 
 /// Opens the system file picker for one or more PDFs. Returns an empty list
 /// when the user cancels. On the web, reads the bytes eagerly (see

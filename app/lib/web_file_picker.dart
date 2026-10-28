@@ -111,3 +111,11 @@ Future<XFile?> pickPdfFileWeb() => pickInMemoryFileWeb(
       accept: '.pdf,application/pdf',
       fallbackMimeType: 'application/pdf',
     );
+
+/// PDFs and images (opened as one-page PDFs).
+Future<List<XFile>> pickDocumentFilesWeb({bool multiple = true}) =>
+    pickInMemoryFilesWeb(
+      accept: '.pdf,application/pdf,image/*',
+      fallbackMimeType: 'application/pdf',
+      multiple: multiple,
+    );
