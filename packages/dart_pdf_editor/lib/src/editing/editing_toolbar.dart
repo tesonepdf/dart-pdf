@@ -2912,7 +2912,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
       // third keeps the whole cluster (swatches + tune) inside the narrow dock
       // without overflowing.
       return [
-        ..._mobileSwatches(context, count: tune.isEmpty ? 3 : 2),
+        ..._mobileSwatches(context, count: 2),
         ...tune
       ];
     }
@@ -2939,13 +2939,35 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     );
   }
 
-  /// The first [count] palette swatches, sized for the mobile dock.
+  /// The colours used last (most recent first), whatever way they were set.
+  final List<Color> _recentColors = [];
+
+  /// The last [count] colours used, sized for the mobile dock: the current
+  /// colour first, then the one before it. Fills up from the palette until
+  /// enough colours have been used.
+  List<Color> _recentSwatchColors(int count) {
+    final current = controller.color;
+    _recentColors
+      ..remove(current)
+      ..insert(0, current);
+    if (_recentColors.length > 8) {
+      _recentColors.removeRange(8, _recentColors.length);
+    }
+    final shown = _recentColors.take(count).toList();
+    for (final color in widget.palette) {
+      if (shown.length >= count) break;
+      if (!shown.contains(color)) shown.add(color);
+    }
+    return shown;
+  }
+
+  /// The last [count] colours used, sized for the mobile dock.
   List<Widget> _mobileSwatches(BuildContext context, {int count = 3}) {
     final scheme = Theme.of(context).colorScheme;
     final current = controller.displayColor;
     var i = 0;
     return [
-      for (final color in widget.palette.take(count))
+      for (final color in _recentSwatchColors(count))
         Padding(
           key: ValueKey('pdf-mobile-swatch-${i++}'),
           padding: const EdgeInsets.symmetric(horizontal: 3),
