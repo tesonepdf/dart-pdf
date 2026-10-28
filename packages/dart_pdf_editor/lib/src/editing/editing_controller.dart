@@ -2873,6 +2873,29 @@ class PdfEditingController extends ChangeNotifier {
     return true;
   }
 
+  (int?,)? _editingFillRequest;
+  (int?,)? _editingBorderRequest;
+
+  /// A fill picked while a box is open in the inline editor (null: none).
+  (int?,)? get editingFillRequest => _editingFillRequest;
+
+  /// Fill/border picked while a box is open in the inline editor. Rewriting
+  /// the annotation would swap the document under the editor, so they wait
+  /// here, show on the editor at once, and land when the edit commits.
+  void requestEditingBoxColors({(int?,)? fill, (int?,)? border}) {
+    if (fill != null) _editingFillRequest = fill;
+    if (border != null) _editingBorderRequest = border;
+    notifyListeners();
+  }
+
+  /// The pending fill/border (see [requestEditingBoxColors]), cleared.
+  ({(int?,)? fill, (int?,)? border}) takeEditingBoxColors() {
+    final taken = (fill: _editingFillRequest, border: _editingBorderRequest);
+    _editingFillRequest = null;
+    _editingBorderRequest = null;
+    return taken;
+  }
+
   void beginEditingTextFocusHold() {
     _editingTextFocusHoldCount++;
     _editingTextFocusHoldRevision++;

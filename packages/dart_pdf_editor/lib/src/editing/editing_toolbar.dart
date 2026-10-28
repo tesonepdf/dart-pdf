@@ -4294,6 +4294,10 @@ class _StyleMenuState extends State<_StyleMenu> {
 
   void _setTextFill(Color? color) {
     controller.preferences.textFillColor = color; // the new default either way
+    if (controller.isEditingText && controller.canRestyleSelectedText) {
+      controller.requestEditingBoxColors(fill: (_rgb(color),));
+      return;
+    }
     if (controller.canRestyleSelectedText) {
       controller.restyleSelectedText(fill: (_rgb(color),));
     }
@@ -4327,6 +4331,10 @@ class _StyleMenuState extends State<_StyleMenu> {
 
   void _setTextBorder(Color? color) {
     controller.preferences.textBorderColor = color;
+    if (controller.isEditingText && controller.canRestyleSelectedText) {
+      controller.requestEditingBoxColors(border: (_rgb(color),));
+      return;
+    }
     if (controller.canRestyleSelectedText) {
       controller.restyleSelectedText(
           border: (_rgb(color),),
