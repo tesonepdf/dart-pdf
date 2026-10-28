@@ -4074,12 +4074,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 20.0, gap = 2.0, closeGap = 52.0;
+    const d = 15.0, closeSize = 6.0, closeHit = 18.0, gap = 2.0, closeGap = 52.0;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
-      final left = (center.dx - d / 2).clamp(0.0, math.max(0.0, size.width - d));
-      final top = (center.dy - d / 2).clamp(0.0, math.max(0.0, size.height - d));
+      final isClose = direction == null;
+      final hit = isClose ? closeHit : d;
+      final face = isClose ? closeSize : d;
+      final left =
+          (center.dx - hit / 2).clamp(0.0, math.max(0.0, size.width - hit));
+      final top =
+          (center.dy - hit / 2).clamp(0.0, math.max(0.0, size.height - hit));
       void down() {
         _holdChipFocus();
         if (direction != null) _startLineCursorMove(direction);
@@ -4105,17 +4110,27 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             onPointerDown: (_) => down(),
             onPointerUp: (_) => up(close: true),
             onPointerCancel: (_) => up(close: false),
-            child: Container(
-              width: d,
-              height: d,
-              decoration: BoxDecoration(
-                color: scheme.surface.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(blurRadius: 2, color: Colors.black26)
-                ],
+            child: SizedBox(
+              width: hit,
+              height: hit,
+              child: Center(
+                child: Container(
+                  width: face,
+                  height: face,
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 2, color: Colors.black26)
+                    ],
+                  ),
+                  child: OverflowBox(
+                    maxWidth: face,
+                    maxHeight: face,
+                    child: Icon(icon, size: isClose ? 6 : 10, color: color),
+                  ),
+                ),
               ),
-              child: Icon(icon, size: 14, color: color),
             ),
           ),
         ),
@@ -4904,8 +4919,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_textEditRect != null) {
       // a drag outside an existing box's editor commits it, like a tap; a new
       // box stays open so the screen can be moved around it
-      if (!_textEditExisting) return;
-      _commitTextEdit();
       return;
     }
     if (_stampPreview != null) {
@@ -6493,8 +6506,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       return;
     }
     if (_textEditRect != null) {
-      // tapping outside the open editor commits it
-      _commitTextEdit();
+      // the open editor closes only with the X
       return;
     }
     if (_polyTool || _hybridPolyTool) {
