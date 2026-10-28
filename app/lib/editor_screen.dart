@@ -29,6 +29,7 @@ import 'document_tab.dart';
 import 'file_io.dart';
 import 'image_clipboard.dart';
 import 'image_export.dart';
+import 'image_to_pdf.dart';
 import 'image_source_picker.dart';
 import 'incoming_file.dart';
 import 'keyless_identity_cache.dart';
@@ -1080,6 +1081,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// Opens [bytes] in a brand-new tab and makes it active, recording a recent.
   void _openBytes(Uint8List bytes, String title,
       {String? originPath, String? originBookmark}) {
+    if (!looksLikePdf(bytes)) {
+      bytes = imageBytesToPdf(bytes);
+      title = imageTitleAsPdf(title);
+    }
     _addTab(DocumentTab.document(
       title: title,
       bytes: bytes,
@@ -1360,7 +1365,10 @@ class _EditorScreenState extends State<EditorScreen>
         .addLog('open-trace: "$title" placeholder shown, awaiting bytes '
             '(defer=$defer, path=${originPath ?? "-"})');
     try {
-      final bytes = await bytesFuture;
+      final rawBytes = await bytesFuture;
+      final isPhoto = !looksLikePdf(rawBytes);
+      final bytes = await imageBytesToPdfAsync(rawBytes);
+      if (isPhoto) title = imageTitleAsPdf(title);
       AppDevTools.instance
           .addLog('open-trace: "$title" bytes ready — ${bytes.length} B; '
               'waiting for end of frame');
@@ -1976,7 +1984,7 @@ class _EditorScreenState extends State<EditorScreen>
       }
     }
     try {
-      final files = await pickPdfFiles(l10n.fileTypePdf);
+      final files = await pickDocumentFiles(l10n.fileTypePdf);
       if (files.isEmpty || !mounted) return;
       // Opening a batch: defer parsing every file but the one that ends up
       // active, so the picker doesn't freeze while it opens all of them.
@@ -2010,7 +2018,9 @@ class _EditorScreenState extends State<EditorScreen>
     // A single desktop pick opens progressively (first paint from ranged
     // reads, full bytes behind it). A batch keeps the deferred whole-file
     // path so the picker doesn't fan out many concurrent streams.
-    if (!defer && progressiveOpenSupported(path)) {
+    if (!defer &&
+        !isImageFileName(file.name) &&
+        progressiveOpenSupported(path)) {
       await _openProgressive(
           title: file.name, path: path!, bookmark: bookmark, into: loading);
     } else {
@@ -2083,7 +2093,8 @@ class _EditorScreenState extends State<EditorScreen>
       final loading = placeholders[i];
       if (!mounted) return;
       if (!_tabs.contains(loading)) continue;
-      final progressive = !defer && pick.seekable;
+      final progressive =
+          !defer && pick.seekable && !isImageFileName(pick.name);
       final reason = progressive
           ? 'single-seekable'
           : defer
@@ -2299,7 +2310,9 @@ class _EditorScreenState extends State<EditorScreen>
     }
     // An OS-handed file with a real path opens progressively; one delivered as
     // raw bytes (Android content://, web handle) is already fully in memory.
-    if (file.bytes == null && progressiveOpenSupported(file.path)) {
+    if (file.bytes == null &&
+        !isImageFileName(file.name) &&
+        progressiveOpenSupported(file.path)) {
       await _openProgressive(
           title: file.name, path: file.path!, bookmark: file.bookmark);
       return;

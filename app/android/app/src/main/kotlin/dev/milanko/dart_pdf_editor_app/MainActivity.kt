@@ -293,7 +293,8 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
         }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/pdf"
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/pdf", "image/*"))
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             // Keep cloud providers (OneDrive/Drive/iCloud) in the list - the
             // whole point of #364 - so don't set EXTRA_LOCAL_ONLY.
