@@ -3766,14 +3766,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// part of the glyphs about 1.5pt above the rule.
   static const double _lineSnapGap = 1.5;
 
-  /// The height of a one-line text box: the font's line plus the 3pt the
-  /// appearance keeps clear above and below the text.
-  double get _oneLineBoxHeight =>
-      _controller.preferences.fontSize * _controller.lineSpacing + 6 - _boxTrim;
+  /// The height of a one-line text box, fitted to the writing: the 3pt the
+  /// appearance keeps clear above the text, a capital's height (about 0.72 of
+  /// the size), and under the baseline room for the descenders (never less
+  /// than the 3pt clear space).
+  double get _oneLineBoxHeight {
+    final size = _controller.preferences.fontSize;
+    return 3 + size * 0.72 + math.max(3.0, size * 0.22);
+  }
 
-  /// Room under the capitals the box no longer keeps (the baseline sits close
-  /// to the bottom edge): a few points of air above and below the glyphs.
-  double get _boxTrim => _controller.preferences.fontSize * 0.22;
+  /// What a one-line box gives up of the full line (line height plus the two
+  /// 3pt paddings) so it hugs the capitals instead.
+  double get _boxTrim =>
+      _controller.preferences.fontSize * _controller.lineSpacing +
+      6 -
+      _oneLineBoxHeight;
 
   /// The rule a box at page point ([x], [y]) belongs to - one the point sits
   /// on or just above (within about a line's height) - or null.
@@ -4103,12 +4110,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         // and pan, which would otherwise close the editor under the arrow
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () {},
+          // the X closes on the tap itself, once the gesture is won: closing
+          // on pointer-up removed the button first and let the tap fall
+          // through to the page, which opened a new box
+          onTap: () {
+            if (direction == null) _closeCursorPad();
+          },
           onPanStart: (_) {},
           child: Listener(
             behavior: HitTestBehavior.opaque,
             onPointerDown: (_) => down(),
-            onPointerUp: (_) => up(close: true),
+            onPointerUp: (_) => up(close: false),
             onPointerCancel: (_) => up(close: false),
             child: SizedBox(
               width: hit,
