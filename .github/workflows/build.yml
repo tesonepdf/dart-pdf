@@ -10,7 +10,7 @@ run-name: ${{ github.event.head_commit.message || (inputs.solo_contatore && 'Con
 
 on:
   push:
-    branches: [main]
+    branches: [main, prova-sviluppatore]
   workflow_dispatch:
     inputs:
       solo_contatore:
@@ -23,6 +23,13 @@ permissions:
 
 env:
   FLUTTER_VERSION: '3.47.7'
+  # Il ramo prova-sviluppatore produce un'app separata ("DartPDF Prova", id
+  # it.tesonepdf.pdf.prova) con le proprie release e il proprio canale di
+  # aggiornamenti: si installa accanto a quella normale senza sostituirla.
+  APP_ID_SUFFIX: ${{ github.ref_name == 'prova-sviluppatore' && '.prova' || '' }}
+  APP_LABEL: ${{ github.ref_name == 'prova-sviluppatore' && 'DartPDF Prova' || 'DartPDF' }}
+  RELEASE_PREFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'prova' || 'build' }}
+  ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
 
 jobs:
   version:
@@ -187,7 +194,8 @@ jobs:
             --no-tree-shake-icons --target-platform android-arm64 \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
-            --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA"
+            --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA" \
+            --dart-define=PDF_ANDROID_TAG="$ANDROID_TAG"
 
       - name: Controllo che lo scanner funzioni dopo la riduzione del codice
         run: |
@@ -285,8 +293,8 @@ jobs:
             cp dl/windows/windows-x64.zip windows-x64.zip
             assets+=(windows-x64.zip)
           fi
-          build_tag="build-${NUMERO}"
-          build_title="Build #${NUMERO} - versione ${VERSIONE}"
+          build_tag="${RELEASE_PREFIX}-${NUMERO}"
+          build_title="Build #${NUMERO} (${APP_LABEL}) - versione ${VERSIONE}"
           build_notes="Commit ${GITHUB_SHA}"
           if gh release view "$build_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$build_tag" \
@@ -303,10 +311,10 @@ jobs:
               --target "$GITHUB_SHA" \
               --title "$build_title" \
               --notes "$build_notes" \
-              --latest
+              --latest="$([[ "$RELEASE_PREFIX" == build ]] && echo true || echo false)"
           fi
 
-          android_tag="app-android-latest"
+          android_tag="$ANDROID_TAG"
           # Il canale Android avanza solo con numero build piu' alto di quello
           # gia' pubblicato: cosi' una build non viene saltata perche' nel
           # frattempo e' arrivato un altro push.
@@ -328,14 +336,14 @@ jobs:
               fi
               gh release edit "$android_tag" \
                 --repo "$GITHUB_REPOSITORY" \
-                --title "DartPDF Android latest" \
+                --title "$APP_LABEL Android" \
                 --notes "$android_notes"
             else
               gh release create "$android_tag" \
                 DartPDF-Android.apk \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
-                --title "DartPDF Android latest" \
+                --title "$APP_LABEL Android" \
                 --notes "$android_notes" \
                 --prerelease
             fi

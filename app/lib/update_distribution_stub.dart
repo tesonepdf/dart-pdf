@@ -3,3 +3,5 @@
 bool get defaultStoreManagedUpdateChannel => false;
 
 Future<List<String>> defaultAndroidSupportedAbis() async => const [];
+
+String get defaultUpdateArchitecture => 'unknown';

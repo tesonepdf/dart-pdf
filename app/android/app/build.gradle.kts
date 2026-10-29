@@ -29,7 +29,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "it.tesonepdf.pdf"
+        // Il ramo di prova aggiunge un suffisso (.prova) per installarsi accanto
+        // all'app normale invece di sostituirla.
+        applicationId = "it.tesonepdf.pdf" + (System.getenv("APP_ID_SUFFIX") ?: "")
+        manifestPlaceholders["appLabel"] = System.getenv("APP_LABEL") ?: "DartPDF"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -58,6 +61,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     packaging {
         jniLibs {
             // The onnxruntime plugin (pinned at 1.4.1, unmaintained) bundles a
@@ -79,6 +86,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
 }
 
 flutter {
