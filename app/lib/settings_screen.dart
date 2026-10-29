@@ -510,6 +510,25 @@ class _UpdateSection extends StatelessWidget {
               ),
               checking,
             ),
+            const SizedBox(height: 8),
+            Text(_t(context, 'Da dove controllare', 'Where to check'),
+                style: theme.textTheme.titleSmall),
+            const SizedBox(height: 6),
+            _repoOption(
+              context,
+              false,
+              _t(context, 'Il mio repo', 'My repository'),
+              '${updates.repoOwner}/${updates.repoName}',
+              checking,
+            ),
+            _repoOption(
+              context,
+              true,
+              _t(context, 'Repo ufficiale', 'Official repository'),
+              '${UpdateService.officialRepoOwner}/'
+                  '${UpdateService.officialRepoName}',
+              checking,
+            ),
             const SizedBox(height: 4),
             OutlinedButton(
               key: const ValueKey('settings-check-updates'),
@@ -561,6 +580,45 @@ class _UpdateSection extends StatelessWidget {
   /// Italian or English text (the update options are not in the ARB files).
   static String _t(BuildContext context, String it, String en) =>
       Localizations.localeOf(context).languageCode == 'it' ? it : en;
+
+  Widget _repoOption(BuildContext context, bool official, String title,
+      String subtitle, bool busy) {
+    final theme = Theme.of(context);
+    final selected = updates.officialRepo == official;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: selected
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          key: ValueKey('settings-update-repo-${official ? 'official' : 'own'}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: busy
+              ? null
+              : () async {
+                  await updates.setOfficialRepo(official);
+                  await updates.checkForUpdates(force: true);
+                },
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${selected ? '\u25CF' : '\u25CB'} $title',
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(subtitle, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _modeOption(BuildContext context, UpdateCheckMode mode, String title,
       String subtitle, bool busy) {
