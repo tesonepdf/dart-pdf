@@ -10,6 +10,7 @@ import 'l10n/app_localizations.dart';
 import 'language_names.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
+import 'official_update.dart';
 import 'pdf_cache.dart';
 import 'recents.dart';
 import 'signature_trust.dart';
@@ -433,12 +434,163 @@ class _ArrowStepsSection extends StatelessWidget {
   }
 }
 
+/// The updates block: a drop-down picks which project is checked - this app's
+/// own releases or the upstream (official) project's - each with its own
+/// status.
+class _UpdateSection extends StatefulWidget {
+  const _UpdateSection({required this.updates, this.installer});
+
+  final UpdateService updates;
+  final UpdateInstaller? installer;
+
+  @override
+  State<_UpdateSection> createState() => _UpdateSectionState();
+}
+
+class _UpdateSectionState extends State<_UpdateSection> {
+  bool _official = false;
+
+  static String _t(BuildContext context, String it, String en) =>
+      Localizations.localeOf(context).languageCode == 'it' ? it : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(appL10n(context).settingsUpdates,
+            style: theme.textTheme.titleSmall),
+        const SizedBox(height: 6),
+        DropdownButton<bool>(
+          key: const ValueKey('settings-update-source'),
+          isExpanded: true,
+          value: _official,
+          items: [
+            DropdownMenuItem(
+              value: false,
+              child: Text(_t(context, 'Il mio repo (tesonepdf)',
+                  'My repository (tesonepdf)')),
+            ),
+            DropdownMenuItem(
+              value: true,
+              child: Text(_t(context, 'Repo ufficiale (ben-milanko)',
+                  'Official repository (ben-milanko)')),
+            ),
+          ],
+          onChanged: (value) => setState(() => _official = value ?? false),
+        ),
+        const SizedBox(height: 6),
+        if (_official)
+          const _OfficialUpdatePanel()
+        else
+          _OwnUpdatePanel(
+              updates: widget.updates, installer: widget.installer),
+      ],
+    );
+  }
+}
+
+/// The upstream project's releases: compared with the version this copy is
+/// based on, opened in the browser (the builds are signed with another key,
+/// so they cannot be installed over this app).
+class _OfficialUpdatePanel extends StatelessWidget {
+  const _OfficialUpdatePanel();
+
+  static String _t(BuildContext context, String it, String en) =>
+      Localizations.localeOf(context).languageCode == 'it' ? it : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final checker = OfficialUpdateChecker.instance;
+    return ListenableBuilder(
+      listenable: checker,
+      builder: (context, _) {
+        final checking = checker.status == OfficialUpdateStatus.checking;
+        final status = switch (checker.status) {
+          OfficialUpdateStatus.newer => _t(
+              context,
+              'Nuova versione ufficiale: ${checker.latestLabel}',
+              'New official version: ${checker.latestLabel}'),
+          OfficialUpdateStatus.upToDate => _t(
+              context,
+              'Nessuna novita\' ufficiale oltre la ${checker.mergedLabel}.',
+              'Nothing newer upstream than ${checker.mergedLabel}.'),
+          OfficialUpdateStatus.error => _t(context,
+              'Controllo non riuscito: ${checker.error}',
+              'Check failed: ${checker.error}'),
+          _ => '',
+        };
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _t(
+                context,
+                'Versione ufficiale da cui e\' partita questa copia: '
+                    '${checker.mergedLabel}. Le novita\' ufficiali si '
+                    'vedono qui, ma non si installano sopra questa app.',
+                'Official version this copy started from: '
+                    '${checker.mergedLabel}. Upstream news shows here but '
+                    'is not installed over this app.',
+              ),
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              key: const ValueKey('settings-check-official-updates'),
+              onPressed: checking ? null : checker.check,
+              child: checking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_t(context, 'Controlla versione ufficiale',
+                      'Check official version')),
+            ),
+            if (status.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(status, style: theme.textTheme.bodySmall),
+            ],
+            if (checker.status == OfficialUpdateStatus.newer) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  FilledButton(
+                    key: const ValueKey('settings-open-official-release'),
+                    onPressed: checker.latestUrl == null
+                        ? null
+                        : () => launchUrl(Uri.parse(checker.latestUrl!),
+                            mode: LaunchMode.externalApplication),
+                    child: Text(_t(context, 'Apri la release',
+                        'Open the release')),
+                  ),
+                  OutlinedButton(
+                    key: const ValueKey('settings-official-merged'),
+                    onPressed: checker.markLatestMerged,
+                    child: Text(_t(context, 'Segna come integrata',
+                        'Mark as merged')),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+
 /// The Settings "Updates" block: a "Check for updates" button and a status
 /// line that reflects the [UpdateService]'s latest result, with a Download
 /// button (opening the platform artifact or release page) when a newer build
 /// is available.
-class _UpdateSection extends StatelessWidget {
-  const _UpdateSection({required this.updates, this.installer});
+class _OwnUpdatePanel extends StatelessWidget {
+  const _OwnUpdatePanel({required this.updates, this.installer});
 
   final UpdateService updates;
 
@@ -461,9 +613,6 @@ class _UpdateSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(appL10n(context).settingsUpdates,
-                style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
             Text(
               _t(
                 context,
@@ -508,25 +657,6 @@ class _UpdateSection extends StatelessWidget {
                 'Nessun controllo automatico: usa il pulsante qui sotto.',
                 'No automatic check: use the button below.',
               ),
-              checking,
-            ),
-            const SizedBox(height: 8),
-            Text(_t(context, 'Da dove controllare', 'Where to check'),
-                style: theme.textTheme.titleSmall),
-            const SizedBox(height: 6),
-            _repoOption(
-              context,
-              false,
-              _t(context, 'Il mio repo', 'My repository'),
-              '${updates.repoOwner}/${updates.repoName}',
-              checking,
-            ),
-            _repoOption(
-              context,
-              true,
-              _t(context, 'Repo ufficiale', 'Official repository'),
-              '${UpdateService.officialRepoOwner}/'
-                  '${UpdateService.officialRepoName}',
               checking,
             ),
             const SizedBox(height: 4),
@@ -580,45 +710,6 @@ class _UpdateSection extends StatelessWidget {
   /// Italian or English text (the update options are not in the ARB files).
   static String _t(BuildContext context, String it, String en) =>
       Localizations.localeOf(context).languageCode == 'it' ? it : en;
-
-  Widget _repoOption(BuildContext context, bool official, String title,
-      String subtitle, bool busy) {
-    final theme = Theme.of(context);
-    final selected = updates.officialRepo == official;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: selected
-            ? theme.colorScheme.primaryContainer
-            : theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          key: ValueKey('settings-update-repo-${official ? 'official' : 'own'}'),
-          borderRadius: BorderRadius.circular(12),
-          onTap: busy
-              ? null
-              : () async {
-                  await updates.setOfficialRepo(official);
-                  await updates.checkForUpdates(force: true);
-                },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${selected ? '\u25CF' : '\u25CB'} $title',
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(subtitle, style: theme.textTheme.bodySmall),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _modeOption(BuildContext context, UpdateCheckMode mode, String title,
       String subtitle, bool busy) {
