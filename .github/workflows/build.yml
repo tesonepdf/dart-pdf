@@ -182,7 +182,8 @@ jobs:
       - name: Compila l'APK
         working-directory: app
         run: |
-          flutter build apk --release --target-platform android-arm64 \
+          flutter --suppress-analytics build apk --release --no-pub \
+            --no-tree-shake-icons --target-platform android-arm64 \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
             --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA"
