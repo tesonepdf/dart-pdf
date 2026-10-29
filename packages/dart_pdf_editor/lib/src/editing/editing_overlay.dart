@@ -3766,21 +3766,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// part of the glyphs about 1.5pt above the rule.
   static const double _lineSnapGap = 1.5;
 
-  /// The height of a one-line text box, fitted to the writing: the 3pt the
-  /// appearance keeps clear above the text, a capital's height (about 0.72 of
-  /// the size), and under the baseline room for the descenders (never less
-  /// than the 3pt clear space).
-  double get _oneLineBoxHeight {
-    final size = _controller.preferences.fontSize;
-    return 3 + size * 0.72 + math.max(3.0, size * 0.22);
-  }
-
-  /// What a one-line box gives up of the full line (line height plus the two
-  /// 3pt paddings) so it hugs the capitals instead.
-  double get _boxTrim =>
+  /// The height of a one-line text box: the font's line plus the two 3pt
+  /// paddings, less a small trim under the baseline. The trim stays small so
+  /// the lower part of the letters and digits is never cut by the box.
+  double get _oneLineBoxHeight =>
       _controller.preferences.fontSize * _controller.lineSpacing +
       6 -
-      _oneLineBoxHeight;
+      _boxTrim;
+
+  /// What a one-line box gives up of the full line (0.2 of the size).
+  double get _boxTrim => _controller.preferences.fontSize * 0.2;
 
   /// The rule a box at page point ([x], [y]) belongs to - one the point sits
   /// on or just above (within about a line's height) - or null.
