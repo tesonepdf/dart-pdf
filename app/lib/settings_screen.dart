@@ -17,6 +17,7 @@ import 'signature_trust.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
 import 'update_installer.dart';
+import 'web_channel.dart';
 import 'whats_new.dart';
 
 // The platform-specific default-app help lives in the ARB as one ICU `select`
@@ -281,6 +282,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showDefaultAppSetup(context),
                 ),
+                if (kIsWeb) const WebChannelSwitchTile(),
                 if (widget.onOpenDevTools != null)
                   ListTile(
                     key: const ValueKey('settings-devtools'),
@@ -689,6 +691,14 @@ class _OwnUpdatePanel extends StatelessWidget {
               ),
             _statusLine(context, theme),
             if (updates.updateAvailable) ...[
+              if (updates.isVersionSkipped) ...[
+                const SizedBox(height: 8),
+                Text(
+                  appL10n(context).settingsUpdateSkipped,
+                  key: const ValueKey('settings-update-skipped'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: 8),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -700,6 +710,12 @@ class _OwnUpdatePanel extends StatelessWidget {
                   onPressed: () => _install(context),
                 ),
               ),
+              if (!updates.isVersionSkipped)
+                TextButton(
+                  key: const ValueKey('settings-skip-update'),
+                  onPressed: () => updates.skipVersion(),
+                  child: Text(appL10n(context).updateSkipVersion),
+                ),
             ],
           ],
         );
