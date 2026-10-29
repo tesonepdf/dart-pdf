@@ -4079,7 +4079,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 15.0, closeSize = 6.0, closeHit = 18.0, gap = 2.0, closeGap = 52.0;
+    const d = 10.5, closeSize = 7.2, closeHit = 21.6, gap = 2.0, closeGap = 28.0;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
@@ -4137,7 +4137,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   child: OverflowBox(
                     maxWidth: face,
                     maxHeight: face,
-                    child: Icon(icon, size: isClose ? 6 : 10, color: color),
+                    child: Icon(icon, size: isClose ? 7 : 7, color: color),
                   ),
                 ),
               ),
@@ -8407,9 +8407,25 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                             // as the shift crosses zero (a run resized
                             // mid-edit) would rebuild the field and drop its
                             // editing state
-                            field = Transform.translate(
-                                offset: Offset(0, math.min(0.0, baselineShift)),
-                                child: field);
+                            // a negative shift lifts the text by growing the
+                            // field upward: its clip window keeps the box's
+                            // bottom edge, so the lower part of the letters
+                            // is never cut (a plain translate dragged the
+                            // clip up with the text)
+                            final inner = field;
+                            final lift = -math.min(0.0, baselineShift);
+                            field = LayoutBuilder(builder: (context, box) {
+                              if (!box.maxHeight.isFinite) {
+                                return Transform.translate(
+                                    offset: Offset(0, -lift), child: inner);
+                              }
+                              final h = box.maxHeight + lift;
+                              return OverflowBox(
+                                  alignment: Alignment.bottomCenter,
+                                  minHeight: h,
+                                  maxHeight: h,
+                                  child: inner);
+                            });
                             return Directionality(
                                 textDirection: direction, child: field);
                           },
