@@ -170,7 +170,14 @@ class ReleaseInfo {
   static ReleaseInfo? fromJson(Map<String, dynamic> json) {
     if (json['draft'] == true) return null;
     final tag = json['tag_name'] as String?;
-    if (json['prerelease'] == true && tag != dartPdfNightlyTag) return null;
+    // The rolling Android release is published as a pre-release on purpose (so
+    // it never becomes the repository's "latest"), so it must pass here like
+    // the nightly one - dropping it made every update check say "up to date".
+    if (json['prerelease'] == true &&
+        tag != dartPdfNightlyTag &&
+        tag != dartPdfAndroidTag) {
+      return null;
+    }
     if (tag == null) return null;
     final notes = (json['body'] as String?)?.trim() ?? '';
     final isNightly = tag == dartPdfNightlyTag;
