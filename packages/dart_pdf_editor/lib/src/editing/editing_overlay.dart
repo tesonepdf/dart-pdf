@@ -1391,6 +1391,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// glyphs out 3 points inside the box.
   double get _textEditPad => 3 * _geometry.scale;
 
+  /// The text sits 1pt from the top and bottom edges of its box.
+  double get _textEditPadY => 1 * _geometry.scale;
+
   /// The caret gutter Flutter reserves out of the width the text aligns in
   /// (see [pdfCaretGutter]). [_textEditRightPad] and
   /// [_textEditGutterOverflow] hand it back, so centred and right-aligned
@@ -3766,12 +3769,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// part of the glyphs about 1.5pt above the rule.
   static const double _lineSnapGap = 1.5;
 
-  /// The height of a one-line text box: the font's line plus the two 3pt
+  /// The height of a one-line text box: the font's line plus the two 1pt
   /// paddings, less a small trim under the baseline. The trim stays small so
   /// the lower part of the letters and digits is never cut by the box.
   double get _oneLineBoxHeight =>
       _controller.preferences.fontSize * _controller.lineSpacing +
-      6 -
+      2 -
       _boxTrim;
 
   /// What a one-line box gives up of the full line (0.2 of the size).
@@ -7463,12 +7466,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     );
     const heightBehavior = TextHeightBehavior(applyHeightToFirstAscent: false);
     final pad = 3 * _geometry.scale;
+    final padY = 1 * _geometry.scale;
     // the same first baseline the inline editor and the appearance use, so
     // closing the editor onto this afterimage doesn't move the text
     final baselineShift = _firstBaselineShift(
       style: style,
       heightBehavior: heightBehavior,
-      pdfBaseline: pad + size * font.ascent / 1000 * _geometry.scale,
+      pdfBaseline: padY + size * font.ascent / 1000 * _geometry.scale,
     );
     Widget label = Text(
       text,
@@ -7482,7 +7486,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final content = Container(
       key: key,
       color: background,
-      padding: EdgeInsets.fromLTRB(pad, math.max(0.0, baselineShift), pad, pad),
+      padding:
+          EdgeInsets.fromLTRB(pad, math.max(0.0, baselineShift), pad, padY),
       alignment: Alignment(
           columnAlign.x,
           switch (verticalAlign) {
@@ -8312,7 +8317,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                               strut: strut,
                               heightBehavior:
                                   DefaultTextHeightBehavior.maybeOf(context),
-                              pdfBaseline: _textEditPad +
+                              pdfBaseline: _textEditPadY +
                                   _textEditText.maxStyleAscent *
                                       _geometry.scale,
                             );
@@ -8394,7 +8399,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                                       // centred and right-aligned glyphs land
                                       // on the appearance's text area
                                       _textEditRightPad,
-                                      _textEditPad,
+                                      _textEditPadY,
                                     ),
                                   ),
                                 )));
