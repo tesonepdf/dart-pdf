@@ -274,6 +274,9 @@ jobs:
           VERSIONE: ${{ needs.version.outputs.version }}
           NUMERO: ${{ needs.version.outputs.number }}
         run: |
+          # se un comando fallisce, scrive quale e perche' (annotazione leggibile)
+          trap 'echo "::error::Pubblica la Release fallita alla riga $LINENO: $BASH_COMMAND"' ERR
+          ls -la dl dl/apk
           cp dl/apk/app-release.apk DartPDF-Android.apk
           assets=(DartPDF-Android.apk)
           if [[ -f dl/windows/windows-x64.zip ]]; then
