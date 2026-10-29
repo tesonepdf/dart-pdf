@@ -4912,6 +4912,24 @@ class _StyleMenuState extends State<_StyleMenu> {
                           setState(() => _draggingFontWidth = null);
                         },
                       ),
+                      Row(
+                        key: const ValueKey('pdf-text-session-only'),
+                        children: [
+                          Expanded(
+                            child: Text(
+                              Localizations.localeOf(context).languageCode ==
+                                      'it'
+                                  ? 'Solo questa sessione (non salvare come predefiniti)'
+                                  : 'This session only (do not save as defaults)',
+                            ),
+                          ),
+                          Switch(
+                            value: controller.preferences.textSessionOnly,
+                            onChanged: (v) =>
+                                controller.preferences.textSessionOnly = v,
+                          ),
+                        ],
+                      ),
                     ],
                   ],
                   if (fields.boxColors && widget.showColor) ...[

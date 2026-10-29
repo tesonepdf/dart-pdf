@@ -535,6 +535,15 @@ class PdfEditingController extends ChangeNotifier {
         annotationClipboard =
             annotationClipboard ?? PdfAnnotationSnapshotClipboard.instance {
     this.preferences.addListener(notifyListeners);
+    // the saved spacing defaults arrive once the preferences have loaded
+    unawaited(this.preferences.ready.then((_) {
+      if (_disposed) return;
+      _lineSpacing = this.preferences.textLineSpacing;
+      _charSpacing = this.preferences.textCharSpacing;
+      _fontWidth = this.preferences.textFontWidth;
+      _textUnderline = this.preferences.textUnderline;
+      notifyListeners();
+    }));
     // rebuild paste affordances live as the shared page clipboard fills or
     // clears - from this controller or from another document tab sharing it
     this.pageClipboard.addListener(notifyListeners);
@@ -2593,19 +2602,27 @@ class PdfEditingController extends ChangeNotifier {
     preferences.fontFamily = value;
   }
 
+  void _saveTextExtras() => preferences.saveTextExtras(
+        lineSpacing: _lineSpacing,
+        charSpacing: _charSpacing,
+        fontWidth: _fontWidth,
+        underline: _textUnderline,
+      );
+
   double _lineSpacing = kPdfFreeTextDefaultLineSpacing;
   double _charSpacing = 0;
   double _fontWidth = kPdfFreeTextDefaultHorizontalScale;
   bool _textUnderline = false;
 
   /// The line-height multiplier new free-text boxes are created with
-  /// (baseline-to-baseline distance is `fontSize * lineSpacing`). Session
-  /// state (not persisted).
+  /// (baseline-to-baseline distance is `fontSize * lineSpacing`). Saved
+  /// as a default unless the session-only mode is on.
   double get lineSpacing => _lineSpacing;
 
   set lineSpacing(double value) {
     if (value == _lineSpacing) return;
     _lineSpacing = value;
+    _saveTextExtras();
     notifyListeners();
   }
 
@@ -2616,6 +2633,7 @@ class PdfEditingController extends ChangeNotifier {
   set charSpacing(double value) {
     if (value == _charSpacing) return;
     _charSpacing = value;
+    _saveTextExtras();
     notifyListeners();
   }
 
@@ -2626,6 +2644,7 @@ class PdfEditingController extends ChangeNotifier {
   set fontWidth(double value) {
     if (value == _fontWidth) return;
     _fontWidth = value;
+    _saveTextExtras();
     notifyListeners();
   }
 
@@ -2635,6 +2654,7 @@ class PdfEditingController extends ChangeNotifier {
   set textUnderline(bool value) {
     if (value == _textUnderline) return;
     _textUnderline = value;
+    _saveTextExtras();
     notifyListeners();
   }
 

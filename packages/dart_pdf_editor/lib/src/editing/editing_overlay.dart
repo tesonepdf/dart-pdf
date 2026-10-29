@@ -3337,7 +3337,27 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _onTextEditChanged() {
     if (_textEditRect == null) return;
     _controller.setEditingTextSelection(_textEditText.selection);
+    _growBoxForNewLines();
     if (mounted) setState(() {});
+  }
+
+  /// Each Enter adds a line, and the box grows to hold it at the line spacing
+  /// of the Settings (`size * spacing` per line). A box sitting on a rule
+  /// grows upward from the rule; any other grows downward. It only grows:
+  /// deleting lines leaves the box as it is.
+  void _growBoxForNewLines() {
+    final pageRect = _textEditPageRect;
+    if (pageRect == null) return;
+    final lines = '\n'.allMatches(_textEditText.text).length + 1;
+    if (lines <= 1) return;
+    final needed =
+        _textEditSize * _textEditLineSpacing * lines + 2 - _boxTrim;
+    if (pageRect.top - pageRect.bottom >= needed) return;
+    _textEditPageRect = _textEditLineField != null
+        ? PdfRect(pageRect.left, pageRect.bottom, pageRect.right,
+            pageRect.bottom + needed)
+        : PdfRect(pageRect.left, pageRect.top - needed, pageRect.right,
+            pageRect.top);
   }
 
   void _onControllerChanged() {
@@ -3902,7 +3922,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     } else if (direction == LogicalKeyboardKey.arrowUp) {
       viewDy = -prefs.lineArrowStepY * scale;
     } else if (direction == LogicalKeyboardKey.arrowDown) {
-      viewDy = prefs.lineArrowStepY * scale;
+      // the down arrow moves half a step: two taps make a full one
+      viewDy = prefs.lineArrowStepY * scale * 0.5;
     } else {
       return (0, 0);
     }
@@ -4085,7 +4106,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 10.5, closeSize = 7.2, closeHit = 21.6, gap = 2.0, closeGap = 28.0;
+    const d = 8.4, closeSize = 8.64, closeHit = 16.0, gap = 2.0, closeGap = 14.0;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
@@ -4143,7 +4164,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   child: OverflowBox(
                     maxWidth: face,
                     maxHeight: face,
-                    child: Icon(icon, size: isClose ? 7 : 7, color: color),
+                    child: Icon(icon, size: isClose ? 8.4 : 5.6, color: color),
                   ),
                 ),
               ),

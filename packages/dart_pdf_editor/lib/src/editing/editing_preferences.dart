@@ -11,7 +11,9 @@ import 'package:pdf_document/pdf_document.dart'
         PdfLineEnding,
         PdfStandardFont,
         PdfTextAlign,
-        PdfTextVerticalAlign;
+        PdfTextVerticalAlign,
+        kPdfFreeTextDefaultHorizontalScale,
+        kPdfFreeTextDefaultLineSpacing;
 
 import '../viewport.dart';
 import 'line_style.dart';
@@ -327,6 +329,13 @@ class PdfEditingPreferences extends ChangeNotifier
         _lineArrowStepY = arrowY;
       }
       _fontSize = store.getDouble('${_prefix}fontSize') ?? _fontSize;
+      textLineSpacing =
+          store.getDouble('${_prefix}textLineSpacing') ?? textLineSpacing;
+      textCharSpacing =
+          store.getDouble('${_prefix}textCharSpacing') ?? textCharSpacing;
+      textFontWidth =
+          store.getDouble('${_prefix}textFontWidth') ?? textFontWidth;
+      textUnderline = store.getBool('${_prefix}textUnderline') ?? textUnderline;
       final fontFamily = store.getString('${_prefix}fontFamily');
       if (fontFamily != null) {
         _fontFamily =
@@ -627,6 +636,62 @@ class PdfEditingPreferences extends ChangeNotifier
     _writeViewports();
   }
 
+  /// Whether the text-style changes (size, font, colours, alignment, opacity
+  /// and the spacing values) apply only to this session instead of being saved
+  /// as the defaults. Session state: every start saves again.
+  bool _textSessionOnly = false;
+  bool get textSessionOnly => _textSessionOnly;
+
+  set textSessionOnly(bool value) {
+    if (value == _textSessionOnly) return;
+    _textSessionOnly = value;
+    if (!value) {
+      // back to saving: what is live now becomes the saved default
+      _write((s) => s.setDouble('${_prefix}fontSize', _fontSize));
+      _write((s) => s.setDouble('${_prefix}textLineSpacing', textLineSpacing));
+      _write((s) => s.setDouble('${_prefix}textCharSpacing', textCharSpacing));
+      _write((s) => s.setDouble('${_prefix}textFontWidth', textFontWidth));
+      _write((s) => s.setBool('${_prefix}textUnderline', textUnderline));
+    }
+    notifyListeners();
+  }
+
+  /// The saved spacing defaults for new free-text boxes (loaded at start;
+  /// the controller reads them once [ready]).
+  double textLineSpacing = kPdfFreeTextDefaultLineSpacing;
+  double textCharSpacing = 0;
+  double textFontWidth = kPdfFreeTextDefaultHorizontalScale;
+  bool textUnderline = false;
+
+  /// Saves the spacing values as defaults - unless the session-only mode is
+  /// on, when they stay live only.
+  void saveTextExtras({
+    required double lineSpacing,
+    required double charSpacing,
+    required double fontWidth,
+    required bool underline,
+  }) {
+    textLineSpacing = lineSpacing;
+    textCharSpacing = charSpacing;
+    textFontWidth = fontWidth;
+    textUnderline = underline;
+    if (_textSessionOnly) return;
+    _write((s) => s.setDouble('${_prefix}textLineSpacing', lineSpacing));
+    _write((s) => s.setDouble('${_prefix}textCharSpacing', charSpacing));
+    _write((s) => s.setDouble('${_prefix}textFontWidth', fontWidth));
+    _write((s) => s.setBool('${_prefix}textUnderline', underline));
+  }
+
+  void _writeText(Future<Object?> Function(PdfPreferencesStore store) write) {
+    if (_textSessionOnly) return;
+    _write(write);
+  }
+
+  void _recordScopedText(String field, Object? value) {
+    if (_textSessionOnly) return;
+    _recordScoped(field, value);
+  }
+
   void _write(Future<Object?> Function(PdfPreferencesStore store) write) {
     _modified = true;
     final store = _store;
@@ -838,8 +903,8 @@ class PdfEditingPreferences extends ChangeNotifier
   void setColor(Color value, {bool recordStyleScope = true}) {
     if (value == _color) return;
     _color = value;
-    _write((s) => s.setInt('${_prefix}color', value.toARGB32()));
-    if (recordStyleScope) _recordScoped('color', value.toARGB32());
+    _writeText((s) => s.setInt('${_prefix}color', value.toARGB32()));
+    if (recordStyleScope) _recordScopedText('color', value.toARGB32());
     notifyListeners();
   }
 
@@ -992,8 +1057,8 @@ class PdfEditingPreferences extends ChangeNotifier
   set fontSize(double value) {
     if (value == _fontSize) return;
     _fontSize = value;
-    _write((s) => s.setDouble('${_prefix}fontSize', value));
-    _recordScoped('fontSize', value);
+    _writeText((s) => s.setDouble('${_prefix}fontSize', value));
+    _recordScopedText('fontSize', value);
     notifyListeners();
   }
 
@@ -1049,8 +1114,8 @@ class PdfEditingPreferences extends ChangeNotifier
   set fontFamily(PdfStandardFont value) {
     if (value == _fontFamily) return;
     _fontFamily = value;
-    _write((s) => s.setString('${_prefix}fontFamily', value.name));
-    _recordScoped('fontFamily', value.name);
+    _writeText((s) => s.setString('${_prefix}fontFamily', value.name));
+    _recordScopedText('fontFamily', value.name);
     notifyListeners();
   }
 
@@ -1060,9 +1125,9 @@ class PdfEditingPreferences extends ChangeNotifier
   set textVerticalAlign(PdfTextVerticalAlign value) {
     if (value == _textVerticalAlign) return;
     _textVerticalAlign = value;
-    _write(
+    _writeText(
         (store) => store.setString('${_prefix}textVerticalAlign', value.name));
-    _recordScoped('textVerticalAlign', value.name);
+    _recordScopedText('textVerticalAlign', value.name);
     notifyListeners();
   }
 
@@ -1072,10 +1137,10 @@ class PdfEditingPreferences extends ChangeNotifier
   set textAlign(PdfTextAlign? value) {
     if (value == _textAlign) return;
     _textAlign = value;
-    _write((s) => value == null
+    _writeText((s) => value == null
         ? s.remove('${_prefix}textAlign')
         : s.setString('${_prefix}textAlign', value.name));
-    _recordScoped('textAlign', value?.name);
+    _recordScopedText('textAlign', value?.name);
     notifyListeners();
   }
 
@@ -1086,8 +1151,8 @@ class PdfEditingPreferences extends ChangeNotifier
   set opacity(double value) {
     if (value == _opacity) return;
     _opacity = value;
-    _write((s) => s.setDouble('${_prefix}opacity', value));
-    _recordScoped('opacity', value);
+    _writeText((s) => s.setDouble('${_prefix}opacity', value));
+    _recordScopedText('opacity', value);
     notifyListeners();
   }
 
@@ -1657,10 +1722,10 @@ class PdfEditingPreferences extends ChangeNotifier
   set textFillColor(Color? value) {
     if (value == _textFillColor) return;
     _textFillColor = value;
-    _write((s) => value == null
+    _writeText((s) => value == null
         ? s.remove('${_prefix}textFillColor')
         : s.setInt('${_prefix}textFillColor', value.toARGB32()));
-    _recordScoped('textFillColor', value?.toARGB32());
+    _recordScopedText('textFillColor', value?.toARGB32());
     notifyListeners();
   }
 
@@ -1671,10 +1736,10 @@ class PdfEditingPreferences extends ChangeNotifier
   set textBorderColor(Color? value) {
     if (value == _textBorderColor) return;
     _textBorderColor = value;
-    _write((s) => value == null
+    _writeText((s) => value == null
         ? s.remove('${_prefix}textBorderColor')
         : s.setInt('${_prefix}textBorderColor', value.toARGB32()));
-    _recordScoped('textBorderColor', value?.toARGB32());
+    _recordScopedText('textBorderColor', value?.toARGB32());
     notifyListeners();
   }
 
