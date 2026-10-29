@@ -4,6 +4,8 @@
 - Commit di base: `3e0bd1b0c0e5b4ab336a8d584510a3a0e43e607a`
 - Data del commit: `2026-10-26T07:34:08+11:00`
 
+Versione dell'app all'origine: `11.0.0+48` (`app/pubspec.yaml` del commit di base). L'app la usa come punto di partenza per il controllo della versione ufficiale (Impostazioni > Aggiornamenti > Repo ufficiale).
+
 Base della copia. Per vedere le novità: https://github.com/ben-milanko/dart-pdf/compare/3e0bd1b0c0e5b4ab336a8d584510a3a0e43e607a...main
 
 ## Modifiche rispetto all'originale

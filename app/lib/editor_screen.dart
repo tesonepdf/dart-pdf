@@ -677,6 +677,20 @@ class _EditorScreenState extends State<EditorScreen>
     // coming back to the foreground) must show again
     if (_updateBannerFor == release.identity) return;
     _updateBannerFor = release.identity;
+    // on Android a newer build found by the automatic check starts downloading
+    // right away and hands the APK to the system installer (one tap there)
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        _updates.checkMode != UpdateCheckMode.manual &&
+        _updates.downloadAssetName != null &&
+        _updateInstaller.modeFor(_updates.downloadAssetName) !=
+            UpdateApplyMode.unsupported) {
+      unawaited(startUpdateInstall(
+        context,
+        updates: _updates,
+        installer: _updateInstaller,
+      ));
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentMaterialBanner();
     messenger.showMaterialBanner(MaterialBanner(
