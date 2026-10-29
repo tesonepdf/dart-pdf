@@ -11,7 +11,9 @@ import 'package:pdf_document/pdf_document.dart'
         PdfLineEnding,
         PdfStandardFont,
         PdfTextAlign,
-        PdfTextVerticalAlign;
+        PdfTextVerticalAlign,
+        kPdfFreeTextDefaultHorizontalScale,
+        kPdfFreeTextDefaultLineSpacing;
 
 import '../viewport.dart';
 import 'line_style.dart';
