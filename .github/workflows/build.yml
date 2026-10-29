@@ -88,6 +88,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             app/build
+            app/.dart_tool/flutter_build
           key: apk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('app/pubspec.lock', 'pubspec.lock', 'app/android/**/*.gradle', 'app/android/**/*.kts', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             apk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
