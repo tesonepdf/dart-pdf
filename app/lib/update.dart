@@ -321,6 +321,11 @@ class UpdateService extends ChangeNotifier {
   static const _dismissedKey = 'dart_pdf_editor_app.update.dismissedTag';
   static const _nightlyKey = 'dart_pdf_editor_app.update.nightly';
   static const _modeKey = 'dart_pdf_editor_app.update.mode';
+  static const _officialKey = 'dart_pdf_editor_app.update.officialRepo';
+
+  /// The upstream project whose releases the "official repo" option follows.
+  static const officialRepoOwner = 'ben-milanko';
+  static const officialRepoName = 'dart-pdf';
 
   UpdateStatus _status = UpdateStatus.idle;
   UpdateStatus get status => _status;
@@ -365,6 +370,36 @@ class UpdateService extends ChangeNotifier {
       // No storage - keep the in-memory choice for this session.
     }
   }
+
+  bool _officialRepo = false;
+
+  /// Whether updates come from the official upstream repository instead of
+  /// this app's own repository (persisted).
+  bool get officialRepo => _officialRepo;
+
+  String get _owner => _officialRepo ? officialRepoOwner : repoOwner;
+  String get _name => _officialRepo ? officialRepoName : repoName;
+
+  /// Switches the repository updates are read from and clears the previous
+  /// result so the next check starts clean.
+  Future<void> setOfficialRepo(bool value) async {
+    await _restored;
+    if (value == _officialRepo) return;
+    _officialRepo = value;
+    _status = UpdateStatus.idle;
+    _latest = null;
+    _error = null;
+    _lastChecked = null;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_officialKey, value);
+      await prefs.remove(_lastCheckedKey);
+    } catch (_) {
+      // No storage - keep the in-memory choice for this session.
+    }
+  }
+
   List<String> _androidAbis = const [];
   Future<void> _restored = Future.value();
 
@@ -446,7 +481,7 @@ class UpdateService extends ChangeNotifier {
   /// The GitHub endpoint used by the default fetcher.
   Uri get releasesUri => Uri.https(
         'api.github.com',
-        '/repos/$repoOwner/$repoName/releases',
+        '/repos/$_owner/$_name/releases',
         const {'per_page': '30'},
       );
 
@@ -455,7 +490,7 @@ class UpdateService extends ChangeNotifier {
   /// release eventually falls out of the first page unless fetched by tag.
   Uri get nightlyReleaseUri => Uri.https(
         'api.github.com',
-        '/repos/$repoOwner/$repoName/releases/tags/$nightlyTag',
+        '/repos/$_owner/$_name/releases/tags/$nightlyTag',
       );
 
   /// The best download URL for [latest] on the current platform: the matching
@@ -674,7 +709,7 @@ class UpdateService extends ChangeNotifier {
       if (_targetPlatform == TargetPlatform.android) {
         final androidUri = Uri.https(
           'api.github.com',
-          '/repos/$repoOwner/$repoName/releases/tags/$dartPdfAndroidTag',
+          '/repos/$_owner/$_name/releases/tags/$dartPdfAndroidTag',
         );
         final androidResponse = await client.get(androidUri, headers: headers);
         if (androidResponse.statusCode != 404) {
@@ -709,6 +744,7 @@ class UpdateService extends ChangeNotifier {
         _lastChecked = DateTime.fromMillisecondsSinceEpoch(last);
       }
       _dismissedTag = prefs.getString(_dismissedKey);
+      _officialRepo = prefs.getBool(_officialKey) ?? false;
       _nightlyUpdates =
           (prefs.getBool(_nightlyKey) ?? false) && nightlySupported;
       final savedMode = prefs.getString(_modeKey);

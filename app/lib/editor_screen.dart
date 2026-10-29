@@ -390,7 +390,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// True once the "update available" banner has been shown this session, so a
   /// later check (or rebuild) doesn't stack a second copy.
-  bool _updateBannerShown = false;
+  String? _updateBannerFor;
 
   /// True while a file is being dragged over the window (desktop/web).
   bool _dragging = false;
@@ -671,10 +671,14 @@ class _EditorScreenState extends State<EditorScreen>
   /// Surfaces a one-time, non-blocking banner when a newer release is found
   /// and the user hasn't dismissed that exact version before.
   void _onUpdateStatus() {
-    if (_updateBannerShown || !_updates.shouldNotify || !mounted) return;
-    _updateBannerShown = true;
+    if (!_updates.shouldNotify || !mounted) return;
     final release = _updates.latest!;
+    // one banner per release: a newer build found on a later check (the app
+    // coming back to the foreground) must show again
+    if (_updateBannerFor == release.identity) return;
+    _updateBannerFor = release.identity;
     final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentMaterialBanner();
     messenger.showMaterialBanner(MaterialBanner(
       key: const ValueKey('update-available-banner'),
       content:
