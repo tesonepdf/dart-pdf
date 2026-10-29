@@ -3430,8 +3430,11 @@ extension PdfAnnotationEditing on PdfEditor {
     }
     final inset =
         textInset.clamp(0.0, math.max(0.0, vr.width - 2 * pad)).toDouble();
-    final textRect =
-        PdfRect(vr.left + inset, vr.bottom, vr.right, vr.top);
+    // the text sits 1pt from the top and bottom edges (3pt at the sides):
+    // widen the text area so the box hugs the writing
+    const padY = 1.0;
+    final textRect = PdfRect(vr.left + inset, vr.bottom - (pad - padY),
+        vr.right, vr.top + (pad - padY));
     final lines = _wrap(text, fontSize, textRect.width - 2 * pad,
         font: font, charSpacing: charSpacing, horizontalScale: horizontalScale);
     final resolvedDirection = textDirection.resolve(text);
@@ -3538,6 +3541,7 @@ extension PdfAnnotationEditing on PdfEditor {
     final effectiveAlign = align ?? _alignForDirection(resolvedDirection);
     final inset =
         textInset.clamp(0.0, math.max(0.0, vr.width - 2 * pad)).toDouble();
+    const padY = 1.0; // 1pt from the top and bottom edges, 3pt at the sides
     final textRect =
         PdfRect(vr.left + inset, vr.bottom, vr.right, vr.top);
     final lines = _wrapRich(runs, textRect.width - 2 * pad,
@@ -3554,9 +3558,9 @@ extension PdfAnnotationEditing on PdfEditor {
         : lines.take(lines.length - 1).fold<double>(
                 0, (height, line) => height + emHeight(line) * lineSpacing) +
             emHeight(lines.last);
-    final spare = math.max(0.0, vr.height - 2 * pad - blockHeight);
+    final spare = math.max(0.0, vr.height - 2 * padY - blockHeight);
     var top = vr.top -
-        pad -
+        padY -
         switch (verticalAlign) {
           PdfTextVerticalAlign.top => 0.0,
           PdfTextVerticalAlign.center => spare / 2,
