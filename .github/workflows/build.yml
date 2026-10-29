@@ -183,7 +183,7 @@ jobs:
       - name: Compila l'APK
         working-directory: app
         run: |
-          flutter --suppress-analytics build apk --release --no-pub \
+          flutter --suppress-analytics build apk --release \
             --no-tree-shake-icons --target-platform android-arm64 \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
@@ -277,6 +277,8 @@ jobs:
           # se un comando fallisce, scrive quale e perche' (annotazione leggibile)
           trap 'echo "::error::Pubblica la Release fallita alla riga $LINENO: $BASH_COMMAND"' ERR
           ls -la dl dl/apk
+          # riprova i comandi gh se GitHub risponde con un errore momentaneo
+          gh() { local i; for i in 1 2 3 4; do command gh "$@" && return 0; echo "gh $1 $2: tentativo $i fallito"; sleep 8; done; return 1; }
           cp dl/apk/app-release.apk DartPDF-Android.apk
           assets=(DartPDF-Android.apk)
           if [[ -f dl/windows/windows-x64.zip ]]; then
