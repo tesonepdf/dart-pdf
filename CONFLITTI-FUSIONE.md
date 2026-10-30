@@ -26,7 +26,7 @@ Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello 
   - Ogni app ha il proprio controllo aggiornamenti: legge solo la propria release, scarica l'APK da dentro l'app.
   - Le modifiche a workflow, release e canali si fanno su `main` e poi si portano nel ramo prova con un merge.
 - Applicato il 2026-10-30: `build.yml` pubblica una sola release normale per canale (commit `2e380312` su main, merge `c7191aa2` su prova). Non crea più `build-N` / `prova-N`.
-- **Numeri build separati: applicato il 2026-10-30** nel workflow (ogni ramo continua dal numero della propria release, la prova parte da 10001 e scrive `#10001p` solo nel titolo). Dettagli e codice in `DA-FARE.md`.
+- **Numeri build separati: applicato il 2026-10-30** nel workflow (ogni ramo continua dal numero della propria release, la prova parte da 10001 (nessuna lettera nel titolo)). Dettagli e codice in `DA-FARE.md`.
 
 ## Riferimenti git
 
