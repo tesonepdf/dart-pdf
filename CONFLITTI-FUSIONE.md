@@ -54,7 +54,7 @@ Da discutere uno per uno, **con lettura del contenuto prima**. Per ciascuno è v
 
 | # | File | Dopo la fusione |
 |---|---|---|
-| 4 | `app/test/update_test.dart` | **misto**, né tuo né ufficiale puro. Il riepilogo iniziale diceva "tuo": non corrisponde. Da controllare |
+| 4 | `app/test/update_test.dart` (**rimandato**: l'utente ha detto di tornarci dopo il 12) | **misto**, né tuo né ufficiale puro. Il riepilogo iniziale diceva "tuo": non corrisponde. Da controllare |
 | 5 | `app/test/update_settings_test.dart` | identico al tuo |
 | 6 | `app/lib/editor_screen.dart` | misto (ha tre punti: popup aggiornamenti = tuo, foto come PDF = tuo, menu = ufficiale) |
 | 7 | `app/lib/file_io.dart` | identico al tuo |
@@ -62,13 +62,33 @@ Da discutere uno per uno, **con lettura del contenuto prima**. Per ciascuno è v
 | 9 | `packages/dart_pdf_editor/lib/src/editing/editing_overlay.dart` | identico al tuo (casella di testo, frecce, X) |
 | 10 | `app/lib/l10n/app_it.arb` | identico al tuo: le stringhe italiane nuove di Ben **non ci sono** |
 | 11 | `app/lib/l10n/app_localizations_it.dart` | identico al tuo, stesso discorso. Verificato che implementa tutte le 390 voci astratte di `app_localizations.dart`, quindi non manca nessun metodo |
-| 12 | `app/lib/app_menu_sheet.dart` | **misto**, non "ufficiale puro" come scritto nel riepilogo. Il lavoro dell'utente su questo file è grande (riscrittura): **rischio più alto di aver perso sue modifiche** |
+| 12 | `app/lib/app_menu_sheet.dart` | **IN DISCUSSIONE, non deciso.** Vedi la sezione "Conflitto 12" sotto |
 | 13 | `packages/dart_pdf_cli/bin/dartpdf.dart` | identico all'ufficiale (solo numero di versione/note) |
 | 14 | `metainfo.xml` | esistono due copie: `app/linux/dev.milanko.dartpdf.metainfo.xml` e `app/packaging/flatpak/desktop-assets/dev.milanko.dartpdf.metainfo.xml`. Quale fosse in conflitto non è verificato. Solo versione e note |
 
 Non verificato per nessuno dei punti 4-14: cosa fa nel dettaglio ogni modifica dell'utente e di Ben, e dove si pestano i piedi davvero. Il riepilogo iniziale (scelte "tuo / ufficiale") l'ho ripetuto senza averlo controllato; la tabella sopra ne corregge solo ciò che ho potuto verificare.
 
 Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog dei pacchetti (presi dall'ufficiale con gli indirizzi `tesonepdf` rimessi); 29 file che nel repo dell'utente non esistono (sito, flussi di compilazione di Ben, `CLAUDE.md`, `doc`): esclusi.
+
+## Conflitto 12: menu del telefono (letto il 2026-10-30, decisione dell'utente ancora aperta)
+
+Verificato con git, non dedotto:
+
+- **Il menu dell'utente** viene da un suo lavoro precedente, commit `543b972f` del 27/10/2026 ("#11 Allinea menu mobile a Windows"). Stesse tre sezioni del menu di Windows (File, Questo documento, App), campo di ricerca in alto, sottomenu dei file recenti. Parametri: `file`, `document`, `recentFiles`, `viewAllRecentFiles`, `clearRecentFiles`, `app`. Ben non ha mai avuto questo codice.
+- **Il menu di Ben** (commit `f279db3d`, 10/10/2026): foglio dal basso con quattro bottoni grandi (Nuovo, Apri, Stampa, Firma), ultimi file in linea, gruppi chiusi Esporta e Altri strumenti. Parametri: `create`, `primary`, `recents`, `seeAllRecents`, `export`, `moreTools`.
+- **Novita' di Ben dentro il suo menu** (commit `07461d61`, 28/10): nuovo parametro `formData` e gruppo "FDF/XFDF/XDP" (`l.editorMenuFormData`, `_SheetPlacement.formData` in `editor_screen.dart`).
+- **Stato dopo la fusione:** `app_menu_sheet.dart` e' un miscuglio. Intestazione e parte del corpo sono dell'utente (`widget.file`, `widget.document`, `widget.recentFiles`, `appItemCount`), mentre firma di `showAppMenuSheet`, campi e costruttore sono di Ben (`create`, `primary`, `export`, `formData`...). `editor_screen.dart` (`_showAppMenuSheet`, riga ~5263) chiama il menu con i parametri di Ben. Per questo la build prova non compila; l'errore visto e' `appItemCount` (righe 202 e 204), ma ce ne saranno altri a catena.
+
+Strade proposte all'utente (nessuna scelta ancora):
+
+1. Tenere il menu dell'utente e inserirvi il gruppo FDF/XFDF/XDP di Ben (richiede di sistemare `app_menu_sheet.dart` e la chiamata in `editor_screen.dart`). E' quella coerente con la sua regola "le mie modifiche restano".
+2. Prendere il menu di Ben per intero e perdere l'allineamento a Windows dell'utente.
+
+**Non fare niente su questo file finche' l'utente non sceglie.**
+
+## Nota sull'utente
+
+Ha detto "abbiamo fatto 8 punti sicuro, il 9 ci stavamo pensando". Quali siano questi 8 punti non e' stato chiarito: nei miei appunti risultano chiusi solo 1, 2 e 3. Non segnare altro come chiuso finche' non lo dice lui, punto per punto.
 
 ## Quattro scelte prese da me, mai approvate dall'utente (da rivedere)
 

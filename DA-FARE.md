@@ -13,7 +13,7 @@ Piano a 4 punti (repo `tesonepdf/dart-pdf`, due rami paralleli):
 | 3. Flusso: l'ufficiale di Ben si unisce nel ramo prova, l'utente prova, poi merge in `main` | Concordato, in corso |
 | 4. Contatore aggiornamenti legge la release ufficiale | Il codice lo fa già e funziona anche con release normale. **Non provato su un telefono** |
 
-Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo"). **Il prossimo è il 4: `app/test/update_test.dart`.** Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `CONFLITTI-FUSIONE.md`.
+Conflitti di codice (14): il 4 e' **rimandato** (l'utente ha detto di tornarci dopo); il **12 (menu del telefono) e' in discussione** ora, vedi `CONFLITTI-FUSIONE.md`. Chiusi: 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo"). **Si sta discutendo il 12 (`app_menu_sheet.dart`); poi si torna al 4 (`app/test/update_test.dart`).** Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `CONFLITTI-FUSIONE.md`.
 
 ## Ordine di lavoro
 
