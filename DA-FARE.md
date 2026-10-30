@@ -9,7 +9,7 @@ Piano a 4 punti (repo `tesonepdf/dart-pdf`, due rami paralleli):
 | Punto | Stato |
 |---|---|
 | 1. Una sola release normale per canale, niente pre-release né build numerate | **Fatto** e pubblicato su `main` e `prova-sviluppatore` |
-| 2. Canale prova separato, con numeri build propri (`#Np`) | **Fatto nel workflow** (vedi sotto). Build prova però **rotta** |
+| 2. Canale prova separato, con numeri build propri (da 10001) | **Fatto nel workflow** (vedi sotto). Build prova però **rotta** |
 | 3. Flusso: l'ufficiale di Ben si unisce nel ramo prova, l'utente prova, poi merge in `main` | Concordato, in corso |
 | 4. Contatore aggiornamenti legge la release ufficiale | Il codice lo fa già e funziona anche con release normale. **Non provato su un telefono** |
 
@@ -28,14 +28,14 @@ Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io
 Ogni ramo conta da solo. Il numero è quello scritto nelle note della **propria** release (`<!-- app-build: N -->`) più 1. Non guarda mai l'altra release.
 
 - `main`: tag `app-android-latest`, titolo `DartPDF #N - versione V`, marcata "Latest".
-- `prova-sviluppatore`: tag `app-android-prova`, titolo `DartPDF Prova #Np - versione V`, mai "Latest".
-- La "p" compare solo nel titolo e nelle note. Nell'APK il numero build è un intero (Android non accetta lettere), e il marcatore `app-build` resta intero.
+- `prova-sviluppatore`: tag `app-android-prova`, titolo `DartPDF Prova #N - versione V` (N parte da 10001, nessuna lettera), mai "Latest".
+- **Nessuna "p"** (tolta su richiesta dell'utente): la prova si riconosce perché i suoi numeri sono da 10001 in su. Nell'APK il numero build è un intero e il marcatore `app-build` resta intero.
 - Se la release non ha il marcatore, si usa `github.run_number` come ripiego, così il numero non scende mai sotto lo storico.
 - Una build fallita non consuma il numero: la successiva riprende lo stesso.
 - Una build alla volta per ramo (`concurrency`), così due build non prendono lo stesso numero. Se arrivano più push mentre una build gira, GitHub tiene in coda solo l'ultimo: i commit intermedi possono non essere compilati.
 - L'input `solo_contatore` ("build fittizia") non ha più effetto sul numero: il numero ora viene dalla release, non dal contatore di GitHub.
 
-Valori al 2026-10-30: `app-android-latest` a #79 (prossima #80). **La prova parte da 10001** (decisione dell'utente, per non confondersi mai con l'ufficiale): `NUM_BASE=10000` nel workflow, titolo `#10001p`, poi 10002p, 10003p... La release `app-android-prova` è ancora la vecchia (#67, pre-release): alla prima build prova riuscita diventa release normale `#10001p`.
+Valori al 2026-10-30: `app-android-latest` a #79 (prossima #80). **La prova parte da 10001** (decisione dell'utente, per non confondersi mai con l'ufficiale): `NUM_BASE=10000` nel workflow, titolo `#10001`, poi 10002, 10003... La release `app-android-prova` è ancora la vecchia (#67, pre-release): alla prima build prova riuscita diventa release normale `#10001`.
 
 Codice applicato (estratti):
 

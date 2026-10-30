@@ -37,8 +37,8 @@ env:
   APP_LABEL: ${{ github.ref_name == 'prova-sviluppatore' && 'DartPDF Prova' || 'DartPDF' }}
   RELEASE_PREFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'prova' || 'build' }}
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
-  # Solo per titolo e note della release (l'APK ha un intero): #12p per la prova.
-  NUM_SUFFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'p' || '' }}
+  # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10001.
+  NUM_SUFFIX: ''
   # La prova parte da 10001 (mai confondibile con i numeri dell'ufficiale).
   NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10000' || '0' }}
 
