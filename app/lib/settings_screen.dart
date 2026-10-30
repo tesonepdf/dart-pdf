@@ -540,6 +540,65 @@ class _OfficialUpdatePanel extends StatelessWidget {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
+            for (final entry in [
+              (
+                UpdateCheckMode.everyOpen,
+                _t(context, 'A ogni apertura', 'Every time the app opens'),
+                _t(
+                  context,
+                  'Controlla ogni volta che apri l\'app o la riporti in primo '
+                      'piano. Consigliata.',
+                  'Checks every time you open the app or bring it to the '
+                      'foreground. Recommended.',
+                ),
+              ),
+              (
+                UpdateCheckMode.startOnly,
+                _t(context, 'Solo all\'avvio da zero', 'Only on a cold start'),
+                _t(
+                  context,
+                  'Controlla solo quando l\'app parte da chiusa del tutto.',
+                  'Checks only when the app starts from fully closed.',
+                ),
+              ),
+              (
+                UpdateCheckMode.manual,
+                _t(context, 'Solo manuale', 'Manual only'),
+                _t(
+                  context,
+                  'Nessun controllo automatico: usa il pulsante qui sotto.',
+                  'No automatic check: use the button below.',
+                ),
+              ),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Material(
+                  color: checker.checkMode == entry.$1
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    key: ValueKey('settings-official-mode-${entry.$1.name}'),
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => checker.setCheckMode(entry.$1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${checker.checkMode == entry.$1 ? '\u25CF' : '\u25CB'} ${entry.$2}',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(entry.$3, style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             OutlinedButton(
               key: const ValueKey('settings-check-official-updates'),
               onPressed: checking ? null : checker.check,
@@ -561,15 +620,6 @@ class _OfficialUpdatePanel extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 children: [
-                  FilledButton(
-                    key: const ValueKey('settings-open-official-release'),
-                    onPressed: checker.latestUrl == null
-                        ? null
-                        : () => launchUrl(Uri.parse(checker.latestUrl!),
-                            mode: LaunchMode.externalApplication),
-                    child: Text(_t(context, 'Apri la release',
-                        'Open the release')),
-                  ),
                   OutlinedButton(
                     key: const ValueKey('settings-official-merged'),
                     onPressed: checker.markLatestMerged,

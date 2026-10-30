@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'update.dart' show AppVersion;
+import 'update.dart' show AppVersion, UpdateCheckMode;
 
 /// The upstream project this app was copied from.
 const upstreamRepoOwner = 'ben-milanko';
@@ -36,6 +36,7 @@ class OfficialUpdateChecker extends ChangeNotifier {
   static const _buildKey = 'dart_pdf_editor_app.official.mergedBuild';
   static const _dismissedKey = 'dart_pdf_editor_app.official.dismissedLabel';
   static const _skippedKey = 'dart_pdf_editor_app.official.skippedLabel';
+  static const _modeKey = 'dart_pdf_editor_app.official.checkMode';
 
   final http.Client Function() _clientFactory;
 
@@ -44,6 +45,25 @@ class OfficialUpdateChecker extends ChangeNotifier {
 
   String? dismissedLabel;
   String? skippedLabel;
+
+  /// When the automatic check of the upstream project runs (same choices as
+  /// the app's own updates).
+  UpdateCheckMode checkMode = UpdateCheckMode.everyOpen;
+
+  bool autoCheckAllowed({required bool resume}) => switch (checkMode) {
+        UpdateCheckMode.everyOpen => true,
+        UpdateCheckMode.startOnly => !resume,
+        UpdateCheckMode.manual => false,
+      };
+
+  Future<void> setCheckMode(UpdateCheckMode mode) async {
+    checkMode = mode;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_modeKey, mode.name);
+    } catch (_) {}
+  }
 
   /// True when the user already chose "Later" for the latest official release.
   bool get isDismissed =>
@@ -70,6 +90,10 @@ class OfficialUpdateChecker extends ChangeNotifier {
       mergedBuild = prefs.getInt(_buildKey) ?? upstreamBaseBuild;
       dismissedLabel = prefs.getString(_dismissedKey);
       skippedLabel = prefs.getString(_skippedKey);
+      checkMode = UpdateCheckMode.values.firstWhere(
+        (m) => m.name == prefs.getString(_modeKey),
+        orElse: () => UpdateCheckMode.everyOpen,
+      );
       notifyListeners();
     } catch (_) {
       // No storage: keep the compiled-in base.

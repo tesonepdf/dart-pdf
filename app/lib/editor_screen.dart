@@ -775,17 +775,20 @@ class _EditorScreenState extends State<EditorScreen>
   /// Automatic check of the upstream project: popup once per official
   /// release; "Later" leaves it highlighted in Settings (Updates > Official
   /// repo) until it is marked as merged or a newer one is published.
-  Future<void> _startupOfficialCheck() async {
+  bool _officialDialogOpen = false;
+
+  Future<void> _startupOfficialCheck({bool resume = false}) async {
     final checker = OfficialUpdateChecker.instance;
-    await _updates.ready;
-    if (!mounted || !_updates.autoCheckAllowed(resume: false)) return;
     await checker.ready;
+    if (!mounted || !checker.autoCheckAllowed(resume: resume)) return;
     await checker.check();
     if (!mounted ||
         checker.status != OfficialUpdateStatus.newer ||
-        checker.isDismissed) {
+        checker.isDismissed ||
+        _officialDialogOpen) {
       return;
     }
+    _officialDialogOpen = true;
     final it = Localizations.localeOf(context).languageCode == 'it';
     await showPdfDialog<void>(
       context: context,
@@ -794,8 +797,10 @@ class _EditorScreenState extends State<EditorScreen>
         key: const ValueKey('official-update-dialog'),
         icon: const Icon(Icons.new_releases_outlined),
         content: Text(it
-            ? 'Nuova versione ufficiale: ${checker.latestLabel}'
-            : 'New official version: ${checker.latestLabel}'),
+            ? 'Nuova versione ufficiale: ${checker.latestLabel}.\n'
+                'Non si scarica: va integrata prima in chat, risolvendo i conflitti.'
+            : 'New official version: ${checker.latestLabel}.\n'
+                'It is not downloaded: merge it in chat first, resolving conflicts.'),
         actions: [
           TextButton(
             key: const ValueKey('official-update-later'),
@@ -813,22 +818,9 @@ class _EditorScreenState extends State<EditorScreen>
             },
             child: Text(it ? 'Salta questa versione' : 'Skip this version'),
           ),
-          FilledButton(
-            key: const ValueKey('official-update-open'),
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              unawaited(checker.dismissLatest());
-              final url = checker.latestUrl;
-              if (url != null) {
-                unawaited(launchUrl(Uri.parse(url),
-                    mode: LaunchMode.externalApplication));
-              }
-            },
-            child: Text(it ? 'Apri la release' : 'Open the release'),
-          ),
         ],
       ),
-    );
+    ).whenComplete(() => _officialDialogOpen = false);
   }
 
   /// Opens the `.pdf`s passed on the command line - how Linux delivers a file
@@ -930,6 +922,9 @@ class _EditorScreenState extends State<EditorScreen>
       if (defaultTargetPlatform == TargetPlatform.android &&
           _updates.autoCheckAllowed(resume: true)) {
         unawaited(_updates.checkForUpdates(force: true));
+      }
+      if (_ownsUpdates && defaultTargetPlatform == TargetPlatform.android) {
+        unawaited(_startupOfficialCheck(resume: true));
       }
     }
     if (state == AppLifecycleState.inactive ||
