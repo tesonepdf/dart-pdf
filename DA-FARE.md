@@ -132,3 +132,12 @@ Scopo: la casella si adatta **in automatico** al testo e alla grandezza del cara
 - Idea: richiamare la stessa misura a ogni modifica (testo, Invio, cambio carattere) **senza chiudere e riaprire** l'editor. Poi togliere la scorciatoia Alt+Z. Il cambio carattere passa dal menu delle impostazioni carattere dell'utente: va collegato lì.
 - Non verificato: se nella versione Android dell'utente la casella si allarga già con Invio (nel codice non ho trovato un ingrandimento automatico, ma non l'ho provato sul telefono).
 - Da fare **dopo i conflitti**, direttamente su `main`, con prova sul telefono. Fino ad allora Alt+Z resta (non si toglie prima che l'automatico funzioni). Serve il suo ok per partire.
+
+## Modifiche del 30/10 sera (richieste dall'utente)
+
+- **Due workflow separati:** `build.yml` = build UFFICIALE, parte solo dai push su `main` ed e' anche richiamabile (`workflow_call`). `build-prova.yml` = build PROVA, parte solo dai push su `prova-sviluppatore` e richiama `build.yml` (`secrets: inherit`). Cosi' su GitHub gli elenchi e il contatore "#N" delle run sono separati. Il numero dell'app resta quello della release (`app-build`): ufficiale continua (#87...), prova da 10001. **Mai mettere `concurrency` con lo stesso gruppo nel workflow chiamante** (blocca la build).
+- **Un solo numero:** titolo release `DartPDF #N` / `DartPDF Prova #N`; nell'app l'aggiornamento e le Informazioni mostrano solo `#N` (`ReleaseInfo.displayVersion`, `AppInfo.displayVersion`). Il numero di versione calcolato (6.303.xxxx) esiste ancora nell'APK e nel marcatore `app-version`, ma non si mostra piu'.
+- **"Salta" e "Piu' tardi" valgono per tutte le build** del canale Android (`ReleaseInfo.choiceKey` = tag, non commit). "Piu' tardi": niente piu' popup, resta il banner. "Salta": niente popup ne' banner; si puo' installare da Impostazioni. Per riattivare gli avvisi basta cambiare la modalita' di controllo (`setCheckMode` azzera le due scelte).
+- **Riapertura dopo l'aggiornamento:** `UpdateRelaunchReceiver` (Kotlin + manifest) prova a riaprire l'app dopo la sostituzione. **Non verificato su telefono**: Android recente puo' bloccare l'avvio dall'background e in quel caso l'app va riaperta a mano.
+- I test (`update_test.dart`, `update_settings_test.dart`) sono stati adeguati a mano, non eseguiti. Non c'e' un test per la nuova scelta valida su tutte le build.
+- "Apri in Word": lavoro **interrotto** dall'utente prima di scrivere codice; da riprendere solo se lo richiede.

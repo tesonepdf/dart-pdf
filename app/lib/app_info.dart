@@ -44,11 +44,13 @@ class AppInfo {
   /// The version as shown to the user. Every nightly shares the package
   /// version of the release it is heading towards, so a nightly adds its
   /// source commit to tell one night's build from the next.
-  static String get displayVersion => formatDisplayVersion(
-        version: version,
-        nightly: isNightly,
-        commit: buildCommit,
-      );
+  static String get displayVersion => !isNightly && buildNumber.isNotEmpty
+      ? '#$buildNumber' // one number: version and build number are the same
+      : formatDisplayVersion(
+          version: version,
+          nightly: isNightly,
+          commit: buildCommit,
+        );
 
   /// [displayVersion] for an explicit channel and commit, so both channels
   /// are testable from one compiled build.

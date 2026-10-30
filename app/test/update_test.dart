@@ -99,7 +99,7 @@ void main() {
       expect(release.version, const AppVersion(3, 1, 1));
       expect(release.commitSha, 'abcdef1234567890abcdef1234567890abcdef12');
       expect(release.buildNumber, '42');
-      expect(release.displayVersion, '3.1.1 #42');
+      expect(release.displayVersion, '#42');
       expect(release.identity,
           '$dartPdfAndroidTag@abcdef1234567890abcdef1234567890abcdef12');
       expect(release.assetSizes['app-arm64-v8a.apk'], 12345);

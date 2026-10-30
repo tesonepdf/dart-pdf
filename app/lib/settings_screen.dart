@@ -309,9 +309,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     style: theme.textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text(
-                  AppInfo.buildNumber.isEmpty
-                      ? '${AppInfo.displayName} ${AppInfo.displayVersion}'
-                      : '${AppInfo.displayName} ${AppInfo.displayVersion} #${AppInfo.buildNumber}',
+                  '${AppInfo.displayName} ${AppInfo.displayVersion}',
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
