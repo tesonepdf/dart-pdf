@@ -13,7 +13,7 @@ Piano a 4 punti (repo `tesonepdf/dart-pdf`, due rami paralleli):
 | 3. Flusso: l'ufficiale di Ben si unisce nel ramo prova, l'utente prova, poi merge in `main` | Concordato, in corso |
 | 4. Contatore aggiornamenti legge la release ufficiale | Il codice lo fa già e funziona anche con release normale. **Non provato su un telefono** |
 
-Conflitti di codice (14): il 4 e' **rimandato** (l'utente ha detto di tornarci dopo); il **12 (menu del telefono) e' in discussione** ora, vedi `CONFLITTI-FUSIONE.md`. Chiusi: 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo"). **Si sta discutendo il 12 (`app_menu_sheet.dart`); poi si torna al 4 (`app/test/update_test.dart`).** Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `CONFLITTI-FUSIONE.md`.
+Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo") 4 e 5 (`update_test.dart`, `update_settings_test.dart`: restano i test dell'utente) 6 (`editor_screen.dart`: restano le funzioni dell'utente), 7 e 8 (`file_io.dart`, `web_file_picker.dart`: restano le tue) e 9 (`editing_overlay.dart`: restano le tue funzioni, frecce da tastiera tolte); **12 applicato** (menu dell'utente ripristinato, voci di Ben in "Da organizzare"), build da verificare. **Il prossimo è il 10: `app/lib/l10n/app_it.arb`** (testi italiani), solo se l'utente lo conferma. Stato dettagliato di ognuno in `CONFLITTI-FUSIONE.md`. Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `CONFLITTI-FUSIONE.md`.
 
 ## Ordine di lavoro
 
@@ -112,3 +112,22 @@ Dopo il merge in `main`, `prova-sviluppatore` non si usa più: alla fusione dopo
 - Non cancellare le release vecchie (`build-N`, `prova-N`) senza che l'utente lo chieda.
 - Non scrivere il token in file, commit o risposte.
 - Non usare popup con bottoni, non agire senza "ok", non fare resoconti lunghi.
+
+## Funzioni nuove (non sono conflitti: da progettare con l'utente, si fanno direttamente su `main`)
+
+### Foto a grandezza reale, e fronte/retro sullo stesso foglio (idea dell'utente, 2026-10-30)
+Scopo: scansionare o fotografare documenti (carta d'identità fronte e retro) e averli in **un unico PDF a grandezza reale**, ritagliabili, copiabili e incollabili tra PDF o foto.
+- Oggi (verificato nel codice): una foto aperta diventa un PDF di una pagina con larghezza A4 (`app/lib/image_to_pdf.dart`, `dpi = larghezza * 72 / 595,28`), quindi riempie il foglio. L'utente **non la vuole a tutta pagina**: deve essere sempre una porzione, a misura reale. Ritaglio immagini, inserimento da file o fotocamera e incolla dagli appunti esistono già; la scansione documenti dà PDF a 300 dpi (`doc_scan_io.dart`).
+- Scansioni da stampante (foglio A4 intero con una o più foto): si può ricavare la misura dal ritaglio, perché il foglio ha dimensione nota.
+- Foto del telefono: la misura reale non è nel file. Idea dell'utente: **misure standard già nel lettore** (carta di credito, carta d'identità, passaporto e altri documenti standard), poi misure personalizzate. Da decidere: elenco dei documenti, come si sceglie la misura, come si affiancano due foto sullo stesso foglio.
+- Non fatto: niente codice. Da affrontare dopo i conflitti.
+
+### Da controllare: apertura delle foto (promessa all'utente, 2026-10-30)
+L'utente vuole pensarci con calma e, al limite, fare qualche prova **direttamente su `main`**. Per ora resta tutto com'è: la foto si apre come PDF (`image_to_pdf.dart`), la finestra Apri accetta PDF e foto (`file_io.dart`, `web_file_picker.dart`), il titolo prende ".pdf" (`editor_screen.dart`). Da rivedere insieme: se conviene aprirla come PDF di una pagina, a che misura, e come si collega alla funzione "foto a grandezza reale" qui sopra. Non farlo in autonomia: serve il suo ok.
+
+### Casella di testo che si adatta da sola al testo (idea dell'utente, 2026-10-30; al posto di Alt+Z)
+Scopo: la casella si adatta **in automatico** al testo e alla grandezza del carattere, **senza Alt+Z**, su Windows e su Android. Se il carattere passa da 10 a 30 la casella cresce da sola; premendo Invio il testo va a capo e la casella si allarga.
+- Base già scritta da Ben (commit `7025e617 2026-10-28 Make Alt+Z autosize a text box while its editor has focus (#1188)`): `PdfEditingController.autosizeSelectedTextBox` in `packages/dart_pdf_editor/lib/src/editing/editing_controller.dart` calcola la misura giusta. Alt+Z, in `editing_overlay.dart` (`_autosizeTextEdit`, flag `_textEditReopening`), salva il testo, chiama quella funzione e riapre l'editor sulla casella adattata.
+- Idea: richiamare la stessa misura a ogni modifica (testo, Invio, cambio carattere) **senza chiudere e riaprire** l'editor. Poi togliere la scorciatoia Alt+Z. Il cambio carattere passa dal menu delle impostazioni carattere dell'utente: va collegato lì.
+- Non verificato: se nella versione Android dell'utente la casella si allarga già con Invio (nel codice non ho trovato un ingrandimento automatico, ma non l'ho provato sul telefono).
+- Da fare **dopo i conflitti**, direttamente su `main`, con prova sul telefono. Fino ad allora Alt+Z resta (non si toglie prima che l'automatico funzioni). Serve il suo ok per partire.

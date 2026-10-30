@@ -1,3 +1,3 @@
-11.0.0
+DartPDF 13.0.0
 
-Crea tablas editables y copia celdas desde y hacia hojas de cálculo. Reanuda el reconocimiento de texto interrumpido. Sustituye colores en capturas y anotaciones. Alinea el texto verticalmente y duplica sellos guardados. Mejoras en el ajuste de texto, las fuentes recordadas y las capturas giradas.
+Importa y exporta datos de formularios y comentarios con archivos FDF, XFDF y XDP. Edita enlaces existentes. Lee hilos de notas junto a la página y mantén varias notas abiertas. Comparte pestañas seleccionadas juntas. Mejora la pantalla de inicio, la apertura de PDF y las actualizaciones. La vista de impresión sigue las páginas seleccionadas.

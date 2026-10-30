@@ -39,6 +39,7 @@ Future<VoidCallback?> showAppMenuSheet(
   required bool? readOnly,
   required VoidCallback onToggleReadOnly,
   required List<AppMenuSheetEntry> app,
+  List<AppMenuSheetEntry> toOrganize = const [],
 }) =>
     showModalBottomSheet<VoidCallback>(
       context: context,
@@ -55,6 +56,7 @@ Future<VoidCallback?> showAppMenuSheet(
         readOnly: readOnly,
         onToggleReadOnly: onToggleReadOnly,
         app: app,
+        toOrganize: toOrganize,
       ),
     );
 
@@ -70,6 +72,7 @@ class AppMenuSheet extends StatefulWidget {
     required this.readOnly,
     required this.onToggleReadOnly,
     required this.app,
+    this.toOrganize = const [],
   });
 
   /// The search field: opens the command palette.
@@ -86,6 +89,10 @@ class AppMenuSheet extends StatefulWidget {
   final VoidCallback onToggleReadOnly;
 
   final List<AppMenuSheetEntry> app;
+
+  /// New things from the upstream project that have no place in the groups
+  /// above yet: shown in their own "To organize" section.
+  final List<AppMenuSheetEntry> toOrganize;
 
   @override
   State<AppMenuSheet> createState() => _AppMenuSheetState();
@@ -167,6 +174,15 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
           if (widget.document.length >= 2)
             _SectionLabel(l.editorMenuSectionDocument),
           for (final entry in widget.document) _row(entry),
+        ],
+        if (widget.toOrganize.isNotEmpty) ...[
+          const Divider(height: 24),
+          _SectionLabel(
+            Localizations.localeOf(context).languageCode == 'it'
+                ? 'Da organizzare'
+                : 'To organize',
+          ),
+          for (final entry in widget.toOrganize) _row(entry),
         ],
         if (appItemCount > 0) ...[
           const Divider(height: 24),

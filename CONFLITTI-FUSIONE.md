@@ -1,6 +1,6 @@
 # Conflitti della fusione con l'ufficiale: appunti per chi riprende il lavoro
 
-File scritto per l'assistente che apre una nuova chat. L'utente non lo deve leggere.
+File per l'utente **e** per l'assistente che apre una nuova chat. Ogni conflitto è scritto due volte: in linguaggio tecnico (per l'assistente) e in italiano semplice (per l'utente).
 Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
 
 ## Regole dell'utente (valgono sempre, le ripete da mesi)
@@ -10,13 +10,16 @@ Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello 
 - Niente resoconti lunghi, niente suggerimenti, nemmeno di sicurezza. A fine lavoro basta "ok".
 - Ogni modifica è seguita da commit, push e build Actions. Non si aspetta l'esito della build per ridare la chat.
 - Le **sue modifiche restano sempre**. Si prende la versione dello sviluppatore solo se ha fatto la stessa cosa meglio.
+- **I menu dell'utente si tengono sempre.** Quello che aggiunge Ben si mette nei menu dell'utente, nella voce a cui si associa meglio; se non c'è, nella sezione provvisoria "Da organizzare". Il riordino dei menu lo farà l'utente più avanti. Mai adottare il menu di Ben.
+- **Tutto quello che Ben aggiunge e che entra nel lavoro dell'utente (menu, voci, frasi, messaggi) deve essere sempre tradotto in italiano.** Se Ben lo lascia in inglese o senza traduzione, si traduce prima di chiudere il conflitto. Un testo nuovo in inglese nell'app dell'utente non va mai lasciato.
+- **Un conflitto alla volta sul ramo prova**: si risolve, commit, push, build. Poi si aggiorna questo file (stato e commit). `main` non si tocca senza il suo ok.
 - Non gli interessano numeri di righe, numeri di file, statistiche. Spiegare in italiano semplice cosa fa ogni cosa.
 - **Prima di parlare di un conflitto bisogna averlo letto.** Se non lo si è letto, dirlo subito. Descrivere conflitti mai visti lo ha fatto infuriare.
 - Il token GitHub non va mai scritto in file, commit o risposte. Se serve, lo dà lui nella chat.
 
 ## Il progetto
 
-- Repo dell'utente: `tesonepdf/dart-pdf` (privato). Copia modificata di `ben-milanko/dart-pdf` ("Ben", "Milanko", "lo sviluppatore"), che fa moltissimi commit al giorno.
+- Repo dell'utente: `tesonepdf/dart-pdf` (**pubblico**, verificato con l'API il 2026-10-30: Ben può vedere i commit). Copia modificata di `ben-milanko/dart-pdf` ("Ben", "Milanko", "lo sviluppatore"), che fa moltissimi commit al giorno.
 - Obiettivo: portare nel suo repo tutte le novità di Ben, tenendo le modifiche dell'utente. Le sue modifiche principali: casella di testo con frecce, X e adattamento (`editing_overlay.dart`); sistema aggiornamenti (pre-release Android, architetture); foto come PDF; apertura PDF e immagini; traduzioni italiane.
 - Flusso deciso (punti 1 e 2 del piano, chiusi):
   - Due percorsi paralleli che non si incontrano mai, se non nel merge.
@@ -42,53 +45,87 @@ Per rivedere un file: aggiungere il remote `upstream` (https://github.com/ben-mi
 
 ## I 14 conflitti di codice
 
-Numerazione usata con l'utente. Percorsi relativi alla radice.
+**Stato al 30/10: tutti e 14 i conflitti sono chiusi sul ramo prova.** Restano: provare "DartPDF Prova" sul telefono, e solo con l'ok dell'utente il merge in `main`. I file `CONFLITTI-FUSIONE.md` e `DA-FARE.md` su `main` sono rimasti indietro rispetto a questi del ramo prova (e in parte sbagliati): al merge vanno presi quelli del ramo prova.
 
-Stato deciso dall'utente in chat:
+Legenda stato: **CHIUSO** = deciso e applicato · **DA FARE** = va letto e deciso con l'utente · **IN CORSO** = applicato, build non ancora verificata.
+Percorsi relativi alla radice. Dopo ogni conflitto: commit, push su `prova-sviluppatore`, build.
 
-1. `app/lib/update.dart`: **chiuso, resta il tuo.**
-2. `app/lib/update_distribution_io.dart`: **chiuso, resta il tuo.**
-3. `app/lib/update_distribution_stub.dart`: **chiuso, verificato.** Base: solo `defaultStoreManagedUpdateChannel`. Ben ha aggiunto `defaultUpdateArchitecture`. L'utente ha aggiunto la stessa riga più `defaultAndroidSupportedAbis`. Collisione finta: il file attuale ha tutto.
+### 1. `app/lib/update.dart` — CHIUSO (resta il tuo)
+- **Tecnico:** logica di controllo aggiornamenti. L'utente ha il riconoscimento della release Android (pre-release prima, ora release normale), i marcatori `app-build`/commit e il controllo delle architetture. Ben ha riscritto le stesse righe (asset compatibili, versioni saltate persistenti). Tenuta la versione dell'utente.
+- **In italiano:** il pezzo che decide se c'è una versione nuova dell'app. Hai già il tuo, che funziona con la tua pagina delle release. Quello di Ben fa una cosa simile ma non conosce le tue release.
 
-Da discutere uno per uno, **con lettura del contenuto prima**. Per ciascuno è verificato solo a cosa assomiglia il file dopo la fusione (commit `396573c3`):
+### 2. `app/lib/update_distribution_io.dart` — CHIUSO (resta il tuo)
+- **Tecnico:** rileva su che telefono gira l'app (architettura, canale). Tenuto il file dell'utente.
+- **In italiano:** serve a scegliere il file giusto da scaricare per il tuo telefono.
 
-| # | File | Dopo la fusione |
+### 3. `app/lib/update_distribution_stub.dart` — CHIUSO (verificato)
+- **Tecnico:** collisione solo apparente. Base: `defaultStoreManagedUpdateChannel`. Ben ha aggiunto `defaultUpdateArchitecture`. L'utente ha aggiunto la stessa riga più `defaultAndroidSupportedAbis`. Il file attuale contiene tutto.
+- **In italiano:** i due avevano aggiunto la stessa cosa. Non c'era niente da scegliere.
+
+### 4. `app/test/update_test.dart` — CHIUSO (restano i tuoi controlli)
+- **Tecnico:** test del servizio di aggiornamento. Il file fuso conteneva i test dell'utente (release Android rolling, scelta ABI, store iOS) mescolati con quelli di Ben (versioni saltate persistenti, asset compatibili, ABI sconosciuta, riscrittura dei test nightly). Scelta dell'utente: **solo i suoi**; il file è tornato alla versione `ebdf12bc`. Nei suoi test la parola "prerelease" compare una sola volta, in un commento sul canale nightly: nessun test controlla il flag pre-release di GitHub. I test non sono eseguiti dalla build dell'APK (`build.yml` non ha `flutter test`) e non sono stati eseguiti in locale (Flutter assente): non è verificato che compilino contro l'`update.dart` fuso.
+- **In italiano:** i controlli sull'aggiornamento sono quelli tuoi. Quelli di Ben non ci sono: se li rifarà o li cambierà, se ne parla. Non c'è nessun controllo sulla pre-release.
+
+### 5. `app/test/update_settings_test.dart` — CHIUSO (restano i tuoi controlli, nessuna modifica al file)
+- **Tecnico:** utente e Ben hanno aggiunto in modo indipendente lo stesso test, `Settings skips notifications but keeps manual installation`. Ben ha in più `startup banner can skip a version across screen restarts` (banner di avvio con "salta", ricordato al riavvio) e ha cambiato i dati di prova (asset macOS, `architecture: 'x64'`). L'utente ha in più `Android startup check offers the user a new APK`. Il test di Ben non si adatta: nell'app dell'utente l'avviso all'avvio è un popup (Scarica / Dopo / Salta), non più un banner. Scelta dell'utente: lasciare i suoi, come nel conflitto 4. Il file resta com'è (422 righe).
+- **In italiano:** tu e Ben avete scritto lo stesso controllo senza saperlo. Quello in più di Ben riguarda un avviso che nella tua app è diventato un popup, quindi non lo aggiungiamo.
+
+### 6. `app/lib/editor_screen.dart` — CHIUSO (restano le tue funzioni)
+- **Tecnico:** sei punti di conflitto in tre zone. (a) Avviso aggiornamenti: Ben ha un banner con Dopo/Salta (`update-banner-skip`, commit `a3b2ab74`), l'utente ha il popup Scarica/Dopo/Salta più banner fisso dopo "Dopo": **tuo**. (b) Apertura foto come PDF (4 punti: `looksLikePdf`, `imageBytesToPdfAsync`, `imageTitleAsPdf`, `isImageFileName`; in un punto la differenza è solo il nome della variabile `rawBytes`/`bytes`): **tuo**. La funzione è entrata il 28/10 con il commit `6b19ecd3` (#43), insieme alla casella di testo. (c) Menu: **tuo**, ripristinato col 12. Nessuna modifica al codice in questo passo.
+- **In italiano:** la schermata principale. Resta tutto come l'hai voluto tu: popup aggiornamenti, foto aperte come PDF e il tuo menu.
+- **Limite noto della parte (b):** la foto aperta diventa un PDF di una pagina con larghezza A4 (`dpi = larghezza * 72 / 595,28`), quindi viene ingrandita a tutto il foglio. Non è la grandezza reale che serve. Vedi "Funzioni nuove" in `DA-FARE.md`.
+
+### 7. `app/lib/file_io.dart` — CHIUSO (resta il tuo, nessuna modifica al codice)
+- **Tecnico:** due righe. Il filtro del dialogo Apri usa `documentTypeGroup` (pdf, jpg, jpeg, jpe, png, bmp, gif, webp, tif, tiff, heic, heif) invece di `pdfTypeGroup` di Ben, e il selettore multiplo web usa `pickDocumentFilesWeb` invece di `pickPdfFilesWeb`. Nel file c'è anche la novità di Ben `xdpTypeGroup` / `openableTypeGroups` per aprire i pacchetti XDP: non era un conflitto ed è rimasta.
+- **In italiano:** nella finestra "Apri file" puoi scegliere PDF e foto, non solo PDF. Resta così, come per il punto 6.
+
+### 8. `app/lib/web_file_picker.dart` — CHIUSO (resta il tuo, nessuna modifica al codice)
+- **Tecnico:** un solo punto: la funzione `pickDocumentFilesWeb` (accept `.pdf,application/pdf,image/*`), che Ben non ha. Resta anche `pickPdfFilesWeb`.
+- **In italiano:** lo stesso discorso del 7, ma per l'app che gira nel browser: sceglie anche le foto.
+
+### 9. `packages/dart_pdf_editor/lib/src/editing/editing_overlay.dart` — CHIUSO (restano le tue funzioni; tolte le frecce da tastiera)
+- **Tecnico:** collisione tra due aggiunte vicine nel gestore dei tasti dell'editor di testo: (a) dell'utente, le frecce della **tastiera** spostavano la casella a testo vuoto (`_moveTextEditBox(event.logicalKey)`, 13 righe); (b) di Ben, Alt+Z adatta la casella al testo (`_autosizeTextEdit`, commit `7025e617`, #1188). Scelta dell'utente: restano le sue funzioni, **ma le frecce da tastiera devono muovere solo il cursore nel testo**: ho **tolto il blocco (a)** (13 righe). Le frecce a schermo ai lati della casella (`_buildEditArrows`, righe ~4107 e 8559) restano e non hanno condizioni di piattaforma, quindi compaiono anche su Windows (letto nel codice, non provato). `_moveTextEditBox` resta, usato da quelle frecce. Alt+Z di Ben resta finché non c'è l'adattamento automatico (vedi `DA-FARE.md`). Il test `editing_arrow_nudge_test.dart` riguarda le frecce su un'annotazione selezionata, non questa.
+- **In italiano:** le frecce della tastiera muovono solo il cursore dentro il testo. Per spostare la casella usi le frecce disegnate ai suoi lati, quelle che hai fatto su Android, che compaiono anche su Windows. L'Alt+Z di Ben resta per ora; poi lo sostituiamo con l'adattamento automatico.
+- **Confermato dall'utente (30/10):** le frecce della tastiera muovono solo il cursore, e **anche su Windows le frecce disegnate restano fuori dal riquadro della casella di testo**.
+
+### 10. `app/lib/l10n/app_it.arb` — CHIUSO (resta il tuo, deciso dall'utente il 30/10)
+- **Tecnico (verificato chiave per chiave):** Ben aggiunge 31 chiavi italiane e non cambia nessuna esistente. Il file dell'utente ha le stesse 31 chiavi con testo identico a quello di Ben, più 15 chiavi che l'utente ha tradotto in italiano mentre Ben le lascia in inglese (OCR automatico, firme, elenco Adobe). Nessuna chiave è stata cambiata da tutti e due. Il file nel ramo prova è identico a quello dell'utente: non si perde nessuna frase di Ben. **La riga precedente di questo file ("le stringhe nuove di Ben non ci sono") era sbagliata.**
+- **In italiano:** i testi italiani dell'app restano i tuoi. Hanno già tutte le frasi nuove di Ben, e in più le tue 15 traduzioni.
+
+### 11. `app/lib/l10n/app_localizations_it.dart` — CHIUSO (resta il tuo, confermato dall'utente il 30/10)
+- **Tecnico (verificato):** codice Dart generato dal file del punto 10. In `app/pubspec.yaml` il Dart generato è tenuto nel repo (nessun passo di generazione in build), quindi deve restare coerente con l'`.arb`. Controllato: tutte le 390 chiavi dell'`.arb` hanno il codice corrispondente e, per quelle senza segnaposto, il testo è identico. Nessuna differenza.
+- **In italiano:** la parte tecnica dei testi italiani. Va d'accordo con il file delle frasi, quindi non c'è niente da sistemare: segue la scelta del punto 10.
+
+### 12. `app/lib/app_menu_sheet.dart` — CHIUSO (menu dell'utente + sezione "Da organizzare"; confermato dall'utente il 30/10)
+- **Tecnico:** ripristinato il file dell'utente (File / Questo documento / App, ricerca, sottomenu recenti). Aggiunto il parametro opzionale `toOrganize` e una sezione "Da organizzare" che contiene le azioni `formData` di Ben (FDF/XFDF/XDP). In `editor_screen.dart` la chiamata a `showAppMenuSheet` usa di nuovo i parametri dell'utente. Corregge l'errore `appItemCount`.
+- **In italiano:** il tuo menu del telefono è tornato com'era. Le novità di Ben per importare ed esportare i moduli stanno in una sezione "Da organizzare", finché non decidi dove metterle.
+- **Non fatto:** il menu di Windows (popup) mette ancora le voci dei moduli all'inizio del blocco Documento. Da riordinare con te insieme a tutti gli altri menu.
+
+### 13. `packages/dart_pdf_cli/bin/dartpdf.dart` — CHIUSO (resta il numero di Ben, 0.10.0; deciso dall'utente il 30/10: non sono numeri suoi, non c'è motivo di tenerli)
+- **Tecnico (verificato):** il conflitto è una sola riga: `const _version`. Base `0.8.0`; nel repo dell'utente `0.9.0`; in Ben `0.10.0`. Entrambi i numeri sono di Ben: `0.9.0` è del suo commit `bf6ba79b` (Release 12.0.0+49), `0.10.0` del suo `f5efa6e5` (13.0.0+50). L'utente non ha fatto nessuna modifica propria a questo file. Nel ramo prova il file è identico a quello di Ben.
+- **In italiano:** il numero di versione del programma da riga di comando `dartpdf`, non dell'app Android. Il tuo era solo una versione più vecchia di Ben. Non c'è niente di tuo da proteggere.
+
+### 14. `metainfo.xml` (due copie: `app/linux/` e `app/packaging/flatpak/desktop-assets/`) — CHIUSO (resta la versione di Ben; deciso dall'utente il 30/10)
+- **Tecnico:** esistono due copie (`app/linux/dev.milanko.dartpdf.metainfo.xml` e `app/packaging/flatpak/desktop-assets/dev.milanko.dartpdf.metainfo.xml`); quale fosse in conflitto non è verificato. Solo versione e note.
+- **In italiano:** la scheda dell'app per Linux. Non ti riguarda.
+
+### Registro dei passi sul ramo prova
+
+| Passo | Commit | Build |
 |---|---|---|
-| 4 | `app/test/update_test.dart` (**rimandato**: l'utente ha detto di tornarci dopo il 12) | **misto**, né tuo né ufficiale puro. Il riepilogo iniziale diceva "tuo": non corrisponde. Da controllare |
-| 5 | `app/test/update_settings_test.dart` | identico al tuo |
-| 6 | `app/lib/editor_screen.dart` | misto (ha tre punti: popup aggiornamenti = tuo, foto come PDF = tuo, menu = ufficiale) |
-| 7 | `app/lib/file_io.dart` | identico al tuo |
-| 8 | `app/lib/web_file_picker.dart` | identico al tuo |
-| 9 | `packages/dart_pdf_editor/lib/src/editing/editing_overlay.dart` | identico al tuo (casella di testo, frecce, X) |
-| 10 | `app/lib/l10n/app_it.arb` | identico al tuo: le stringhe italiane nuove di Ben **non ci sono** |
-| 11 | `app/lib/l10n/app_localizations_it.dart` | identico al tuo, stesso discorso. Verificato che implementa tutte le 390 voci astratte di `app_localizations.dart`, quindi non manca nessun metodo |
-| 12 | `app/lib/app_menu_sheet.dart` | **IN DISCUSSIONE, non deciso.** Vedi la sezione "Conflitto 12" sotto |
-| 13 | `packages/dart_pdf_cli/bin/dartpdf.dart` | identico all'ufficiale (solo numero di versione/note) |
-| 14 | `metainfo.xml` | esistono due copie: `app/linux/dev.milanko.dartpdf.metainfo.xml` e `app/packaging/flatpak/desktop-assets/dev.milanko.dartpdf.metainfo.xml`. Quale fosse in conflitto non è verificato. Solo versione e note |
-
-Non verificato per nessuno dei punti 4-14: cosa fa nel dettaglio ogni modifica dell'utente e di Ben, e dove si pestano i piedi davvero. Il riepilogo iniziale (scelte "tuo / ufficiale") l'ho ripetuto senza averlo controllato; la tabella sopra ne corregge solo ciò che ho potuto verificare.
+| 1, 2, 3 chiusi | già nel ramo | — |
+| 12 menu ripristinato + sezione "Da organizzare" | `0e471cf1` | da verificare su GitHub Actions |
+| 4 test aggiornamenti: restano i tuoi | `6254b50a` | da verificare su GitHub Actions |
+| 5 test schermata aggiornamenti: restano i tuoi | `0a9bf733` | da verificare su GitHub Actions |
+| 6 schermata principale: restano le tue funzioni (nessuna modifica al codice) | `93907a7b` | — |
+| 7 e 8 apertura file: restano le tue (nessuna modifica al codice) | `06c0ea16` | — |
+| 9 casella di testo: restano le tue funzioni, tolte le frecce da tastiera | vedi `git log` del ramo | da verificare su GitHub Actions |
+| 10 traduzioni italiane: resta il tuo file (nessuna modifica al codice) | questo commit | da verificare su GitHub Actions |
+| 11 file italiano generato: resta il tuo (nessuna modifica al codice) | questo commit | da verificare su GitHub Actions |
+| 13 versione del programma da riga di comando: resta quella di Ben (nessuna modifica al codice) | questo commit | da verificare su GitHub Actions |
+| 14 note di versione Linux: resta quella di Ben (nessuna modifica al codice) | questo commit | da verificare su GitHub Actions |
 
 Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog dei pacchetti (presi dall'ufficiale con gli indirizzi `tesonepdf` rimessi); 29 file che nel repo dell'utente non esistono (sito, flussi di compilazione di Ben, `CLAUDE.md`, `doc`): esclusi.
-
-## Conflitto 12: menu del telefono (letto il 2026-10-30, decisione dell'utente ancora aperta)
-
-Verificato con git, non dedotto:
-
-- **Il menu dell'utente** viene da un suo lavoro precedente, commit `543b972f` del 27/10/2026 ("#11 Allinea menu mobile a Windows"). Stesse tre sezioni del menu di Windows (File, Questo documento, App), campo di ricerca in alto, sottomenu dei file recenti. Parametri: `file`, `document`, `recentFiles`, `viewAllRecentFiles`, `clearRecentFiles`, `app`. Ben non ha mai avuto questo codice.
-- **Il menu di Ben** (commit `f279db3d`, 10/10/2026): foglio dal basso con quattro bottoni grandi (Nuovo, Apri, Stampa, Firma), ultimi file in linea, gruppi chiusi Esporta e Altri strumenti. Parametri: `create`, `primary`, `recents`, `seeAllRecents`, `export`, `moreTools`.
-- **Novita' di Ben dentro il suo menu** (commit `07461d61`, 28/10): nuovo parametro `formData` e gruppo "FDF/XFDF/XDP" (`l.editorMenuFormData`, `_SheetPlacement.formData` in `editor_screen.dart`).
-- **Stato dopo la fusione:** `app_menu_sheet.dart` e' un miscuglio. Intestazione e parte del corpo sono dell'utente (`widget.file`, `widget.document`, `widget.recentFiles`, `appItemCount`), mentre firma di `showAppMenuSheet`, campi e costruttore sono di Ben (`create`, `primary`, `export`, `formData`...). `editor_screen.dart` (`_showAppMenuSheet`, riga ~5263) chiama il menu con i parametri di Ben. Per questo la build prova non compila; l'errore visto e' `appItemCount` (righe 202 e 204), ma ce ne saranno altri a catena.
-
-Strade proposte all'utente (nessuna scelta ancora):
-
-1. Tenere il menu dell'utente e inserirvi il gruppo FDF/XFDF/XDP di Ben (richiede di sistemare `app_menu_sheet.dart` e la chiamata in `editor_screen.dart`). E' quella coerente con la sua regola "le mie modifiche restano".
-2. Prendere il menu di Ben per intero e perdere l'allineamento a Windows dell'utente.
-
-**Non fare niente su questo file finche' l'utente non sceglie.**
-
-## Nota sull'utente
-
-Ha detto "abbiamo fatto 8 punti sicuro, il 9 ci stavamo pensando". Quali siano questi 8 punti non e' stato chiarito: nei miei appunti risultano chiusi solo 1, 2 e 3. Non segnare altro come chiuso finche' non lo dice lui, punto per punto.
 
 ## Quattro scelte prese da me, mai approvate dall'utente (da rivedere)
 
