@@ -3341,23 +3341,53 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (mounted) setState(() {});
   }
 
-  /// Each Enter adds a line, and the box grows to hold it at the line spacing
-  /// of the Settings (`size * spacing` per line). A box sitting on a rule
-  /// grows upward from the rule; any other grows downward. It only grows:
-  /// deleting lines leaves the box as it is.
+  /// The box follows its text while it is typed. It widens to the right to
+  /// hold the longest line (never past the page edge), and grows to hold every
+  /// line - those from Enter and those the page edge wraps - at the line
+  /// spacing of the Settings (`size * spacing` per line). A new size, font or
+  /// line also grows it, so a character going from 10 to 30 takes the box
+  /// along. A box sitting on a rule grows upward from the rule; any other
+  /// grows downward. It only grows: deleting text leaves the box as it is.
   void _growBoxForNewLines() {
     final pageRect = _textEditPageRect;
     if (pageRect == null) return;
-    final lines = '\n'.allMatches(_textEditText.text).length + 1;
-    if (lines <= 1) return;
-    final needed =
-        _textEditSize * _textEditLineSpacing * lines + 2 - _boxTrim;
-    if (pageRect.top - pageRect.bottom >= needed) return;
-    _textEditPageRect = _textEditLineField != null
-        ? PdfRect(pageRect.left, pageRect.bottom, pageRect.right,
-            pageRect.bottom + needed)
-        : PdfRect(pageRect.left, pageRect.top - needed, pageRect.right,
-            pageRect.top);
+    final text = pdfNormalizeLineEndings(_textEditText.text);
+    if (text.isEmpty) return;
+    const pad = 3.0;
+    final size = math.max(_textEditSize, _textEditText.maxStyleSize);
+    final font = _textEditFont;
+    final charSpacing = _textEditCharSpacing;
+    double measure(String line) =>
+        (font.measure(line, size) + charSpacing * line.runes.length) *
+        kPdfFreeTextDefaultHorizontalScale /
+        100;
+    var rect = pageRect;
+    // width: in view space, so it widens to the visual right on any rotation
+    final scale = _geometry.scale;
+    var view = _geometry.toViewRect(rect);
+    final longest = text.split('\n').fold<double>(0, (widest, line) {
+      final width = measure(line);
+      return width > widest ? width : widest;
+    });
+    final neededPx = (longest + 2 * pad) * scale;
+    final pageRight = _geometry.viewSize.width;
+    if (view.width < neededPx && view.left < pageRight) {
+      final right = math.max(view.right, math.min(view.left + neededPx, pageRight));
+      view = Rect.fromLTRB(view.left, view.top, right, view.bottom);
+      rect = _geometry.toPageRect(view);
+    }
+    // height: Enter lines plus the lines the page edge wraps
+    final available = view.width / scale - 2 * pad;
+    final lines = available > 0
+        ? pdfWrapText(text, available, measure, tolerance: 1e-6).length
+        : '\n'.allMatches(text).length + 1;
+    final needed = size * _textEditLineSpacing * lines + 2 - _boxTrim;
+    if (rect.top - rect.bottom < needed) {
+      rect = _textEditLineField != null
+          ? PdfRect(rect.left, rect.bottom, rect.right, rect.bottom + needed)
+          : PdfRect(rect.left, rect.top - needed, rect.right, rect.top);
+    }
+    _textEditPageRect = rect;
   }
 
   void _onControllerChanged() {
@@ -3506,6 +3536,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       if (font is PdfStandardFont) _textEditFont = font;
       if (size != null) _textEditSize = size;
       if (color != null) _textEditColor = next.color;
+      _growBoxForNewLines();
     });
   }
 
