@@ -712,6 +712,14 @@ class _EditorScreenState extends State<EditorScreen>
             },
             child: Text(l10n.editorUpdateLater),
           ),
+          TextButton(
+            key: const ValueKey('update-dialog-skip'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_updates.skipVersion());
+            },
+            child: Text(l10n.updateSkipVersion),
+          ),
           FilledButton(
             key: const ValueKey('update-dialog-download'),
             onPressed: () {
@@ -796,6 +804,14 @@ class _EditorScreenState extends State<EditorScreen>
               unawaited(checker.dismissLatest());
             },
             child: Text(it ? 'Dopo' : 'Later'),
+          ),
+          TextButton(
+            key: const ValueKey('official-update-skip'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(checker.skipLatest());
+            },
+            child: Text(it ? 'Salta questa versione' : 'Skip this version'),
           ),
           FilledButton(
             key: const ValueKey('official-update-open'),
