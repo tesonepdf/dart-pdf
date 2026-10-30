@@ -674,73 +674,57 @@ class _EditorScreenState extends State<EditorScreen>
     if (!mounted) return;
     await _updates.ready;
     if (!mounted || !_updates.autoCheckAllowed(resume: false)) return;
-    await _updates.checkForUpdates();
+    await _updates.checkForUpdates(force: true);
   }
 
-  /// Surfaces a one-time, non-blocking banner when a newer release is found
-  /// and the user hasn't dismissed that exact version before.
+  /// Asks, with a popup, whether to download a newer release found by the
+  /// automatic check. "Later" only closes the popup: nothing is remembered, so
+  /// the next open (or return to the foreground) asks again.
   void _onUpdateStatus() {
     if (!_updates.shouldNotify || !mounted) return;
     final release = _updates.latest!;
-    // one banner per release: a newer build found on a later check (the app
-    // coming back to the foreground) must show again
+    // one popup at a time per release
     if (_updateBannerFor == release.identity) return;
     _updateBannerFor = release.identity;
-    // on Android a newer build found by the automatic check starts downloading
-    // right away and hands the APK to the system installer (one tap there)
-    if (defaultTargetPlatform == TargetPlatform.android &&
-        _updates.checkMode != UpdateCheckMode.manual &&
-        _updates.downloadAssetName != null &&
+    final l10n = appL10n(context);
+    final canInstall = _updates.downloadAssetName != null &&
         _updateInstaller.modeFor(_updates.downloadAssetName) !=
-            UpdateApplyMode.unsupported) {
-      unawaited(startUpdateInstall(
-        context,
-        updates: _updates,
-        installer: _updateInstaller,
-      ));
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentMaterialBanner();
-    messenger.showMaterialBanner(MaterialBanner(
-      key: const ValueKey('update-available-banner'),
-      content:
-          Text(appL10n(context).editorUpdateAvailable(release.displayVersion)),
-      leading: const Icon(Icons.system_update_alt),
-      actions: [
-        TextButton(
-          onPressed: () {
-            messenger.hideCurrentMaterialBanner();
-            unawaited(_updates.dismiss());
-          },
-          child: Text(appL10n(context).editorUpdateLater),
-        ),
-        TextButton(
-          key: const ValueKey('update-banner-skip'),
-          onPressed: () {
-            messenger.hideCurrentMaterialBanner();
-            unawaited(_updates.skipVersion());
-          },
-          child: Text(appL10n(context).updateSkipVersion),
-        ),
-        FilledButton(
-          key: const ValueKey('update-banner-download'),
-          onPressed: () {
-            messenger.hideCurrentMaterialBanner();
-            unawaited(startUpdateInstall(
-              context,
-              updates: _updates,
-              installer: _updateInstaller,
-            ));
-          },
-          child: Text(_updates.downloadAssetName != null &&
-                  _updateInstaller.modeFor(_updates.downloadAssetName) !=
-                      UpdateApplyMode.unsupported
-              ? appL10n(context).updateInstallNow
-              : appL10n(context).editorDownload),
-        ),
-      ],
-    ));
+            UpdateApplyMode.unsupported;
+    var later = true;
+    unawaited(showPdfDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('update-available-dialog'),
+        icon: const Icon(Icons.system_update_alt),
+        content: Text(l10n.editorUpdateAvailable(release.displayVersion)),
+        actions: [
+          TextButton(
+            key: const ValueKey('update-dialog-later'),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.editorUpdateLater),
+          ),
+          FilledButton(
+            key: const ValueKey('update-dialog-download'),
+            onPressed: () {
+              later = false;
+              Navigator.of(dialogContext).pop();
+              unawaited(startUpdateInstall(
+                context,
+                updates: _updates,
+                installer: _updateInstaller,
+              ));
+            },
+            child: Text(canInstall ? l10n.updateInstallNow : l10n.editorDownload),
+          ),
+        ],
+      ),
+    ).whenComplete(() {
+      // closed with "Later": allow the next check to ask again
+      if (later && _updateBannerFor == release.identity) {
+        _updateBannerFor = null;
+      }
+    }));
   }
 
   /// Opens the `.pdf`s passed on the command line - how Linux delivers a file
@@ -841,7 +825,7 @@ class _EditorScreenState extends State<EditorScreen>
       _recoverOcr();
       if (defaultTargetPlatform == TargetPlatform.android &&
           _updates.autoCheckAllowed(resume: true)) {
-        unawaited(_updates.checkForUpdates());
+        unawaited(_updates.checkForUpdates(force: true));
       }
     }
     if (state == AppLifecycleState.inactive ||

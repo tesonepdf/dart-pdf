@@ -155,45 +155,6 @@ void main() {
     expect(tester.widget<FilledButton>(download).onPressed, isNotNull);
   });
 
-  testWidgets('startup banner can skip a version across screen restarts',
-      (tester) async {
-    final releases = [_release('app-v1.3.0')];
-    final updates = _fakeService(current: '1.2.0', releases: releases);
-    addTearDown(updates.dispose);
-    await tester.pumpWidget(MaterialApp(
-      home: EditorScreen(
-        prefs: prefs,
-        updateService: updates,
-        autoCheckUpdates: true,
-      ),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.text('Later'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('update-banner-skip')));
-    await tester.pumpAndSettle();
-    expect(updates.isVersionSkipped, isTrue);
-    expect(updates.updateAvailable, isTrue);
-    expect(find.byKey(const ValueKey('update-available-banner')), findsNothing);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-    final restarted = _fakeService(current: '1.2.0', releases: releases);
-    addTearDown(restarted.dispose);
-    // Startup is throttled across restarts; a manual check reloads the release
-    // without clearing its persisted skip.
-    await restarted.checkForUpdates(force: true);
-    await tester.pumpWidget(MaterialApp(
-      home: EditorScreen(
-        prefs: prefs,
-        updateService: restarted,
-        autoCheckUpdates: true,
-      ),
-    ));
-    await tester.pumpAndSettle();
-    expect(restarted.isVersionSkipped, isTrue);
-    expect(find.byKey(const ValueKey('update-available-banner')), findsNothing);
-  });
-
   testWidgets('Settings names the running build and its channel',
       (tester) async {
     final updates =
@@ -312,7 +273,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('update-available-banner')),
+      find.byKey(const ValueKey('update-available-dialog')),
       findsOneWidget,
     );
     expect(find.textContaining('nightly (aaaaaaa)'), findsOneWidget);
@@ -337,23 +298,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('update-available-banner')),
+      find.byKey(const ValueKey('update-available-dialog')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('update-banner-download')),
+      find.byKey(const ValueKey('update-dialog-download')),
       findsOneWidget,
     );
     expect(find.textContaining('1.3.0'), findsOneWidget);
 
-    // "Later" dismisses the banner and silences it for this release.
+    // "Later" only closes the popup: nothing is remembered, so it asks again.
     await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('update-available-banner')),
+      find.byKey(const ValueKey('update-available-dialog')),
       findsNothing,
     );
-    expect(updates.shouldNotify, isFalse);
+    expect(updates.shouldNotify, isTrue);
   });
 
   testWidgets('Android startup check offers the user a new APK',
@@ -376,12 +337,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('update-available-banner')),
+      find.byKey(const ValueKey('update-available-dialog')),
       findsOneWidget,
     );
     expect(find.textContaining('#10'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('update-banner-download')), findsOneWidget);
+        find.byKey(const ValueKey('update-dialog-download')), findsOneWidget);
   });
 
   testWidgets('no banner when already on the latest version', (tester) async {
@@ -399,7 +360,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('update-available-banner')),
+      find.byKey(const ValueKey('update-available-dialog')),
       findsNothing,
     );
   });
@@ -424,7 +385,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('update-available-banner')),
+        find.byKey(const ValueKey('update-available-dialog')),
         findsNothing,
       );
     });
