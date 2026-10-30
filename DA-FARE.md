@@ -17,7 +17,7 @@ Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io
 
 ## Ordine di lavoro
 
-1. Scoprire perché la build del ramo prova non compila (errore nel passo "Compila l'APK"). Il log non si scarica dall'ambiente della chat: `productionresultssa13.blob.core.windows.net` è bloccato. Serve che l'utente incolli le righe rosse della build, oppure che consenta il dominio nelle impostazioni di rete.
+1. **Build prova rotta, causa trovata (log incollato dall'utente, build #80):** in `app/lib/app_menu_sheet.dart` righe 202 e 204 il codice usa `appItemCount`, che nel file della fusione non è definito (errore `The getter 'appItemCount' isn't defined for the type '_AppMenuSheetState'`). Nella versione dell'utente (`ebdf12bc`, riga 128) era una variabile locale di `_buildMain`: `final appItemCount = widget.app.length + (widget.readOnly == null ? 0 : 1);`. La fusione ha tenuto i due usi e perso la definizione (è il conflitto 12, file "misto"). Da sistemare con l'ok dell'utente, rileggendo il file con lui; possibili altri errori dopo questo, il log incollato mostrava solo la fine.
 2. Riprendere i conflitti dal numero 4, confrontando con Ben solo ciò che serve, in italiano semplice e senza numeri di righe.
 3. Quando la prova è senza conflitti e compila: l'utente la prova sul telefono, poi (solo con il suo ok) merge in `main`.
 4. Web app: l'utente la vuole, ma **dopo** conflitti e build prova, così in caso di problemi si sa dove cercare. Niente è stato fatto.
@@ -35,7 +35,7 @@ Ogni ramo conta da solo. Il numero è quello scritto nelle note della **propria*
 - Una build alla volta per ramo (`concurrency`), così due build non prendono lo stesso numero. Se arrivano più push mentre una build gira, GitHub tiene in coda solo l'ultimo: i commit intermedi possono non essere compilati.
 - L'input `solo_contatore` ("build fittizia") non ha più effetto sul numero: il numero ora viene dalla release, non dal contatore di GitHub.
 
-Valori al 2026-10-30: `app-android-latest` era a #78; `app-android-prova` a #67 (vecchia, ancora pre-release e con titolo vecchio). Alla prima build riuscita la prova diventa release normale `#68p`.
+Valori al 2026-10-30: `app-android-latest` a #79 (prossima #80). **La prova parte da 10001** (decisione dell'utente, per non confondersi mai con l'ufficiale): `NUM_BASE=10000` nel workflow, titolo `#10001p`, poi 10002p, 10003p... La release `app-android-prova` è ancora la vecchia (#67, pre-release): alla prima build prova riuscita diventa release normale `#10001p`.
 
 Codice applicato (estratti):
 

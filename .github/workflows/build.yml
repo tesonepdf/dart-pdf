@@ -39,6 +39,8 @@ env:
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
   # Solo per titolo e note della release (l'APK ha un intero): #12p per la prova.
   NUM_SUFFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'p' || '' }}
+  # La prova parte da 10001 (mai confondibile con i numeri dell'ufficiale).
+  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10000' || '0' }}
 
 jobs:
   version:
@@ -68,8 +70,13 @@ jobs:
           # Non legge mai la release dell'altro ramo. Se la release non ha il
           # marcatore, usa il contatore di GitHub (mai piu' basso dello storico).
           ultimo="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ANDROID_TAG" --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
+          # La prova parte da NUM_BASE+1 (10001): se la sua release ha un numero
+          # piu' basso (build vecchie), si riparte da li'.
           if [[ -n "$ultimo" ]]; then
+            if [[ "$ultimo" -lt "$NUM_BASE" ]]; then ultimo="$NUM_BASE"; fi
             number="$((ultimo + 1))"
+          elif [[ "$NUM_BASE" -gt 0 ]]; then
+            number="$((NUM_BASE + 1))"
           else
             number="${{ github.run_number }}"
           fi

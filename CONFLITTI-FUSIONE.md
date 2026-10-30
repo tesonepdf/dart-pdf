@@ -26,7 +26,7 @@ Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello 
   - Ogni app ha il proprio controllo aggiornamenti: legge solo la propria release, scarica l'APK da dentro l'app.
   - Le modifiche a workflow, release e canali si fanno su `main` e poi si portano nel ramo prova con un merge.
 - Applicato il 2026-10-30: `build.yml` pubblica una sola release normale per canale (commit `2e380312` su main, merge `c7191aa2` su prova). Non crea più `build-N` / `prova-N`.
-- **Numeri build separati: applicato il 2026-10-30** nel workflow (ogni ramo continua dal numero della propria release, la prova scrive `#Np` solo nel titolo). Dettagli e codice in `DA-FARE.md`.
+- **Numeri build separati: applicato il 2026-10-30** nel workflow (ogni ramo continua dal numero della propria release, la prova parte da 10001 e scrive `#10001p` solo nel titolo). Dettagli e codice in `DA-FARE.md`.
 
 ## Riferimenti git
 
@@ -80,8 +80,7 @@ Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog d
 ## Stato delle build (verificato con l'API di GitHub)
 
 - `main`: build #73 e #76 riuscite.
-- `prova-sviluppatore`: build #74, #75, #77 **tutte fallite** nel passo "Compila l'APK" (exit code 1). La causa non è nota: il log completo non si scarica dall'ambiente della chat (l'indirizzo di download è bloccato). L'app Prova sul telefono quindi potrebbe non essere aggiornata. Compilare in locale non è possibile (Flutter non è installato).
-- Probabile da guardare per prima: l'errore reale nel log di Actions del run di `prova-sviluppatore`, passo "Compila l'APK".
+- `prova-sviluppatore`: build #74, #75, #77, #80 **tutte fallite** nel passo "Compila l'APK". **Causa (dal log incollato dall'utente):** `app/lib/app_menu_sheet.dart` usa `appItemCount` (righe 202 e 204) ma la fusione ne ha perso la definizione, che nella versione dell'utente era una variabile locale di `_buildMain`. È il conflitto 12. Il log completo non si scarica dall'ambiente della chat (dominio bloccato): se servono altri errori li incolla l'utente. L'app Prova sul telefono non è aggiornata. Compilare in locale non è possibile (Flutter non è installato).
 
 ## Altre cose in sospeso
 
