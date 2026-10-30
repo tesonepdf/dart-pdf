@@ -1,4 +1,4 @@
-name: Build APK (Windows a comando)
+name: Build APK UFFICIALE (main)
 
 run-name: ${{ github.event.head_commit.message || (inputs.solo_contatore && 'Contatore (build fittizia, non compila)') || 'Build a comando' }}
 
@@ -9,12 +9,20 @@ run-name: ${{ github.event.head_commit.message || (inputs.solo_contatore && 'Con
 # app/RELEASING.md.
 
 on:
+  # Questo file e' la build UFFICIALE: parte solo dai push su main.
+  # Il ramo prova ha il suo workflow (build-prova.yml), che richiama questo
+  # file: cosi' le due build hanno elenchi e contatori GitHub separati.
   push:
-    branches: [main, prova-sviluppatore]
+    branches: [main]
   workflow_dispatch:
     inputs:
       solo_contatore:
         description: 'Build fittizia: aumenta solo il contatore, non compila nulla'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      solo_contatore:
         type: boolean
         default: false
 
@@ -334,8 +342,8 @@ jobs:
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
           if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
-            android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX} - versione ${VERSIONE}"
-            android_notes="$(printf 'Build #%s%s - versione %s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$VERSIONE" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+            android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
+            android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$android_tag" \

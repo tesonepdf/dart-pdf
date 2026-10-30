@@ -171,11 +171,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    final about = find.text(
-      AppInfo.buildNumber.isEmpty
-          ? '${AppInfo.displayName} ${AppInfo.displayVersion}'
-          : '${AppInfo.displayName} ${AppInfo.displayVersion} #${AppInfo.buildNumber}',
-    );
+    final about = find.text('${AppInfo.displayName} ${AppInfo.displayVersion}');
     await tester.ensureVisible(about);
     expect(about, findsOneWidget);
     expect(

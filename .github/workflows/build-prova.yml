@@ -1,0 +1,22 @@
+name: Build APK PROVA (ramo prova-sviluppatore)
+
+run-name: PROVA - ${{ github.event.head_commit.message || 'Build a comando' }}
+
+# Build della app "DartPDF Prova". Parte solo dai push sul ramo prova e usa
+# lo stesso procedimento della build ufficiale (build.yml), richiamato da qui:
+# i numeri build, la release (app-android-prova) e l'elenco su GitHub restano
+# separati da quelli dell'app ufficiale. Il numero build della prova parte da
+# 10001 (vedi NUM_BASE in build.yml).
+
+on:
+  push:
+    branches: [prova-sviluppatore]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
