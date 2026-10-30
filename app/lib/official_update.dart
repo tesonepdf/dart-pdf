@@ -27,15 +27,25 @@ enum OfficialUpdateStatus { idle, checking, newer, upToDate, error }
 class OfficialUpdateChecker extends ChangeNotifier {
   OfficialUpdateChecker({http.Client Function()? clientFactory})
       : _clientFactory = clientFactory ?? http.Client.new {
-    unawaited(_restore());
+    ready = _restore();
   }
 
   static final OfficialUpdateChecker instance = OfficialUpdateChecker();
 
   static const _versionKey = 'dart_pdf_editor_app.official.mergedVersion';
   static const _buildKey = 'dart_pdf_editor_app.official.mergedBuild';
+  static const _dismissedKey = 'dart_pdf_editor_app.official.dismissedLabel';
 
   final http.Client Function() _clientFactory;
+
+  /// Completes when the persisted state has been restored.
+  late final Future<void> ready;
+
+  String? dismissedLabel;
+
+  /// True when the user already chose "Later" for the latest official release.
+  bool get isDismissed =>
+      latestVersion != null && latestLabel == dismissedLabel;
 
   String mergedVersion = upstreamBaseVersion;
   int mergedBuild = upstreamBaseBuild;
@@ -56,10 +66,24 @@ class OfficialUpdateChecker extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       mergedVersion = prefs.getString(_versionKey) ?? upstreamBaseVersion;
       mergedBuild = prefs.getInt(_buildKey) ?? upstreamBaseBuild;
+      dismissedLabel = prefs.getString(_dismissedKey);
       notifyListeners();
     } catch (_) {
       // No storage: keep the compiled-in base.
     }
+  }
+
+  /// "Later": stop asking for this official release; it stays highlighted in
+  /// Settings until it is marked as merged or a newer one appears.
+  Future<void> dismissLatest() async {
+    final label = latestLabel;
+    if (label.isEmpty) return;
+    dismissedLabel = label;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_dismissedKey, label);
+    } catch (_) {}
   }
 
   /// Marks the latest upstream release as merged into this copy.

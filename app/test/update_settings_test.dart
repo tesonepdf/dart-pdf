@@ -307,14 +307,18 @@ void main() {
     );
     expect(find.textContaining('1.3.0'), findsOneWidget);
 
-    // "Later" only closes the popup: nothing is remembered, so it asks again.
+    // "Later" is remembered: no more popups, but a banner stays up.
     await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('update-available-dialog')),
       findsNothing,
     );
-    expect(updates.shouldNotify, isTrue);
+    expect(
+      find.byKey(const ValueKey('update-available-banner')),
+      findsOneWidget,
+    );
+    expect(updates.isDismissed, isTrue);
   });
 
   testWidgets('Android startup check offers the user a new APK',
