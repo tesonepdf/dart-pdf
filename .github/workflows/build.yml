@@ -2,8 +2,8 @@ name: Build APK (Windows a comando)
 
 run-name: ${{ github.event.head_commit.message || (inputs.solo_contatore && 'Contatore (build fittizia, non compila)') || 'Build a comando' }}
 
-# A ogni push su main produce l'APK Android (solo arm64, piu' leggero),
-# pubblica la build numerata e aggiorna il prerelease Android rolling.
+# A ogni push su main produce l'APK Android (solo arm64, piu' leggero) e
+# aggiorna l'unica release Android (normale, non pre-release).
 # Windows (windows-x64.zip) si compila solo a comando: Actions > Run workflow.
 # La firma Android permanente richiede i quattro Secrets documentati in
 # app/RELEASING.md.
@@ -293,59 +293,50 @@ jobs:
             cp dl/windows/windows-x64.zip windows-x64.zip
             assets+=(windows-x64.zip)
           fi
-          build_tag="${RELEASE_PREFIX}-${NUMERO}"
-          build_title="Build #${NUMERO} (${APP_LABEL}) - versione ${VERSIONE}"
-          build_notes="Commit ${GITHUB_SHA}"
-          if gh release view "$build_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$build_tag" \
-              "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$build_tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$build_title" \
-              --notes "$build_notes"
-          else
-            gh release create "$build_tag" \
-              "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "$build_title" \
-              --notes "$build_notes" \
-              --latest="$([[ "$RELEASE_PREFIX" == build ]] && echo true || echo false)"
-          fi
 
+          # Una sola release per canale (nessuna build numerata a parte):
+          # - main: tag app-android-latest, release normale e "Latest"
+          # - prova-sviluppatore: tag app-android-prova, release normale, mai "Latest"
+          # Il numero build e' nel titolo (#N) e nel marcatore delle note, che
+          # l'app confronta per decidere se c'e' un aggiornamento.
           android_tag="$ANDROID_TAG"
-          # Il canale Android avanza solo con numero build piu' alto di quello
-          # gia' pubblicato: cosi' una build non viene saltata perche' nel
-          # frattempo e' arrivato un altro push.
+          latest_flag="$([[ "$RELEASE_PREFIX" == build ]] && echo true || echo false)"
+
+          # Il canale avanza solo con numero build piu' alto di quello gia'
+          # pubblicato: cosi' una build non viene saltata perche' nel frattempo
+          # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
           if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
-            android_notes="$(printf 'Nuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+            android_title="$APP_LABEL #${NUMERO} - versione ${VERSIONE}"
+            android_notes="$(printf 'Build #%s - versione %s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$VERSIONE" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$android_tag" \
-                DartPDF-Android.apk \
+                "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" --clobber
               android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
               old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
-                --jq '.[] | select(.name != "DartPDF-Android.apk") | .id')"
+                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "windows-x64.zip") | .id')"
               if [[ -n "$old_asset_ids" ]]; then
                 while IFS= read -r asset_id; do
                   gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
                 done <<< "$old_asset_ids"
               fi
+              # Se il tag era ancora una pre-release, diventa release normale.
               gh release edit "$android_tag" \
                 --repo "$GITHUB_REPOSITORY" \
-                --title "$APP_LABEL Android" \
-                --notes "$android_notes"
+                --title "$android_title" \
+                --notes "$android_notes" \
+                --prerelease=false \
+                --latest="$latest_flag"
             else
               gh release create "$android_tag" \
-                DartPDF-Android.apk \
+                "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
-                --title "$APP_LABEL Android" \
+                --title "$android_title" \
                 --notes "$android_notes" \
-                --prerelease
+                --latest="$latest_flag"
             fi
           else
             echo "Il canale Android e' gia' alla build $current_build (>= $NUMERO): non lo sposto."
