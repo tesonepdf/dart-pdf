@@ -121,7 +121,7 @@ void main() {
     // The button reads "Update now" because an in-app apply path exists.
     expect(find.text('Update now'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('update-banner-download')));
+    await tester.tap(find.byKey(const ValueKey('update-dialog-download')));
     await tester.pumpAndSettle();
 
     // Downloaded and handed to the OS installer, with a confirming snackbar.
@@ -159,7 +159,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Update now'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('update-banner-download')));
+    await tester.tap(find.byKey(const ValueKey('update-dialog-download')));
     await tester.pumpAndSettle();
 
     expect(ops.opened, '/downloads/app-arm64-v8a.apk');
@@ -192,7 +192,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('update-banner-download')));
+    await tester.tap(find.byKey(const ValueKey('update-dialog-download')));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('update-progress-dialog')), findsNothing);
@@ -230,7 +230,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Update now'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('update-banner-download')));
+    await tester.tap(find.byKey(const ValueKey('update-dialog-download')));
     await tester.pumpAndSettle();
 
     expect(
