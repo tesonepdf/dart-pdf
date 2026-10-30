@@ -789,6 +789,9 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     _officialDialogOpen = true;
+    // Asked once per official version, however the popup is closed (Later,
+    // Skip, back button): the next one appears only with a newer release.
+    unawaited(checker.dismissLatest());
     final it = Localizations.localeOf(context).languageCode == 'it';
     await showPdfDialog<void>(
       context: context,
