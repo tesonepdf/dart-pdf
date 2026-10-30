@@ -35,6 +35,7 @@ class OfficialUpdateChecker extends ChangeNotifier {
   static const _versionKey = 'dart_pdf_editor_app.official.mergedVersion';
   static const _buildKey = 'dart_pdf_editor_app.official.mergedBuild';
   static const _dismissedKey = 'dart_pdf_editor_app.official.dismissedLabel';
+  static const _skippedKey = 'dart_pdf_editor_app.official.skippedLabel';
 
   final http.Client Function() _clientFactory;
 
@@ -42,6 +43,7 @@ class OfficialUpdateChecker extends ChangeNotifier {
   late final Future<void> ready;
 
   String? dismissedLabel;
+  String? skippedLabel;
 
   /// True when the user already chose "Later" for the latest official release.
   bool get isDismissed =>
@@ -67,6 +69,7 @@ class OfficialUpdateChecker extends ChangeNotifier {
       mergedVersion = prefs.getString(_versionKey) ?? upstreamBaseVersion;
       mergedBuild = prefs.getInt(_buildKey) ?? upstreamBaseBuild;
       dismissedLabel = prefs.getString(_dismissedKey);
+      skippedLabel = prefs.getString(_skippedKey);
       notifyListeners();
     } catch (_) {
       // No storage: keep the compiled-in base.
@@ -83,6 +86,20 @@ class OfficialUpdateChecker extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_dismissedKey, label);
+    } catch (_) {}
+  }
+
+  /// "Skip this version": stop asking and stop highlighting this official
+  /// release; a newer one appears again.
+  Future<void> skipLatest() async {
+    final label = latestLabel;
+    if (label.isEmpty) return;
+    skippedLabel = label;
+    status = OfficialUpdateStatus.upToDate;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_skippedKey, label);
     } catch (_) {}
   }
 
@@ -158,7 +175,7 @@ class OfficialUpdateChecker extends ChangeNotifier {
         final order = merged == null ? 1 : bestVersion.compareTo(merged);
         final isNewer = order > 0 ||
             (order == 0 && (bestBuild ?? 0) > mergedBuild);
-        status = isNewer
+        status = isNewer && latestLabel != skippedLabel
             ? OfficialUpdateStatus.newer
             : OfficialUpdateStatus.upToDate;
       }
