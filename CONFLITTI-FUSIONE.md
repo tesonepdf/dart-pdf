@@ -1,7 +1,7 @@
 # Conflitti della fusione con l'ufficiale: appunti per chi riprende il lavoro
 
 File scritto per l'assistente che apre una nuova chat. L'utente non lo deve leggere.
-Aggiornato il 2026-10-30. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
+Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
 
 ## Regole dell'utente (valgono sempre, le ripete da mesi)
 
@@ -26,7 +26,7 @@ Aggiornato il 2026-10-30. Quello che qui è "verificato" l'ho controllato con gi
   - Ogni app ha il proprio controllo aggiornamenti: legge solo la propria release, scarica l'APK da dentro l'app.
   - Le modifiche a workflow, release e canali si fanno su `main` e poi si portano nel ramo prova con un merge.
 - Applicato il 2026-10-30: `build.yml` pubblica una sola release normale per canale (commit `2e380312` su main, merge `c7191aa2` su prova). Non crea più `build-N` / `prova-N`.
-- **Da applicare, deciso a parole ma non ancora fatto:** numeri build separati. Oggi il `#N` viene da `github.run_number`, unico per tutto il repo, quindi i numeri dei due canali si mescolano. Voluto: ogni canale prende il numero dalla propria release (`app-build` nelle note) e aggiunge 1; la prova nel titolo scrive `#Np` (es. `#12p`). Android accetta solo interi nel `--build-number`, quindi la "p" va solo nel titolo e nelle note della release, mai nell'APK.
+- **Numeri build separati: applicato il 2026-10-30** nel workflow (ogni ramo continua dal numero della propria release, la prova scrive `#Np` solo nel titolo). Dettagli e codice in `DA-FARE.md`.
 
 ## Riferimenti git
 

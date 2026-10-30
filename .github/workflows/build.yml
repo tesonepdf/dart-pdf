@@ -21,6 +21,13 @@ on:
 permissions:
   contents: read
 
+# Una build alla volta per ramo: cosi' il numero build (letto dalla release del
+# ramo) non puo' essere preso da due build insieme. I due rami non si bloccano
+# tra loro.
+concurrency:
+  group: build-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   FLUTTER_VERSION: '3.47.7'
   # Il ramo prova-sviluppatore produce un'app separata ("DartPDF Prova", id
@@ -30,6 +37,8 @@ env:
   APP_LABEL: ${{ github.ref_name == 'prova-sviluppatore' && 'DartPDF Prova' || 'DartPDF' }}
   RELEASE_PREFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'prova' || 'build' }}
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
+  # Solo per titolo e note della release (l'APK ha un intero): #12p per la prova.
+  NUM_SUFFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'p' || '' }}
 
 jobs:
   version:
@@ -46,13 +55,24 @@ jobs:
 
       - name: Calcola versione e numero build
         id: app-version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           commit_epoch="$(git log -1 --format=%ct HEAD)"
           read -r year day hour minute < <(
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          number="${{ github.run_number }}"
+          # Numero build separato per canale: continua dal numero gia' pubblicato
+          # nella release del PROPRIO ramo (marcatore app-build) e aggiunge 1.
+          # Non legge mai la release dell'altro ramo. Se la release non ha il
+          # marcatore, usa il contatore di GitHub (mai piu' basso dello storico).
+          ultimo="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ANDROID_TAG" --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
+          if [[ -n "$ultimo" ]]; then
+            number="$((ultimo + 1))"
+          else
+            number="${{ github.run_number }}"
+          fi
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -307,8 +327,8 @@ jobs:
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
           if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
-            android_title="$APP_LABEL #${NUMERO} - versione ${VERSIONE}"
-            android_notes="$(printf 'Build #%s - versione %s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$VERSIONE" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+            android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX} - versione ${VERSIONE}"
+            android_notes="$(printf 'Build #%s%s - versione %s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$VERSIONE" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$android_tag" \
