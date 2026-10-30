@@ -161,12 +161,6 @@ class ReleaseInfo {
       ? '$tagName@$commitSha'
       : tagName;
 
-  /// Key under which "Later" and "Skip" are remembered. The Android release
-  /// reuses one tag for every build, so the choice follows that tag (the
-  /// channel) instead of each build's commit: it stays valid when a newer
-  /// build appears. Other releases keep their own [identity].
-  String get choiceKey => isAndroidUpdate ? tagName : identity;
-
   static final _commitMarker =
       RegExp(r'<!-- main-sha: ([0-9a-fA-F]{7,40}) -->');
   static final _versionMarker =
@@ -374,7 +368,7 @@ class UpdateService extends ChangeNotifier {
 
   /// Skipped updates remain available in Settings for an explicit install.
   bool get isVersionSkipped =>
-      _latest != null && _skippedIdentities.contains(_latest!.choiceKey);
+      _latest != null && _skippedIdentities.contains(_latest!.identity);
   bool _nightlyUpdates = false;
   UpdateCheckMode _checkMode = UpdateCheckMode.everyOpen;
 
@@ -393,16 +387,10 @@ class UpdateService extends ChangeNotifier {
     await _restored;
     if (mode == _checkMode) return;
     _checkMode = mode;
-    // Choosing how to be notified again also turns messages back on after a
-    // "Skip" or "Later" (those now last across builds).
-    _dismissedTag = null;
-    _skippedIdentities.clear();
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_modeKey, mode.name);
-      await prefs.remove(_dismissedKey);
-      await prefs.remove(_skippedKey);
     } catch (_) {
       // No storage - keep the in-memory choice for this session.
     }
@@ -483,14 +471,14 @@ class UpdateService extends ChangeNotifier {
 
   /// True when the user already chose "Later" for exactly this release.
   bool get isDismissed =>
-      _latest != null && _latest!.choiceKey == _dismissedTag;
+      _latest != null && _latest!.identity == _dismissedTag;
 
   /// True when the user should be nudged about [latest]: an update is available
   /// and they haven't already dismissed this exact release.
   bool get shouldNotify =>
       updateAvailable &&
       !isVersionSkipped &&
-      _latest!.choiceKey != _dismissedTag;
+      _latest!.identity != _dismissedTag;
 
   /// The GitHub endpoint used by the default fetcher.
   Uri get releasesUri => Uri.https(
@@ -607,18 +595,19 @@ class UpdateService extends ChangeNotifier {
 
   /// Suppresses the startup banner for [latest] until a newer release ships.
   Future<void> dismiss() async {
-    final identity = _latest?.choiceKey;
+    final identity = _latest?.identity;
     if (identity == null) return;
     _dismissedTag = identity;
     notifyListeners();
     await _persistDismissed(identity);
   }
 
-  /// Suppresses this release (for the Android channel: this and every later
-  /// build) across restarts; Settings still permits installing.
+  /// Suppresses this release across restarts and across app updates (the
+  /// choice is saved on the device); a newer release asks again. Settings
+  /// still permits installing.
   Future<void> skipVersion() async {
     await _restored;
-    final identity = _latest?.choiceKey;
+    final identity = _latest?.identity;
     if (!updateAvailable || identity == null) return;
     _skippedIdentities.add(identity);
     notifyListeners();

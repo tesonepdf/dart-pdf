@@ -11,11 +11,14 @@ import 'update.dart' show AppVersion, UpdateCheckMode;
 const upstreamRepoOwner = 'ben-milanko';
 const upstreamRepoName = 'dart-pdf';
 
-/// The upstream version the copy started from (`app/pubspec.yaml` of commit
-/// 3e0bd1b0c0e5b4ab336a8d584510a3a0e43e607a, 2026-10-26): 11.0.0+48.
-const upstreamBaseVersion = '11.0.0';
-const upstreamBaseBuild = 48;
-const upstreamBaseCommit = '3e0bd1b0c0e5b4ab336a8d584510a3a0e43e607a';
+/// The last upstream version merged into this copy: 13.0.0+50 (commit
+/// f5efa6e525494b24c0ab2049916d1dbe8546a94c, 2026-10-29), merged on
+/// 2026-10-30. (The copy started from 11.0.0+48, commit 3e0bd1b0...) Only a
+/// newer official release than this one is offered; update these three
+/// constants each time a newer official version has been merged.
+const upstreamBaseVersion = '13.0.0';
+const upstreamBaseBuild = 50;
+const upstreamBaseCommit = 'f5efa6e525494b24c0ab2049916d1dbe8546a94c';
 
 enum OfficialUpdateStatus { idle, checking, newer, upToDate, error }
 
