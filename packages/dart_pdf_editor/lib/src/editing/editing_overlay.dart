@@ -3913,20 +3913,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// box centred on the tap.
   void _openFreeTextAt(Offset position) {
     final (px, py) = _geometry.toPagePoint(position);
-    // a tap on a text box that is already there edits it, instead of laying a
-    // new box over it
-    final hit = _controller.selectableAnnotationAt(widget.pageIndex, px, py);
-    if (hit != null &&
-        hit.$2.subtype == 'FreeText' &&
-        hit.$2.isCallout != true &&
-        hit.$2.isLockedContents != true &&
-        _controller.selectAnnotationAt(widget.pageIndex, px, py)) {
-      final rect = _selectedViewRect;
-      if (rect != null) {
-        _openTextEditor(rect, existing: true);
-        return;
-      }
-    }
     final line = _lineNear(px, py);
     if (line == null) {
       _openTextEditor(_defaultPlacementRect(position, oneLine: true),
