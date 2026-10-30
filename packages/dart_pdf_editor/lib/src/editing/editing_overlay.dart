@@ -1159,6 +1159,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   PdfTextVerticalAlign _textEditVerticalAlign = PdfTextVerticalAlign.top;
   double _textEditLineSpacing = kPdfFreeTextDefaultLineSpacing;
   double _textEditCharSpacing = 0;
+  // the box's size when its editor opened: the box never shrinks below it,
+  // but takes it back when the text that stretched it is deleted
+  double _textEditBaseWidth = 0; // pt
+  double _textEditBaseHeight = 0; // pt
   bool _textEditStyleMenuOpen = false;
   // holds the editor's keyboard focus while a pointer is down on the inline
   // style chip, so tapping a chip button (underline, size, …) on mobile
@@ -3341,18 +3345,18 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (mounted) setState(() {});
   }
 
-  /// The box follows its text while it is typed. It widens to the right to
-  /// hold the longest line (never past the page edge), and grows to hold every
-  /// line - those from Enter and those the page edge wraps - at the line
-  /// spacing of the Settings (`size * spacing` per line). A new size, font or
-  /// line also grows it, so a character going from 10 to 30 takes the box
-  /// along. A box sitting on a rule grows upward from the rule; any other
-  /// grows downward. It only grows: deleting text leaves the box as it is.
+  /// The box follows its text while it is typed, growing and shrinking with
+  /// it. It widens to the right to hold the longest line (never past the page
+  /// edge) and takes the height of every line - those from Enter and those the
+  /// page edge wraps - at the line spacing of the Settings (`size * spacing`
+  /// per line). A new size or font moves it too, so a character going from 10
+  /// to 30 takes the box along. It never shrinks below the size it had when
+  /// the editor opened. A box sitting on a rule grows upward from the rule; any
+  /// other grows downward.
   void _growBoxForNewLines() {
     final pageRect = _textEditPageRect;
     if (pageRect == null) return;
     final text = pdfNormalizeLineEndings(_textEditText.text);
-    if (text.isEmpty) return;
     const pad = 3.0;
     final size = math.max(_textEditSize, _textEditText.maxStyleSize);
     final font = _textEditFont;
@@ -3362,30 +3366,42 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         kPdfFreeTextDefaultHorizontalScale /
         100;
     var rect = pageRect;
-    // width: in view space, so it widens to the visual right on any rotation
+    // width: in view space, so it follows the visual right on any rotation
     final scale = _geometry.scale;
     var view = _geometry.toViewRect(rect);
-    final longest = text.split('\n').fold<double>(0, (widest, line) {
-      final width = measure(line);
-      return width > widest ? width : widest;
-    });
-    final neededPx = (longest + 2 * pad) * scale;
+    final longest = text.isEmpty
+        ? 0.0
+        : text.split('\n').fold<double>(0, (widest, line) {
+            final width = measure(line);
+            return width > widest ? width : widest;
+          });
+    final neededPx = text.isEmpty ? 0.0 : (longest + 2 * pad) * scale;
+    final basePx = _textEditBaseWidth * scale;
     final pageRight = _geometry.viewSize.width;
-    if (view.width < neededPx && view.left < pageRight) {
-      final right = math.max(view.right, math.min(view.left + neededPx, pageRight));
+    final targetPx = math.max(basePx, neededPx);
+    final right = math.max(
+      view.left + basePx,
+      math.min(view.left + targetPx, pageRight),
+    );
+    if ((right - view.right).abs() > 0.01) {
       view = Rect.fromLTRB(view.left, view.top, right, view.bottom);
       rect = _geometry.toPageRect(view);
     }
     // height: Enter lines plus the lines the page edge wraps
     final available = view.width / scale - 2 * pad;
-    final lines = available > 0
-        ? pdfWrapText(text, available, measure, tolerance: 1e-6).length
-        : '\n'.allMatches(text).length + 1;
-    final needed = size * _textEditLineSpacing * lines + 2 - _boxTrim;
-    if (rect.top - rect.bottom < needed) {
+    final lines = text.isEmpty
+        ? 0
+        : available > 0
+            ? pdfWrapText(text, available, measure, tolerance: 1e-6).length
+            : '\n'.allMatches(text).length + 1;
+    final needed = lines == 0
+        ? 0.0
+        : size * _textEditLineSpacing * lines + 2 - _boxTrim;
+    final height = math.max(_textEditBaseHeight, needed);
+    if ((rect.top - rect.bottom - height).abs() > 0.01) {
       rect = _textEditLineField != null
-          ? PdfRect(rect.left, rect.bottom, rect.right, rect.bottom + needed)
-          : PdfRect(rect.left, rect.top - needed, rect.right, rect.top);
+          ? PdfRect(rect.left, rect.bottom, rect.right, rect.bottom + height)
+          : PdfRect(rect.left, rect.top - height, rect.right, rect.top);
     }
     _textEditPageRect = rect;
   }
@@ -3897,6 +3913,20 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// box centred on the tap.
   void _openFreeTextAt(Offset position) {
     final (px, py) = _geometry.toPagePoint(position);
+    // a tap on a text box that is already there edits it, instead of laying a
+    // new box over it
+    final hit = _controller.selectableAnnotationAt(widget.pageIndex, px, py);
+    if (hit != null &&
+        hit.$2.subtype == 'FreeText' &&
+        hit.$2.isCallout != true &&
+        hit.$2.isLockedContents != true &&
+        _controller.selectAnnotationAt(widget.pageIndex, px, py)) {
+      final rect = _selectedViewRect;
+      if (rect != null) {
+        _openTextEditor(rect, existing: true);
+        return;
+      }
+    }
     final line = _lineNear(px, py);
     if (line == null) {
       _openTextEditor(_defaultPlacementRect(position, oneLine: true),
@@ -4304,6 +4334,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     setState(() {
       _textEditRect = rect;
       _textEditPageRect = pageRect ?? _geometry.toPageRect(rect);
+      _textEditBaseWidth = rect.width / _geometry.scale;
+      _textEditBaseHeight =
+          _textEditPageRect!.top - _textEditPageRect!.bottom;
       _textEditRotation = editorRotation;
       _textEditPageRotation = existing ? 0 : annotationRotation;
       _textEditInset = existing ? (parsed?.textInset ?? 0) : textInset;
