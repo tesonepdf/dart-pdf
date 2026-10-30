@@ -465,6 +465,10 @@ class UpdateService extends ChangeNotifier {
   bool get updateAvailable =>
       _status == UpdateStatus.updateAvailable && _latest != null;
 
+  /// True when the user already chose "Later" for exactly this release.
+  bool get isDismissed =>
+      _latest != null && _latest!.identity == _dismissedTag;
+
   /// True when the user should be nudged about [latest]: an update is available
   /// and they haven't already dismissed this exact release.
   bool get shouldNotify =>

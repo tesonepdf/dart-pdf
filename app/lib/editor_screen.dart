@@ -54,6 +54,7 @@ import 'paced_read.dart';
 import 'tab_drag.dart';
 import 'unsaved_changes.dart';
 import 'unsaved_changes_store.dart';
+import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
 import 'update_installer.dart';
@@ -512,6 +513,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (widget.autoCheckUpdates && _updates.supported) {
       _updates.addListener(_onUpdateStatus);
       unawaited(_startupUpdateCheck());
+      if (_ownsUpdates) unawaited(_startupOfficialCheck());
     }
   }
 
@@ -678,19 +680,21 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Asks, with a popup, whether to download a newer release found by the
-  /// automatic check. "Later" only closes the popup: nothing is remembered, so
-  /// the next open (or return to the foreground) asks again.
+  /// automatic check. "Later" is remembered for that release: no more popups,
+  /// but a banner stays up (on this and every later open) until the update is
+  /// installed or a newer release appears, which asks again.
   void _onUpdateStatus() {
-    if (!_updates.shouldNotify || !mounted) return;
+    if (!mounted || !_updates.updateAvailable || _updates.isVersionSkipped) {
+      return;
+    }
     final release = _updates.latest!;
-    // one popup at a time per release
     if (_updateBannerFor == release.identity) return;
     _updateBannerFor = release.identity;
+    if (_updates.isDismissed) {
+      _showUpdateBanner(release);
+      return;
+    }
     final l10n = appL10n(context);
-    final canInstall = _updates.downloadAssetName != null &&
-        _updateInstaller.modeFor(_updates.downloadAssetName) !=
-            UpdateApplyMode.unsupported;
-    var later = true;
     unawaited(showPdfDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -701,13 +705,16 @@ class _EditorScreenState extends State<EditorScreen>
         actions: [
           TextButton(
             key: const ValueKey('update-dialog-later'),
-            onPressed: () => Navigator.of(dialogContext).pop(),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(_updates.dismiss());
+              _showUpdateBanner(release);
+            },
             child: Text(l10n.editorUpdateLater),
           ),
           FilledButton(
             key: const ValueKey('update-dialog-download'),
             onPressed: () {
-              later = false;
               Navigator.of(dialogContext).pop();
               unawaited(startUpdateInstall(
                 context,
@@ -715,16 +722,97 @@ class _EditorScreenState extends State<EditorScreen>
                 installer: _updateInstaller,
               ));
             },
-            child: Text(canInstall ? l10n.updateInstallNow : l10n.editorDownload),
+            child: Text(_canInstallUpdate
+                ? l10n.updateInstallNow
+                : l10n.editorDownload),
           ),
         ],
       ),
-    ).whenComplete(() {
-      // closed with "Later": allow the next check to ask again
-      if (later && _updateBannerFor == release.identity) {
-        _updateBannerFor = null;
-      }
-    }));
+    ));
+  }
+
+  bool get _canInstallUpdate =>
+      _updates.downloadAssetName != null &&
+      _updateInstaller.modeFor(_updates.downloadAssetName) !=
+          UpdateApplyMode.unsupported;
+
+  /// Persistent reminder: only goes away by downloading the update.
+  void _showUpdateBanner(ReleaseInfo release) {
+    if (!mounted) return;
+    final l10n = appL10n(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(MaterialBanner(
+      key: const ValueKey('update-available-banner'),
+      content: Text(l10n.editorUpdateAvailable(release.displayVersion)),
+      leading: const Icon(Icons.system_update_alt),
+      actions: [
+        FilledButton(
+          key: const ValueKey('update-banner-download'),
+          onPressed: () {
+            messenger.hideCurrentMaterialBanner();
+            unawaited(startUpdateInstall(
+              context,
+              updates: _updates,
+              installer: _updateInstaller,
+            ));
+          },
+          child: Text(
+              _canInstallUpdate ? l10n.updateInstallNow : l10n.editorDownload),
+        ),
+      ],
+    ));
+  }
+
+  /// Automatic check of the upstream project: popup once per official
+  /// release; "Later" leaves it highlighted in Settings (Updates > Official
+  /// repo) until it is marked as merged or a newer one is published.
+  Future<void> _startupOfficialCheck() async {
+    final checker = OfficialUpdateChecker.instance;
+    await _updates.ready;
+    if (!mounted || !_updates.autoCheckAllowed(resume: false)) return;
+    await checker.ready;
+    await checker.check();
+    if (!mounted ||
+        checker.status != OfficialUpdateStatus.newer ||
+        checker.isDismissed) {
+      return;
+    }
+    final it = Localizations.localeOf(context).languageCode == 'it';
+    await showPdfDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('official-update-dialog'),
+        icon: const Icon(Icons.new_releases_outlined),
+        content: Text(it
+            ? 'Nuova versione ufficiale: ${checker.latestLabel}'
+            : 'New official version: ${checker.latestLabel}'),
+        actions: [
+          TextButton(
+            key: const ValueKey('official-update-later'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(checker.dismissLatest());
+            },
+            child: Text(it ? 'Dopo' : 'Later'),
+          ),
+          FilledButton(
+            key: const ValueKey('official-update-open'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              unawaited(checker.dismissLatest());
+              final url = checker.latestUrl;
+              if (url != null) {
+                unawaited(launchUrl(Uri.parse(url),
+                    mode: LaunchMode.externalApplication));
+              }
+            },
+            child: Text(it ? 'Apri la release' : 'Open the release'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Opens the `.pdf`s passed on the command line - how Linux delivers a file
