@@ -5259,6 +5259,16 @@ class _EditorScreenState extends State<EditorScreen>
         for (final action in _documentActions())
           if (!(action.hiddenWhenReadOnly && _readOnly)) action,
     ];
+    // New actions from the upstream project (form data FDF/XFDF/XDP) go in
+    // their own "To organize" section until the user places them.
+    final organizeActions = [
+      for (final action in documentActions)
+        if (action.sheet == _SheetPlacement.formData) action,
+    ];
+    final plainDocumentActions = [
+      for (final action in documentActions)
+        if (action.sheet != _SheetPlacement.formData) action,
+    ];
     final appActions = _appActions();
     final action = await showAppMenuSheet(
       context,
@@ -5269,7 +5279,7 @@ class _EditorScreenState extends State<EditorScreen>
         run: _openCommandPalette,
       ),
       file: [for (final action in _fileActions()) entry(action)],
-      document: [for (final action in documentActions) entry(action)],
+      document: [for (final action in plainDocumentActions) entry(action)],
       recentFiles: [
         for (final recent in allRecents)
           AppMenuSheetEntry(
@@ -5295,6 +5305,7 @@ class _EditorScreenState extends State<EditorScreen>
               title: l.editorClearRecentFiles,
               run: () => unawaited(_recents.clear()),
             ),
+      toOrganize: [for (final action in organizeActions) entry(action)],
       readOnly: hasDocument ? _readOnly : null,
       onToggleReadOnly: () => setState(() => _readOnly = !_readOnly),
       app: [for (final action in appActions) entry(action)],

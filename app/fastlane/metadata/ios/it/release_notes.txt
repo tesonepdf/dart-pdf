@@ -1,3 +1,3 @@
-11.0.0
+DartPDF 13.0.0
 
-Crea tabelle modificabili e copia celle da e verso fogli di calcolo. Riprendi il riconoscimento del testo interrotto. Sostituisci i colori nelle istantanee e nelle annotazioni. Allinea il testo verticalmente e duplica i timbri salvati. Migliorati il testo a capo, i caratteri memorizzati e le istantanee ruotate.
+Importa ed esporta dati dei moduli e commenti con file FDF, XFDF e XDP. Modifica i link esistenti. Leggi le discussioni accanto alla pagina e tieni aperte più note. Condividi insieme le schede selezionate. Migliora la schermata iniziale, l’apertura dei PDF e gli aggiornamenti. L’anteprima di stampa segue le pagine selezionate.

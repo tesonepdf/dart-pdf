@@ -4861,19 +4861,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         return KeyEventResult.handled;
       }
     }
-    if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
-        _textEditRect != null &&
-        _textEditText.text.isEmpty &&
-        !HardwareKeyboard.instance.isControlPressed &&
-        !HardwareKeyboard.instance.isMetaPressed &&
-        !HardwareKeyboard.instance.isAltPressed &&
-        (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-            event.logicalKey == LogicalKeyboardKey.arrowRight ||
-            event.logicalKey == LogicalKeyboardKey.arrowUp ||
-            event.logicalKey == LogicalKeyboardKey.arrowDown)) {
-      _moveTextEditBox(event.logicalKey);
-      return KeyEventResult.handled;
-    }
     // Alt+Z fits the box to its text while the caret is still in it - the
     // viewer's own binding never sees the key once the field has focus
     if (event is KeyDownEvent &&
