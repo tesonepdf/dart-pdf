@@ -14,7 +14,7 @@ import 'update_distribution_stub.dart'
 /// (Windows + macOS).
 const dartPdfNightlyTag = 'app-nightly';
 
-/// The rolling GitHub release used by sideloaded Android builds.
+/// The single GitHub release used by sideloaded Android builds.
 // The prova (test) build points at its own release so the two apps never offer
 // each other's updates (see .github/workflows/build.yml).
 const dartPdfAndroidTag = String.fromEnvironment(
@@ -170,9 +170,10 @@ class ReleaseInfo {
   static ReleaseInfo? fromJson(Map<String, dynamic> json) {
     if (json['draft'] == true) return null;
     final tag = json['tag_name'] as String?;
-    // The rolling Android release is published as a pre-release on purpose (so
-    // it never becomes the repository's "latest"), so it must pass here like
-    // the nightly one - dropping it made every update check say "up to date".
+    // The Android release is now a normal release (not a pre-release), but
+    // older builds published it as a pre-release: keep letting it pass here so
+    // the check works in both cases - dropping it made every update check say
+    // "up to date".
     if (json['prerelease'] == true &&
         tag != dartPdfNightlyTag &&
         tag != dartPdfAndroidTag) {
