@@ -52,7 +52,7 @@ jobs:
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          number="$(git rev-list --count HEAD)"
+          number="${{ github.run_number }}"
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
