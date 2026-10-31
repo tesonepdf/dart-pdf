@@ -1431,6 +1431,7 @@ class PdfViewer extends StatefulWidget {
     this.onPlaceSignature,
     this.pageSpacing = 12,
     this.trailingPadding = 0,
+    this.leadingPadding = 0,
     this.pageLayout = const PdfPageLayout.verticalContinuous(),
     this.initialFit = PdfViewerFit.page,
     this.initialViewport,
@@ -1865,6 +1866,10 @@ class PdfViewer extends StatefulWidget {
   /// scrolled above it. In a vertical layout the space is below the document;
   /// in a horizontal layout it is to its right.
   final double trailingPadding;
+
+  /// Space kept free above the first page of a vertical layout - the height
+  /// of a header drawn over the viewer, so the page starts below it.
+  final double leadingPadding;
 
   /// How the pages are arranged: vertical continuous (the default,
   /// top-to-bottom) or horizontal continuous (left-to-right). See
@@ -10292,6 +10297,7 @@ class _PdfViewerState extends State<PdfViewer>
             ? EdgeInsets.only(
                 right: widget.pageSpacing + widget.trailingPadding)
             : EdgeInsets.only(
+                top: widget.leadingPadding,
                 bottom: widget.pageSpacing + widget.trailingPadding),
         itemBuilder: (context, index) => KeyedSubtree(
           // Stable indirect page identity is the reconciliation key. A pure

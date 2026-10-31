@@ -1991,10 +1991,32 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                 enabled: autoHide,
                 child: child,
               );
-          return Column(children: [
-            if (header != null) autoHideBar(header, AxisDirection.up),
-            Expanded(
-              child: PdfShellPanelLayout(
+          // phone: the PDF fills the whole screen; header and toolbar are
+          // drawn over it (they slide away while reading)
+          final overlayChrome = compact && header != null;
+          Widget layout(Widget content) => overlayChrome
+              ? Stack(children: [
+                  Positioned.fill(child: content),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: autoHideBar(header, AxisDirection.up),
+                  ),
+                  if (toolbar != null && dockToolbar)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: autoHideBar(toolbar, AxisDirection.down),
+                    ),
+                ])
+              : Column(children: [
+                  if (header != null) autoHideBar(header, AxisDirection.up),
+                  Expanded(child: content),
+                ]);
+          return layout(
+              PdfShellPanelLayout(
                 leadingPanels: dockedPanels(PdfPanelDock.left),
                 topPanels: dockedPanels(PdfPanelDock.top),
                 bottomPanels: dockedPanels(PdfPanelDock.bottom),
@@ -2065,6 +2087,10 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           // contextual strip, so the last page can move fully
                           // clear of the controls instead of being trapped
                           // underneath them.
+                          leadingPadding: compact && header != null
+                              ? MediaQuery.paddingOf(context).top +
+                                  kToolbarHeight
+                              : 0,
                           trailingPadding: showToolbar &&
                                   !dockToolbar &&
                                   prefs.toolbarDock == PdfPanelDock.bottom
@@ -2115,15 +2141,13 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                 floatingToolbar:
                     toolbar != null && !dockToolbar ? toolbar : null,
                 floatingToolbarDock: prefs.toolbarDock,
-                dockedToolbar: toolbar != null && dockToolbar
+                dockedToolbar: toolbar != null && dockToolbar && !overlayChrome
                     ? autoHideBar(toolbar, AxisDirection.down)
                     : null,
                 onToolbarDock: toolbar != null && !dockToolbar
                     ? (dock) => prefs.toolbarDock = dock
                     : null,
-              ),
-            ),
-          ]);
+              ));
         },
       );
     });

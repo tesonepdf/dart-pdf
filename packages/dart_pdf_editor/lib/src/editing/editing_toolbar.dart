@@ -2701,6 +2701,12 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     _commands.currentToolBuilder = (ctx) =>
         mounted ? _currentToolSurface(ctx) : const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
+    final mobileTrailing = _mobileTrailing(context);
+    // nothing to show (undo/redo live in the header): no empty bar over the
+    // page
+    if (!widget.showUndoRedo && mobileTrailing.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Container(
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -2732,7 +2738,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             ),
           ],
           const Spacer(),
-          ..._mobileTrailing(context),
+          ...mobileTrailing,
         ]),
       ),
     );
@@ -3118,11 +3124,9 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   Future<void> _openToolSheet(BuildContext context) async {
     final groups = _visibleGroups;
     var tabId = _openGroup?.id ?? groups.first.id;
-    await PdfEditorPresenter.of(context).sheet<void>(
+    await _showTopDropSheet<void>(
       context,
-      PdfSheetRequest<void>(
-        scrollControlled: true,
-        builder: (sheetContext) => StatefulBuilder(
+      (sheetContext) => StatefulBuilder(
           builder: (sheetContext, setSheetState) => ListenableBuilder(
             listenable: Listenable.merge([controller, viewerController]),
             builder: (context, _) {
@@ -3130,6 +3134,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                   orElse: () => groups.first);
               return SafeArea(
                 top: false,
+                bottom: false,
                 // sized to its content, scrolling only once a tall group
                 // (the measure grid plus its settings) outgrows the sheet
                 child: SingleChildScrollView(
@@ -3181,6 +3186,44 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             },
           ),
         ),
+    );
+  }
+
+  /// Shows [builder] as a panel that drops down from the top edge, over the
+  /// page (the phone's tools menu), instead of rising from the bottom.
+  Future<T?> _showTopDropSheet<T>(
+      BuildContext context, WidgetBuilder builder) {
+    final scheme = Theme.of(context).colorScheme;
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black26,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, _, __) => Align(
+        alignment: Alignment.topCenter,
+        child: Material(
+          color: scheme.surface,
+          elevation: 8,
+          borderRadius:
+              const BorderRadius.vertical(bottom: Radius.circular(20)),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.8,
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: builder(dialogContext),
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+            .animate(CurvedAnimation(
+                parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
       ),
     );
   }
