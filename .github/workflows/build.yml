@@ -73,21 +73,12 @@ jobs:
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          # Numero build separato per canale: continua dal numero gia' pubblicato
-          # nella release del PROPRIO ramo (marcatore app-build) e aggiunge 1.
-          # Non legge mai la release dell'altro ramo. Se la release non ha il
-          # marcatore, usa il contatore di GitHub (mai piu' basso dello storico).
-          ultimo="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ANDROID_TAG" --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
-          # La prova parte da NUM_BASE+1 (10001): se la sua release ha un numero
-          # piu' basso (build vecchie), si riparte da li'.
-          if [[ -n "$ultimo" ]]; then
-            if [[ "$ultimo" -lt "$NUM_BASE" ]]; then ultimo="$NUM_BASE"; fi
-            number="$((ultimo + 1))"
-          elif [[ "$NUM_BASE" -gt 0 ]]; then
-            number="$((NUM_BASE + 1))"
-          else
-            number="${{ github.run_number }}"
-          fi
+          # Il numero dopo il # dell'app e' quello della run su GitHub Actions:
+          # ufficiale = numero della run (es. run #103 -> app #103); prova =
+          # 10000 + numero della run del suo workflow (run #1 -> app #10001).
+          # GitHub numera da 1 ogni workflow e non lo si puo' cambiare: per
+          # questo la prova si distingue con l'offset di 10000.
+          number="$((NUM_BASE + ${{ github.run_number }}))"
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -341,7 +332,7 @@ jobs:
           # pubblicato: cosi' una build non viene saltata perche' nel frattempo
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
-          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
+          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" || "$NUM_BASE" -gt 0 ]]; then
             android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
             android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
