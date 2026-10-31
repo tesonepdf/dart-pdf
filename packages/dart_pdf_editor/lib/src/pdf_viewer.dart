@@ -8847,6 +8847,7 @@ class _PdfViewerState extends State<PdfViewer>
 
   void _onTouchMarkStart(DragStartDetails details) {
     _markIgnore = false;
+    _markSnapped = false;
     final start = _lastPointerLocal ?? details.localPosition;
     _focusNode.requestFocus();
     _wordAnchor = null;
@@ -8860,17 +8861,55 @@ class _PdfViewerState extends State<PdfViewer>
     final box = _pages[point.$1].cropBox;
     final scale = box.width <= 0 ? 1.0 : _pageWidth(point.$1) / box.width;
     setState(() {
-      _markStroke = [start];
+      _markStroke = [_snapMarkPoint(start)];
       _markStrokeWidth =
           PdfEditingController.markupStrokeWidth(kind, box.width) * scale;
     });
+  }
+
+  bool _markSnapped = false;
+
+  /// The finger position, straightened onto the text line when it is over a
+  /// word: the stroke keeps following the finger along the line but sits on
+  /// the word's own height instead of wobbling.
+  Offset _snapMarkPoint(Offset p) {
+    final range = _wordRangeAt(p, tolerance: 6);
+    if (range == null) return p;
+    final page = range.$1.$1;
+    final text = _pageText(page);
+    final quads = text.quadsFor(range.$1.$2, range.$2.$2);
+    if (quads.isEmpty) return p;
+    var top = double.negativeInfinity;
+    var bottom = double.infinity;
+    var left = double.infinity;
+    var right = double.negativeInfinity;
+    for (final q in quads) {
+      final b = q.bounds;
+      if (b.top > top) top = b.top;
+      if (b.bottom < bottom) bottom = b.bottom;
+      if (b.left < left) left = b.left;
+      if (b.right > right) right = b.right;
+    }
+    final box = _pages[page].cropBox;
+    if (box.width <= 0 || box.height <= 0) return p;
+    final geometry = PdfPageGeometry(
+      cropBox: box,
+      rotation: _effectiveRotation(page),
+      viewSize: Size(_pageWidth(page), _pageHeight(page)),
+    );
+    final view = geometry
+        .toViewRect(PdfRect(left, bottom, right, top))
+        .shift(Offset(_pageContentX(page), _pageContentY(page)));
+    if (p.dx < view.left - 6 || p.dx > view.right + 6) return p;
+    _markSnapped = true;
+    return Offset(p.dx, view.center.dy);
   }
 
   void _onTouchMarkUpdate(DragUpdateDetails details) {
     if (_markIgnore) return;
     final stroke = _markStroke;
     if (stroke != null) {
-      final p = details.localPosition;
+      final p = _snapMarkPoint(details.localPosition);
       if ((p - stroke.last).distance < 1.0) return;
       setState(() => stroke.add(p));
       return;
@@ -8893,6 +8932,22 @@ class _PdfViewerState extends State<PdfViewer>
     final editing = widget.editing;
     final kind = editing?.markupTool;
     if (editing == null || kind == null || stroke.length < 2) return;
+    if (!_markSnapped) {
+      var minX = stroke.first.dx, maxX = minX;
+      var minY = stroke.first.dy, maxY = minY;
+      var sumY = 0.0;
+      for (final o in stroke) {
+        if (o.dx < minX) minX = o.dx;
+        if (o.dx > maxX) maxX = o.dx;
+        if (o.dy < minY) minY = o.dy;
+        if (o.dy > maxY) maxY = o.dy;
+        sumY += o.dy;
+      }
+      if ((maxX - minX) > 40 && (maxY - minY) < (maxX - minX) * 0.3) {
+        final y = sumY / stroke.length;
+        stroke = [for (final o in stroke) Offset(o.dx, y)];
+      }
+    }
     final first = _pagePointAt(stroke.first);
     if (first == null) return;
     final page = first.$1;
@@ -9584,6 +9639,9 @@ class _PdfViewerState extends State<PdfViewer>
   void _onDoubleTap() {
     final details = _doubleTapDetails;
     if (details == null) return;
+    // with a marker armed a double tap marks a word, it never zooms
+    final armed = widget.editing;
+    if (armed != null && armed.markupTool != null && !armed.isHandMode) return;
     if (_openTableAt(details.localPosition)) return;
     // two quick pen dots (dotting an i twice) are ink, not a zoom
     // gesture - the strokes already committed through the raw path
