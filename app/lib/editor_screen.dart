@@ -4813,8 +4813,8 @@ class _EditorScreenState extends State<EditorScreen>
               final build = toolCommands.currentToolBuilder;
               if (build == null) return const SizedBox.shrink();
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: SizedBox(width: phone ? 112 : 150, child: build(context)),
+                padding: EdgeInsets.symmetric(horizontal: phone ? 2 : 4),
+                child: SizedBox(width: phone ? 100 : 150, child: build(context)),
               );
             },
           );
@@ -4830,7 +4830,7 @@ class _EditorScreenState extends State<EditorScreen>
                 icon: const Icon(Icons.undo),
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 36),
                 onPressed: session.canUndo ? session.undo : null,
               ),
               IconButton(
@@ -4838,7 +4838,7 @@ class _EditorScreenState extends State<EditorScreen>
                 icon: const Icon(Icons.redo),
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 36),
                 onPressed: session.canRedo ? session.redo : null,
               ),
             ]),
@@ -4880,7 +4880,7 @@ class _EditorScreenState extends State<EditorScreen>
     return AppBar(
       key: const ValueKey('editor-app-bar'),
       leading: app.leading,
-      leadingWidth: _appMenuLeadingWidth,
+      leadingWidth: phone ? 48 : _appMenuLeadingWidth,
       centerTitle: false,
       // phone: one single row - menu, page, tool, undo/redo, search, close
       title: phone ? editorRow : app.title,
@@ -5170,6 +5170,8 @@ class _EditorScreenState extends State<EditorScreen>
     return PdfEditorView(
       key: ValueKey(tab),
       features: PdfEditorFeatures(undoRedo: !_usesAppMenuSheet(context)),
+      // phone: no dark band under a short page - the paper colour fills it
+      backgroundColor: _usesAppMenuSheet(context) ? Colors.white : null,
       documentId: tab.documentId,
       controller: tab.session,
       viewerController: tab.viewer,
