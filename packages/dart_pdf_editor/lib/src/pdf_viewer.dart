@@ -8848,29 +8848,22 @@ class _PdfViewerState extends State<PdfViewer>
   void _onTouchMarkStart(DragStartDetails details) {
     _markIgnore = false;
     final start = _lastPointerLocal ?? details.localPosition;
-    final position = _textSelectionStartAt(start, alongTolerance: 14);
     _focusNode.requestFocus();
     _wordAnchor = null;
-    if (position == null) {
-      final editing = widget.editing;
-      final kind = editing?.markupTool;
-      final point = _pagePointAt(start);
-      if (editing == null || kind == null || point == null) return;
-      final box = _pages[point.$1].cropBox;
-      final scale = box.width <= 0 ? 1.0 : _pageWidth(point.$1) / box.width;
-      setState(() {
-        _markStroke = [start];
-        _markStrokeWidth =
-            PdfEditingController.markupStrokeWidth(kind, box.width) * scale;
-      });
+    final editing = widget.editing;
+    final kind = editing?.markupTool;
+    final point = _pagePointAt(start);
+    if (editing == null || kind == null || point == null) {
+      _markIgnore = true;
       return;
     }
+    final box = _pages[point.$1].cropBox;
+    final scale = box.width <= 0 ? 1.0 : _pageWidth(point.$1) / box.width;
     setState(() {
-      _touchSelecting = true;
-      _selAnchor = position;
-      _selFocus = position;
+      _markStroke = [start];
+      _markStrokeWidth =
+          PdfEditingController.markupStrokeWidth(kind, box.width) * scale;
     });
-    _controller._setSelection('');
   }
 
   void _onTouchMarkUpdate(DragUpdateDetails details) {
