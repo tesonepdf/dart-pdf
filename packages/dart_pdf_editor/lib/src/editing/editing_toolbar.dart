@@ -2623,7 +2623,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
       case PdfEditToolGroup.measure:
         return const _StyleFields(stroke: true, opacity: true, font: true);
       case PdfEditToolGroup.markup:
-        return const _StyleFields(opacity: true);
+        return const _StyleFields(stroke: true, opacity: true);
       default:
         return const _StyleFields();
     }
@@ -4542,7 +4542,7 @@ class _StyleMenuState extends State<_StyleMenu> {
                       label: pdfL10n(context).tbStrokeWidthLabel,
                       value: strokeValue,
                       min: 0.5,
-                      max: 12,
+                      max: controller.markupTool != null ? 40 : 12,
                       fieldMin: 0,
                       fieldMax: kPdfTypedSizeMax,
                       display: (v) => '${v.toStringAsFixed(1)} pt',

@@ -736,15 +736,16 @@ class PdfEditingPreferences extends ChangeNotifier
       Set<String> lockedFields = const {},
       bool forceRestore = false}) {
     var seeded = false;
-    if (scope != null &&
-        defaults.isNotEmpty &&
-        !_toolStyles.containsKey(scope)) {
-      final slot = {
+    if (scope != null && defaults.isNotEmpty) {
+      final existing = _toolStyles[scope];
+      final missing = {
         for (final entry in defaults.entries)
-          if (fields.contains(entry.key)) entry.key: entry.value,
+          if (fields.contains(entry.key) &&
+              (existing == null || !existing.containsKey(entry.key)))
+            entry.key: entry.value,
       };
-      if (slot.isNotEmpty) {
-        _toolStyles[scope] = slot;
+      if (missing.isNotEmpty) {
+        _toolStyles[scope] = {...?existing, ...missing};
         _writeToolStyles();
         seeded = true;
       }

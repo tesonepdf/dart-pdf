@@ -2567,7 +2567,9 @@ class PdfEditingController extends ChangeNotifier {
         const {
           'color',
           'opacity',
+          'strokeWidth',
         },
+        defaults: const {'strokeWidth': 12.0},
         lockedFields: _lockedStyleFields,
         forceRestore: forceRestore,
       );
@@ -3335,7 +3337,7 @@ class PdfEditingController extends ChangeNotifier {
           pageIndex,
           [List.of(stroke)],
           color: _colorValue,
-          strokeWidth: markupStrokeWidth(kind, pageWidth),
+          strokeWidth: preferences.strokeWidth,
           opacity: preferences.opacity,
           author: preferences.author,
         );
