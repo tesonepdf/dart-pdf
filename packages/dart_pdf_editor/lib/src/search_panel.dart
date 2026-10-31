@@ -1214,6 +1214,10 @@ class PdfPanelToggleButton extends StatelessWidget {
 }
 
 
+/// Whether a [PdfCollapsibleSearch] is unfolded. A host header can hide its
+/// other controls meanwhile, so the field and the "more" button stay in view.
+final ValueNotifier<bool> pdfSearchOpen = ValueNotifier<bool>(false);
+
 /// A search that rests as a magnifier icon and unfolds into the full
 /// [PdfSearchField]; tapping the field's magnifier folds it back.
 class PdfCollapsibleSearch extends StatefulWidget {
@@ -1239,7 +1243,14 @@ class PdfCollapsibleSearch extends StatefulWidget {
 class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
   bool _open = false;
 
+  @override
+  void dispose() {
+    if (_open) Future.microtask(() => pdfSearchOpen.value = false);
+    super.dispose();
+  }
+
   void _expand() {
+    pdfSearchOpen.value = true;
     setState(() => _open = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _open) widget.focusNode?.requestFocus();
@@ -1248,6 +1259,7 @@ class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
 
   void _collapse() {
     widget.focusNode?.unfocus();
+    pdfSearchOpen.value = false;
     setState(() => _open = false);
   }
 
