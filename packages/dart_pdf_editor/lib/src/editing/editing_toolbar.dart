@@ -2787,7 +2787,9 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             label: switchLabel,
             child: InkWell(
               key: const ValueKey('pdf-mobile-current-tool'),
-              onTap: () => _openRecentTools(context),
+              // always the tools menu (dropping from the top); the list of recent
+              // tools would hide it once a tool had been used
+              onTap: () => _openToolSheet(this.context),
               child: SizedBox(
                 width: double.infinity,
                 height: 40,
