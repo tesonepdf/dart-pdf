@@ -150,3 +150,5 @@ Scopo: la casella si adatta **in automatico** al testo e alla grandezza del cara
 - Selezione dei risultati uno per uno (spunte): non c'è; oggi si marca il corrente o tutti.
 
 - **Marcatore col dito rifatto (2026-10-31, richiesta dell'utente):** con un marcatore armato, il dito che striscia colora sempre sotto il dito (`_TouchMarkupDragRecognizer`, si prende il gesto dopo 5 pixel): se parte da una parola si aggancia alle parole, altrimenti (scansioni, margini) disegna un tratto libero (`PdfEditingController.addMarkupStroke`, un'annotazione a mano libera, un solo annulla). Due dita allargano e stringono (zoom); se la seconda dita arriva a tratto iniziato, il tratto viene scartato. Il doppio tocco su una parola marca solo quella parola. Stesso comportamento prima e dopo lo zoom. Non compilato qui (Flutter assente), da provare sul telefono.
+
+- **Marcatore col dito semplificato (2026-10-31):** tolto l'aggancio alle parole nella striscia: il dito colora sempre sotto il dito (tratto libero). Il doppio tocco su una parola marca la parola.
