@@ -8848,6 +8848,7 @@ class _PdfViewerState extends State<PdfViewer>
   void _onTouchMarkStart(DragStartDetails details) {
     _markIgnore = false;
     _markSnapped = false;
+    _markSnapYs.clear();
     final start = _lastPointerLocal ?? details.localPosition;
     _focusNode.requestFocus();
     _wordAnchor = null;
@@ -8862,12 +8863,12 @@ class _PdfViewerState extends State<PdfViewer>
     final scale = box.width <= 0 ? 1.0 : _pageWidth(point.$1) / box.width;
     setState(() {
       _markStroke = [_snapMarkPoint(start)];
-      _markStrokeWidth =
-          PdfEditingController.markupStrokeWidth(kind, box.width) * scale;
+      _markStrokeWidth = editing.preferences.strokeWidth * scale;
     });
   }
 
   bool _markSnapped = false;
+  final List<double> _markSnapYs = [];
 
   /// The finger position, straightened onto the text line when it is over a
   /// word: the stroke keeps following the finger along the line but sits on
@@ -8902,7 +8903,34 @@ class _PdfViewerState extends State<PdfViewer>
         .shift(Offset(_pageContentX(page), _pageContentY(page)));
     if (p.dx < view.left - 6 || p.dx > view.right + 6) return p;
     _markSnapped = true;
+    _markSnapYs.add(view.center.dy);
     return Offset(p.dx, view.center.dy);
+  }
+
+  /// Every marker stroke is a straight line: horizontal (on the text line
+  /// when it crossed words) or vertical, whichever way the finger mostly
+  /// went, from one end of the movement to the other.
+  List<Offset> _straightMark(List<Offset> pts) {
+    if (pts.length < 2) return pts;
+    var minX = pts.first.dx, maxX = minX;
+    var minY = pts.first.dy, maxY = minY;
+    var sumX = 0.0, sumY = 0.0;
+    for (final o in pts) {
+      if (o.dx < minX) minX = o.dx;
+      if (o.dx > maxX) maxX = o.dx;
+      if (o.dy < minY) minY = o.dy;
+      if (o.dy > maxY) maxY = o.dy;
+      sumX += o.dx;
+      sumY += o.dy;
+    }
+    if (maxX - minX >= maxY - minY) {
+      final y = _markSnapYs.isNotEmpty
+          ? _markSnapYs.reduce((a, b) => a + b) / _markSnapYs.length
+          : sumY / pts.length;
+      return [Offset(minX, y), Offset(maxX, y)];
+    }
+    final x = sumX / pts.length;
+    return [Offset(x, minY), Offset(x, maxY)];
   }
 
   void _onTouchMarkUpdate(DragUpdateDetails details) {
@@ -8932,22 +8960,7 @@ class _PdfViewerState extends State<PdfViewer>
     final editing = widget.editing;
     final kind = editing?.markupTool;
     if (editing == null || kind == null || stroke.length < 2) return;
-    if (!_markSnapped) {
-      var minX = stroke.first.dx, maxX = minX;
-      var minY = stroke.first.dy, maxY = minY;
-      var sumY = 0.0;
-      for (final o in stroke) {
-        if (o.dx < minX) minX = o.dx;
-        if (o.dx > maxX) maxX = o.dx;
-        if (o.dy < minY) minY = o.dy;
-        if (o.dy > maxY) maxY = o.dy;
-        sumY += o.dy;
-      }
-      if ((maxX - minX) > 40 && (maxY - minY) < (maxX - minX) * 0.3) {
-        final y = sumY / stroke.length;
-        stroke = [for (final o in stroke) Offset(o.dx, y)];
-      }
-    }
+    stroke = _straightMark(stroke);
     final first = _pagePointAt(stroke.first);
     if (first == null) return;
     final page = first.$1;
@@ -10669,7 +10682,7 @@ class _PdfViewerState extends State<PdfViewer>
                                           child: IgnorePointer(
                                             child: CustomPaint(
                                               painter: _MarkStrokePainter(
-                                                List.of(_markStroke!),
+                                                _straightMark(_markStroke!),
                                                 widget.editing!.color
                                                     .withValues(
                                                         alpha: widget.editing!
