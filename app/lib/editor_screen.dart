@@ -4814,9 +4814,34 @@ class _EditorScreenState extends State<EditorScreen>
               if (build == null) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: SizedBox(width: 150, child: build(context)),
+                child: SizedBox(width: phone ? 112 : 150, child: build(context)),
               );
             },
+          );
+    // phone: undo/redo sit in the header's single row, after the tool
+    final session = tab?.session;
+    final undoRedo = session == null
+        ? null
+        : ListenableBuilder(
+            listenable: session,
+            builder: (context, _) => Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                key: const ValueKey('pdf-undo'),
+                icon: const Icon(Icons.undo),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: session.canUndo ? session.undo : null,
+              ),
+              IconButton(
+                key: const ValueKey('pdf-redo'),
+                icon: const Icon(Icons.redo),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: session.canRedo ? session.redo : null,
+              ),
+            ]),
           );
     final editorRow = parts == null
         ? null
@@ -4826,6 +4851,7 @@ class _EditorScreenState extends State<EditorScreen>
                 leading: [
                   if (parts.pageNumber case final pageNumber?) pageNumber,
                   if (toolPart != null) toolPart,
+                  if (phone && undoRedo != null && !_readOnly) undoRedo,
                   if (searchPart != null) searchPart,
                 ],
                 trailing: [
@@ -4856,8 +4882,9 @@ class _EditorScreenState extends State<EditorScreen>
       leading: app.leading,
       leadingWidth: _appMenuLeadingWidth,
       centerTitle: false,
-      title: phone ? null : app.title,
-      titleSpacing: _tabs.isEmpty ? null : 8,
+      // phone: one single row - menu, page, tool, undo/redo, search, close
+      title: phone ? editorRow : app.title,
+      titleSpacing: phone ? 0 : (_tabs.isEmpty ? null : 8),
       actions: [
         ...app.actions,
         if (save != null)
@@ -4866,7 +4893,7 @@ class _EditorScreenState extends State<EditorScreen>
             child: save,
           ),
       ],
-      bottom: editorRow == null
+      bottom: editorRow == null || phone
           ? null
           : PreferredSize(
               preferredSize: const Size.fromHeight(48),
@@ -5142,6 +5169,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
     return PdfEditorView(
       key: ValueKey(tab),
+      features: PdfEditorFeatures(undoRedo: !_usesAppMenuSheet(context)),
       documentId: tab.documentId,
       controller: tab.session,
       viewerController: tab.viewer,
