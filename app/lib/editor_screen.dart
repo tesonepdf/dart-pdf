@@ -4843,15 +4843,24 @@ class _EditorScreenState extends State<EditorScreen>
               ),
             ]),
           );
+    Widget hideWhileSearching(Widget child) => ValueListenableBuilder<bool>(
+          valueListenable: pdfSearchOpen,
+          builder: (context, open, _) =>
+              open && phone ? const SizedBox.shrink() : child,
+        );
     final editorRow = parts == null
         ? null
         : parts.compact
             ? parts.bar(
                 color: Colors.transparent,
                 leading: [
-                  if (parts.pageNumber case final pageNumber?) pageNumber,
-                  if (toolPart != null) toolPart,
-                  if (phone && undoRedo != null && !_readOnly) undoRedo,
+                  // while the search is unfolded the other controls step
+                  // aside, so the field and the "more" button stay visible
+                  if (parts.pageNumber case final pageNumber?)
+                    hideWhileSearching(pageNumber),
+                  if (toolPart != null) hideWhileSearching(toolPart),
+                  if (phone && undoRedo != null && !_readOnly)
+                    hideWhileSearching(undoRedo),
                   if (searchPart != null) searchPart,
                 ],
                 trailing: [

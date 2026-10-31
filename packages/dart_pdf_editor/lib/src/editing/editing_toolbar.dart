@@ -3127,8 +3127,6 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   /// arms it directly and closes the sheet.
   Future<void> _openToolSheet(BuildContext context) async {
     final groups = _visibleGroups;
-    // the phone panel lists the six tool groups (select is the header's own
-    // tool control)
     final panelGroups = _panelGroupOrder(groups);
     var tabId = _openGroup?.id ?? panelGroups.first.id;
     await _showTopDropSheet<void>(
@@ -3154,7 +3152,9 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                         Padding(
                           padding: EdgeInsets.only(bottom: row == 0 ? 7 : 0),
                           child: Row(children: [
-                            for (final g in panelGroups.skip(row * 3).take(3))
+                            for (final g in panelGroups
+                                .skip(row == 0 ? 0 : 4)
+                                .take(row == 0 ? 4 : 3))
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -3166,6 +3166,11 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                                       group: g,
                                       active: g.id == tabId,
                                       onTap: () {
+                                        if (g.kind == PdfEditToolGroup.select) {
+                                          Navigator.of(sheetContext).pop();
+                                          _toggleTool(PdfEditTool.select);
+                                          return;
+                                        }
                                         if (g.id == tabId) return;
                                         setSheetState(() => tabId = g.id);
                                         _armSheetGroupDefault(g);
@@ -3199,9 +3204,10 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   }
 
   /// The groups in the phone panel's order: insert, markup, draw, measure,
-  /// edit, shapes (select left out).
+  /// edit, shapes (select first).
   List<_ToolGroup> _panelGroupOrder(List<_ToolGroup> groups) {
     const order = [
+      PdfEditToolGroup.select,
       PdfEditToolGroup.insert,
       PdfEditToolGroup.markup,
       PdfEditToolGroup.draw,
