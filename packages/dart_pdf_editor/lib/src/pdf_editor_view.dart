@@ -35,6 +35,7 @@ import 'preview_cache.dart';
 import 'raster_warm.dart';
 import 'progressive_source.dart';
 import 'raster_cache.dart';
+import 'renderer.dart';
 import 'search_panel.dart';
 import 'shell_chrome.dart';
 import 'shell_session.dart';
@@ -1991,49 +1992,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                 enabled: autoHide,
                 child: child,
               );
-          // phone: the PDF fills the whole screen; header and toolbar are
-          // drawn over it (they slide away while reading)
-          final overlayChrome = compact && header != null;
-          Widget layout(Widget content) => overlayChrome
-              ? Stack(children: [
-                  Positioned.fill(child: content),
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: autoHideBar(header, AxisDirection.up),
-                  ),
-                  if (toolbar != null && dockToolbar)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: autoHideBar(toolbar, AxisDirection.down),
-                    ),
-                ])
-              : Column(children: [
-                  if (header != null) autoHideBar(header, AxisDirection.up),
-                  Expanded(child: content),
-                ]);
-          return layout(
-              PdfShellPanelLayout(
-                leadingPanels: dockedPanels(PdfPanelDock.left),
-                topPanels: dockedPanels(PdfPanelDock.top),
-                bottomPanels: dockedPanels(PdfPanelDock.bottom),
-                onPanelDock: _setPanelDock,
-                onHostPanelDock: widget.extraPanels.isEmpty
-                    ? null
-                    : (panel, dock) => prefs.setExtraPanelDock(panel.id, dock),
-                viewer: PdfChromeAutoHideListener(
-                  controller: _chrome,
-                  child: reflowActive
-                      ? PdfReflowView(
-                          document: session.document,
-                          controller: _viewer,
-                          onShareImage: widget.onShareReflowImage,
-                          backgroundColor: widget.backgroundColor,
-                        )
-                      : PdfViewer(
+          Widget buildViewer(double lead) => PdfViewer(
                           // PdfViewer binds its controller once, in initState: a host
                           // handing in a different one (its own in place of ours)
                           // gets a fresh viewer bound to it, not one left driving
@@ -2087,10 +2046,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           // contextual strip, so the last page can move fully
                           // clear of the controls instead of being trapped
                           // underneath them.
-                          leadingPadding: compact && header != null
-                              ? MediaQuery.paddingOf(context).top +
-                                  kToolbarHeight
-                              : 0,
+                          leadingPadding: lead,
                           trailingPadding: showToolbar &&
                                   !dockToolbar &&
                                   prefs.toolbarDock == PdfPanelDock.bottom
@@ -2124,6 +2080,63 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           // thumbnails. It stays laid out, so tapping a grid
                           // page still scrolls it before the grid closes.
                           active: !gridActive,
+                        );
+          // phone: the PDF fills the whole screen; header and toolbar are
+          // drawn over it (they slide away while reading)
+          final overlayChrome = compact && header != null;
+          Widget layout(Widget content) => overlayChrome
+              ? Stack(children: [
+                  Positioned.fill(child: content),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: autoHideBar(header, AxisDirection.up),
+                  ),
+                  if (toolbar != null && dockToolbar)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: autoHideBar(toolbar, AxisDirection.down),
+                    ),
+                ])
+              : Column(children: [
+                  if (header != null) autoHideBar(header, AxisDirection.up),
+                  Expanded(child: content),
+                ]);
+          return layout(
+              PdfShellPanelLayout(
+                leadingPanels: dockedPanels(PdfPanelDock.left),
+                topPanels: dockedPanels(PdfPanelDock.top),
+                bottomPanels: dockedPanels(PdfPanelDock.bottom),
+                onPanelDock: _setPanelDock,
+                onHostPanelDock: widget.extraPanels.isEmpty
+                    ? null
+                    : (panel, dock) => prefs.setExtraPanelDock(panel.id, dock),
+                viewer: PdfChromeAutoHideListener(
+                  controller: _chrome,
+                  child: reflowActive
+                      ? PdfReflowView(
+                          document: session.document,
+                          controller: _viewer,
+                          onShareImage: widget.onShareReflowImage,
+                          backgroundColor: widget.backgroundColor,
+                        )
+                      : _PdfStretchToFill(
+                          enabled: compact && header != null && !gridActive,
+                          topInset: MediaQuery.paddingOf(context).top +
+                              kToolbarHeight,
+                          pageAspect: session.document.pageCount == 0
+                              ? null
+                              : () {
+                                  final size = PdfPageRenderer.pageSize(
+                                      session.document.pages.first);
+                                  return size.width <= 0
+                                      ? null
+                                      : size.height / size.width;
+                                }(),
+                          builder: buildViewer,
                         ),
                 ),
                 trailingPanels: dockedPanels(PdfPanelDock.right),
@@ -2177,5 +2190,58 @@ class _PdfEditorViewState extends State<PdfEditorView> {
       body = CallbackShortcuts(bindings: bindings, child: body);
     }
     return body;
+  }
+}
+
+/// Phone: stretches the document (different width and height proportions) so
+/// the first page fills the whole screen under the header, edge to edge.
+/// The viewer is laid out in a viewport [k] times taller than the screen and
+/// the result is scaled back by [k] vertically, so touch and layout stay
+/// consistent.
+class _PdfStretchToFill extends StatelessWidget {
+  const _PdfStretchToFill({
+    required this.enabled,
+    required this.topInset,
+    required this.pageAspect,
+    required this.builder,
+  });
+
+  final bool enabled;
+  final double topInset;
+
+  /// Height / width of the first page, or null when unknown.
+  final double? pageAspect;
+
+  /// Builds the viewer with the given space to keep free above the pages.
+  final Widget Function(double leadingPadding) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final aspect = pageAspect;
+    if (!enabled || aspect == null) return builder(enabled ? topInset : 0);
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      final h = constraints.maxHeight;
+      final avail = h - topInset;
+      if (!w.isFinite || !h.isFinite || w <= 0 || avail <= 0) {
+        return builder(topInset);
+      }
+      final k = (avail / (w * aspect)).clamp(0.5, 3.0).toDouble();
+      final innerHeight = h / k;
+      return ClipRect(
+        child: Transform(
+          transform: Matrix4.diagonal3Values(1, k, 1),
+          alignment: Alignment.topLeft,
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: w,
+            maxWidth: w,
+            minHeight: innerHeight,
+            maxHeight: innerHeight,
+            child: builder(topInset / k),
+          ),
+        ),
+      );
+    });
   }
 }
