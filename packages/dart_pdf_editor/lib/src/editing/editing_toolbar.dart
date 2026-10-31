@@ -480,7 +480,9 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
 
   @override
   void dispose() {
-    _sharedCommands?.toolSheetOpener = null;
+    _sharedCommands
+      ?..toolSheetOpener = null
+      ..currentToolBuilder = null;
     _sharedCommands?.removeListener(_onCommandsChanged);
     _ownCommands
       ?..removeListener(_onCommandsChanged)
@@ -2689,9 +2691,16 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     _commands.toolSheetOpener = () {
       if (mounted) _openToolSheet(this.context);
     };
+    if (_commands.currentToolBuilder == null) {
+      // the host's header shows the active-tool control; let it know once
+      // this frame is done
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _commands.announce();
+      });
+    }
+    _commands.currentToolBuilder = (ctx) =>
+        mounted ? _currentToolSurface(ctx) : const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
-    final activeChoice = _activeToolChoice;
-    final compactToolLabel = controller.selectedElement != null;
     return Container(
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -2722,85 +2731,90 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
               onPressed: controller.canRedo ? controller.redo : null,
             ),
           ],
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(maxWidth: _mobileToolSwitcherMaxWidth),
-                child: LayoutBuilder(builder: (context, constraints) {
-                  // On narrow phones the undo/redo buttons, tool actions, and
-                  // Tools handle can leave less than one icon's width here.
-                  // Keep the switcher usable by progressively dropping its
-                  // label and chevron instead of overflowing.
-                  if (constraints.maxWidth < 22) {
-                    return const SizedBox.shrink();
-                  }
-                  final mainWidth = constraints.maxWidth;
-                  final horizontalPadding = mainWidth >= 36
-                      ? 7.0
-                      : ((mainWidth - 22) / 2).clamp(0.0, 7.0).toDouble();
-                  final showLabel = !compactToolLabel && mainWidth >= 100;
-                  final showChevron = mainWidth >= 54;
-                  final recent = _previousVisibleTools;
-                  final activeLabel = _activeToolLabel(context, activeChoice);
-                  final switchLabel = recent.isEmpty
-                      ? '$activeLabel, ${pdfL10n(context).tbTools}'
-                      : '$activeLabel, ${pdfL10n(context).propRecentlyUsed}';
-                  return Material(
-                    key: const ValueKey('pdf-mobile-current-tool-surface'),
-                    color: scheme.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                    clipBehavior: Clip.antiAlias,
-                    child: Semantics(
-                      button: true,
-                      label: switchLabel,
-                      child: InkWell(
-                        key: const ValueKey('pdf-mobile-current-tool'),
-                        onTap: () => _openRecentTools(context),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 40,
-                          child: ExcludeSemantics(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: horizontalPadding),
-                              child: Row(children: [
-                                Icon(_activeToolIcon(activeChoice),
-                                    size: 22, color: scheme.primary),
-                                if (showLabel) ...[
-                                  const SizedBox(width: 7),
-                                  Expanded(
-                                    child: Text(
-                                      activeLabel,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      softWrap: false,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ] else
-                                  const Spacer(),
-                                if (showChevron)
-                                  Icon(Icons.expand_less,
-                                      size: 17, color: scheme.primary),
-                              ]),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
+          const Spacer(),
           ..._mobileTrailing(context),
         ]),
       ),
+    );
+  }
+
+  /// The active-tool control: the tool's icon and name, opening the recent
+  /// tools menu. Built here, shown in the host's header (see
+  /// [PdfEditorCommands.currentToolBuilder]).
+  Widget _currentToolSurface(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final activeChoice = _activeToolChoice;
+    final compactToolLabel = controller.selectedElement != null;
+    return ConstrainedBox(
+      constraints:
+          const BoxConstraints(maxWidth: _mobileToolSwitcherMaxWidth),
+      child: LayoutBuilder(builder: (context, constraints) {
+        // On narrow phones the undo/redo buttons, tool actions, and
+        // Tools handle can leave less than one icon's width here.
+        // Keep the switcher usable by progressively dropping its
+        // label and chevron instead of overflowing.
+        if (constraints.maxWidth < 22) {
+          return const SizedBox.shrink();
+        }
+        final mainWidth = constraints.maxWidth;
+        final horizontalPadding = mainWidth >= 36
+            ? 7.0
+            : ((mainWidth - 22) / 2).clamp(0.0, 7.0).toDouble();
+        final showLabel = !compactToolLabel && mainWidth >= 100;
+        final showChevron = mainWidth >= 54;
+        final recent = _previousVisibleTools;
+        final activeLabel = _activeToolLabel(context, activeChoice);
+        final switchLabel = recent.isEmpty
+            ? '$activeLabel, ${pdfL10n(context).tbTools}'
+            : '$activeLabel, ${pdfL10n(context).propRecentlyUsed}';
+        return Material(
+          key: const ValueKey('pdf-mobile-current-tool-surface'),
+          color: scheme.primary.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: Semantics(
+            button: true,
+            label: switchLabel,
+            child: InkWell(
+              key: const ValueKey('pdf-mobile-current-tool'),
+              onTap: () => _openRecentTools(context),
+              child: SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: ExcludeSemantics(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding),
+                    child: Row(children: [
+                      Icon(_activeToolIcon(activeChoice),
+                          size: 22, color: scheme.primary),
+                      if (showLabel) ...[
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            activeLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: false,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ] else
+                        const Spacer(),
+                      if (showChevron)
+                        Icon(Icons.expand_less,
+                            size: 17, color: scheme.primary),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 

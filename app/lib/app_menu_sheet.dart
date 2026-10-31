@@ -30,6 +30,7 @@ class AppMenuSheetEntry {
 /// a dialog an action opens never stacks on the closing sheet).
 Future<VoidCallback?> showAppMenuSheet(
   BuildContext context, {
+  String? title,
   required AppMenuSheetEntry search,
   required List<AppMenuSheetEntry> file,
   required List<AppMenuSheetEntry> document,
@@ -47,6 +48,7 @@ Future<VoidCallback?> showAppMenuSheet(
       useSafeArea: true,
       showDragHandle: true,
       builder: (context) => AppMenuSheet(
+        title: title,
         search: search,
         file: file,
         document: document,
@@ -63,6 +65,7 @@ Future<VoidCallback?> showAppMenuSheet(
 class AppMenuSheet extends StatefulWidget {
   const AppMenuSheet({
     super.key,
+    this.title,
     required this.search,
     required this.file,
     required this.document,
@@ -74,6 +77,9 @@ class AppMenuSheet extends StatefulWidget {
     required this.app,
     this.toOrganize = const [],
   });
+
+  /// The open document's name, shown at the top of the menu.
+  final String? title;
 
   /// The search field: opens the command palette.
   final AppMenuSheetEntry search;
@@ -137,6 +143,15 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
       key: const ValueKey('app-menu-sheet'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.title case final title? when title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: MiddleEllipsisText(
+              title,
+              hidePdfExtension: true,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
         const Divider(height: 24),
         if (widget.file.length + 1 >= 2)

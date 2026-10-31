@@ -194,6 +194,13 @@ class PdfEditorCommands extends ChangeNotifier {
   /// screen; null otherwise.
   VoidCallback? toolSheetOpener;
 
+  /// Builds the active-tool control (icon, name, recent tools menu). Set by
+  /// the mobile toolbar while it is on screen; null otherwise.
+  Widget Function(BuildContext context)? currentToolBuilder;
+
+  /// Tells listeners something changed (a host header showing the control).
+  void announce() => notifyListeners();
+
   /// Whether [openToolSheet] has a toolbar to open the sheet.
   bool get canOpenToolSheet => toolSheetOpener != null;
 

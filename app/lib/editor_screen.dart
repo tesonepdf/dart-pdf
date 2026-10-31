@@ -4801,6 +4801,23 @@ class _EditorScreenState extends State<EditorScreen>
   PreferredSizeWidget _buildAppBar(DocumentTab? tab,
       {PdfHeaderParts? parts, _AppBarContent? content}) {
     final app = content ?? _appBarContent(tab);
+    final phone = _usesAppMenuSheet(context);
+    // phone: the selected tool and a folding search sit in the second row
+    final searchPart = parts?.searchToggle ?? parts?.search;
+    final toolCommands = tab?.commands;
+    final toolPart = toolCommands == null || tab?.session == null
+        ? null
+        : ListenableBuilder(
+            listenable: Listenable.merge([toolCommands, tab!.session!]),
+            builder: (context, _) {
+              final build = toolCommands.currentToolBuilder;
+              if (build == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(width: 150, child: build(context)),
+              );
+            },
+          );
     final editorRow = parts == null
         ? null
         : parts.compact
@@ -4808,7 +4825,8 @@ class _EditorScreenState extends State<EditorScreen>
                 color: Colors.transparent,
                 leading: [
                   if (parts.pageNumber case final pageNumber?) pageNumber,
-                  if (parts.search case final search?) search,
+                  if (toolPart != null) toolPart,
+                  if (searchPart != null) searchPart,
                 ],
                 trailing: [
                   if (parts.controls(includeSave: false) case final more?) more,
@@ -4830,7 +4848,7 @@ class _EditorScreenState extends State<EditorScreen>
     // the compact bar's save/share button stays live without edits (sharing
     // an unedited file is the phone's main action); ⌘S still saves only when
     // there is something to save
-    final save = parts != null && parts.compact
+    final save = parts != null && parts.compact && !phone
         ? parts.saveButton(enabledWhenUnchanged: true)
         : null;
     return AppBar(
@@ -4838,7 +4856,7 @@ class _EditorScreenState extends State<EditorScreen>
       leading: app.leading,
       leadingWidth: _appMenuLeadingWidth,
       centerTitle: false,
-      title: app.title,
+      title: phone ? null : app.title,
       titleSpacing: _tabs.isEmpty ? null : 8,
       actions: [
         ...app.actions,
@@ -4859,7 +4877,11 @@ class _EditorScreenState extends State<EditorScreen>
 
   _AppBarContent _appBarContent(DocumentTab? tab) => (
         leading: _buildAppMenu(tab),
-        title: _tabs.isEmpty ? _buildEmptyTabsTitle() : _buildTabsTitle(),
+        title: _usesAppMenuSheet(context)
+            ? null
+            : _tabs.isEmpty
+                ? _buildEmptyTabsTitle()
+                : _buildTabsTitle(),
         actions: _buildActions(tab),
       );
 
@@ -5222,7 +5244,8 @@ class _EditorScreenState extends State<EditorScreen>
                   },
                 ),
         ),
-      if (compact && _tabs.isNotEmpty) _buildMobileTabsButton(),
+      if (compact && !_usesAppMenuSheet(context) && _tabs.isNotEmpty)
+        _buildMobileTabsButton(),
     ];
   }
 
@@ -5275,6 +5298,7 @@ class _EditorScreenState extends State<EditorScreen>
     final appActions = _appActions();
     final action = await showAppMenuSheet(
       context,
+      title: tab == null || tab.title.isEmpty ? null : tab.title,
       search: AppMenuSheetEntry(
         key: const ValueKey('menu-command-palette'),
         icon: Icons.search,
@@ -5289,6 +5313,22 @@ class _EditorScreenState extends State<EditorScreen>
             icon: Icons.build_outlined,
             title: pdfL10n(context).tbTools,
             run: () => tab?.commands?.openToolSheet(),
+          ),
+        if (_tabs.isNotEmpty)
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-tabs'),
+            icon: Icons.tab_outlined,
+            title: '${l.editorOpenTabs} (${_tabs.length})',
+            run: _showTabsSheet,
+          ),
+        if (hasDocument && _usesMobileShare)
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-share'),
+            icon: Icons.share_outlined,
+            title: WidgetsLocalizations.of(context).shareButtonLabel,
+            run: () {
+              if (tab != null) unawaited(_save(tab));
+            },
           ),
         for (final action in plainDocumentActions) entry(action),
       ],
@@ -7491,6 +7531,6 @@ enum _SheetPlacement {
 /// the app actions.
 typedef _AppBarContent = ({
   Widget leading,
-  Widget title,
+  Widget? title,
   List<Widget> actions,
 });

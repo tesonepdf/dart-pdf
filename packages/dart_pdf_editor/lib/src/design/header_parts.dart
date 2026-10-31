@@ -45,6 +45,7 @@ class PdfHeaderParts {
     this.pageNumber,
     this.zoom,
     this.search,
+    this.searchToggle,
     this.viewOptions,
     this.panelSwitch,
     this.save,
@@ -71,6 +72,10 @@ class PdfHeaderParts {
 
   /// The search field.
   final Widget? search;
+
+  /// The search as a magnifier icon that unfolds into the field and folds
+  /// back. Use it in place of [search], not beside it.
+  final Widget? searchToggle;
 
   /// The view options button (view modes, page colour, guides, author,
   /// shortcuts).
