@@ -5282,7 +5282,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: _openCommandPalette,
       ),
       file: [for (final action in _fileActions()) entry(action)],
-      document: [for (final action in plainDocumentActions) entry(action)],
+      document: [
+        if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-tools'),
+            icon: Icons.build_outlined,
+            title: pdfL10n(context).tbTools,
+            run: () => tab?.commands?.openToolSheet(),
+          ),
+        for (final action in plainDocumentActions) entry(action),
+      ],
       recentFiles: [
         for (final recent in allRecents)
           AppMenuSheetEntry(

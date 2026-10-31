@@ -480,6 +480,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
 
   @override
   void dispose() {
+    _sharedCommands?.toolSheetOpener = null;
     _sharedCommands?.removeListener(_onCommandsChanged);
     _ownCommands
       ?..removeListener(_onCommandsChanged)
@@ -2684,6 +2685,10 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   // ---- mobile: collapsed dock + bottom sheet ------------------------------
 
   Widget _buildMobile(BuildContext context, {required double width}) {
+    // the tools sheet is opened from the host's app menu
+    _commands.toolSheetOpener = () {
+      if (mounted) _openToolSheet(this.context);
+    };
     final scheme = Theme.of(context).colorScheme;
     final activeChoice = _activeToolChoice;
     final compactToolLabel = controller.selectedElement != null;
@@ -2794,12 +2799,6 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             ),
           ),
           ..._mobileTrailing(context),
-          const SizedBox(width: 6),
-          _GroupChip.toolsHandle(
-            key: const ValueKey('pdf-tools-handle'),
-            compact: width < 360,
-            onTap: () => _openToolSheet(context),
-          ),
         ]),
       ),
     );
