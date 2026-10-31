@@ -73,12 +73,15 @@ jobs:
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          # Il numero dopo il # dell'app e' sempre calcolabile dalla run:
-          # ufficiale = numero della run (run #105 -> app #105);
-          # prova     = NUM_BASE + numero della run del suo workflow (run #4 ->
-          #             app #10016). Lo stesso numero e' scritto nel titolo delle
-          #             run della prova (build-prova.yml).
-          number="$((NUM_BASE + ${{ github.run_number }}))"
+          # Numero build = numero del commit, lo stesso scritto in testa al
+          # messaggio (hook .githooks/commit-msg) e quindi su Vercel:
+          # ufficiale = commit di main + 24 (allineato alle run di Actions);
+          # prova     = 10000 + commit del ramo prova non ancora in main.
+          if [[ "$GITHUB_REF_NAME" == prova-sviluppatore ]]; then
+            number="$((10000 + $(git rev-list --count origin/main..HEAD)))"
+          else
+            number="$(( $(git rev-list --count HEAD) + 24 ))"
+          fi
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -332,7 +335,7 @@ jobs:
           # pubblicato: cosi' una build non viene saltata perche' nel frattempo
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
-          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
+          if [[ -z "$current_build" || "$NUMERO" -ne "$current_build" ]]; then
             android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
             android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
