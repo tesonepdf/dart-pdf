@@ -177,6 +177,10 @@ Future<void> showPdfEditingGuidesDialog(
   );
 }
 
+/// Height (from the top of the screen) taken by the phone's tools panel while
+/// it is open, 0 when closed. The viewer keeps the page below it.
+final ValueNotifier<double> pdfToolPanelInset = ValueNotifier<double>(0);
+
 /// A ready-made toolbar for [PdfEditingController].
 ///
 /// The bar is organised as a **dock** with a compact Hand / Select navigation
@@ -3123,7 +3127,10 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   /// arms it directly and closes the sheet.
   Future<void> _openToolSheet(BuildContext context) async {
     final groups = _visibleGroups;
-    var tabId = _openGroup?.id ?? groups.first.id;
+    // the phone panel lists the six tool groups (select is the header's own
+    // tool control)
+    final panelGroups = _panelGroupOrder(groups);
+    var tabId = _openGroup?.id ?? panelGroups.first.id;
     await _showTopDropSheet<void>(
       context,
       (sheetContext) => StatefulBuilder(
@@ -3131,7 +3138,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             listenable: Listenable.merge([controller, viewerController]),
             builder: (context, _) {
               final group = groups.firstWhere((g) => g.id == tabId,
-                  orElse: () => groups.first);
+                  orElse: () => panelGroups.first);
               return SafeArea(
                 top: false,
                 bottom: false,
@@ -3143,30 +3150,32 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(children: [
-                          for (final g in groups)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.only(end: 7),
-                              child: _GroupChip(
-                                key: ValueKey('pdf-group-tab-${g.id}'),
-                                group: g,
-                                active: g.id == tabId,
-                                onTap: () {
-                                  if (g.kind == PdfEditToolGroup.select) {
-                                    Navigator.of(sheetContext).pop();
-                                    _toggleTool(PdfEditTool.select);
-                                    return;
-                                  }
-                                  if (g.id == tabId) return;
-                                  setSheetState(() => tabId = g.id);
-                                  _armSheetGroupDefault(g);
-                                },
+                      for (var row = 0; row < 2; row++)
+                        Padding(
+                          padding: EdgeInsets.only(bottom: row == 0 ? 7 : 0),
+                          child: Row(children: [
+                            for (final g in panelGroups.skip(row * 3).take(3))
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 3.5),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: _GroupChip(
+                                      key: ValueKey('pdf-group-tab-${g.id}'),
+                                      group: g,
+                                      active: g.id == tabId,
+                                      onTap: () {
+                                        if (g.id == tabId) return;
+                                        setSheetState(() => tabId = g.id);
+                                        _armSheetGroupDefault(g);
+                                      },
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                        ]),
-                      ),
+                          ]),
+                        ),
                       const SizedBox(height: 14),
                       _SheetSectionLabel(
                         group.label(context),
@@ -3189,19 +3198,42 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     );
   }
 
+  /// The groups in the phone panel's order: insert, markup, draw, measure,
+  /// edit, shapes (select left out).
+  List<_ToolGroup> _panelGroupOrder(List<_ToolGroup> groups) {
+    const order = [
+      PdfEditToolGroup.insert,
+      PdfEditToolGroup.markup,
+      PdfEditToolGroup.draw,
+      PdfEditToolGroup.measure,
+      PdfEditToolGroup.edit,
+      PdfEditToolGroup.shapes,
+    ];
+    final result = <_ToolGroup>[
+      for (final kind in order)
+        ...groups.where((g) => g.kind == kind),
+    ];
+    return result.isEmpty ? groups : result;
+  }
+
   /// Shows [builder] as a panel that drops down from the top edge, over the
   /// page (the phone's tools menu), instead of rising from the bottom.
   Future<T?> _showTopDropSheet<T>(
       BuildContext context, WidgetBuilder builder) {
     final scheme = Theme.of(context).colorScheme;
+    return _showTopDropDialog<T>(context, scheme, builder)
+        .whenComplete(() => pdfToolPanelInset.value = 0);
+  }
+
+  Future<T?> _showTopDropDialog<T>(
+      BuildContext context, ColorScheme scheme, WidgetBuilder builder) {
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black26,
+      barrierColor: Colors.transparent,
       transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (dialogContext, _, __) => Align(
-        alignment: Alignment.topCenter,
+      pageBuilder: (dialogContext, _, __) => _PanelHeightReporter(
         child: Material(
           color: scheme.surface,
           elevation: 8,
@@ -5268,4 +5300,57 @@ class _LineEndingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_LineEndingPainter old) =>
       old.ending != ending || old.atEnd != atEnd || old.color != color;
+}
+
+/// Reports the height of the phone tools panel (the topmost child's bottom
+/// edge) to [pdfToolPanelInset], so the viewer lowers the page below it.
+class _PanelHeightReporter extends StatefulWidget {
+  const _PanelHeightReporter({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PanelHeightReporter> createState() => _PanelHeightReporterState();
+}
+
+class _PanelHeightReporterState extends State<_PanelHeightReporter> {
+  final GlobalKey _key = GlobalKey();
+
+  void _measure() {
+    if (!mounted) return;
+    final box = _key.currentContext?.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      pdfToolPanelInset.value = box.size.height;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    return Stack(children: [
+      Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: NotificationListener<SizeChangedLayoutNotification>(
+          onNotification: (_) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+            return false;
+          },
+          child: SizeChangedLayoutNotifier(
+            child: KeyedSubtree(key: _key, child: _PanelBody(child: widget.child)),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _PanelBody extends StatelessWidget {
+  const _PanelBody({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
 }
