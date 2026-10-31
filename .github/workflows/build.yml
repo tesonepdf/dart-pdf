@@ -47,8 +47,8 @@ env:
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
   # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10001.
   NUM_SUFFIX: ''
-  # La prova ha gia' registrato 10014 numeri (mai confondibile con l'ufficiale).
-  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10014' || '0' }}
+  # Prova: 10012 + numero della run (la run #3 era la 10015, la #4 e' la 10016).
+  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10012' || '0' }}
 
 jobs:
   version:
@@ -73,20 +73,12 @@ jobs:
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          # Ufficiale: il numero dopo il # dell'app e' quello della run su GitHub
-          # Actions (run #103 -> app #103).
-          # Prova: GitHub numera da 1 il suo workflow e non si puo' cambiare, quindi
-          # il numero continua da quello gia' pubblicato nella release della
-          # prova (marcatore app-build) e aggiunge 1, ma mai sotto NUM_BASE: la
-          # prova ha gia' consumato 10014 numeri (allineamento del 2026-10-31),
-          # il prossimo e' 10015.
-          if [[ "$NUM_BASE" -gt 0 ]]; then
-            ultimo="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ANDROID_TAG" --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
-            if [[ -z "$ultimo" || "$ultimo" -lt "$NUM_BASE" ]]; then ultimo="$NUM_BASE"; fi
-            number="$((ultimo + 1))"
-          else
-            number="${{ github.run_number }}"
-          fi
+          # Il numero dopo il # dell'app e' sempre calcolabile dalla run:
+          # ufficiale = numero della run (run #105 -> app #105);
+          # prova     = NUM_BASE + numero della run del suo workflow (run #4 ->
+          #             app #10016). Lo stesso numero e' scritto nel titolo delle
+          #             run della prova (build-prova.yml).
+          number="$((NUM_BASE + ${{ github.run_number }}))"
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
