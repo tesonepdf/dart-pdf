@@ -3313,6 +3313,27 @@ class PdfEditingController extends ChangeNotifier {
     );
   }
 
+  /// Marks search [matches] with a text markup of [kind], as if the text under
+  /// each hit had been selected: the hit boxes go through [addMarkup], so the
+  /// current colour and opacity apply and the whole batch is one undo step.
+  /// Returns how many hits were marked (hits with no boxes are skipped).
+  int markMatchesWithMarkup(
+    PdfMarkupKind kind,
+    Iterable<PdfTextMatch> matches,
+  ) {
+    final quadsByPage = <int, List<PdfRect>>{};
+    var count = 0;
+    for (final match in matches) {
+      if (match.rects.isEmpty) continue;
+      quadsByPage.putIfAbsent(match.pageIndex, () => []).addAll(match.rects);
+      count++;
+    }
+    if (count == 0) return 0;
+    useMarkupStyleScope();
+    addMarkup(kind, quadsByPage);
+    return count;
+  }
+
   void addRectangle(int pageIndex, PdfRect rect) => apply(
         (e) => e.addSquare(
           pageIndex,
