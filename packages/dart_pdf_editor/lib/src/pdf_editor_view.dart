@@ -1230,6 +1230,15 @@ class _PdfEditorViewState extends State<PdfEditorView> {
             showOptions: !features.searchResultsPanel,
           )
         : null;
+    final searchToggle = features.search && !altView
+        ? PdfCollapsibleSearch(
+            controller: _viewer,
+            searchController: _searchField,
+            focusNode: _searchFocus,
+            preferences: prefs,
+            showOptions: !features.searchResultsPanel,
+          )
+        : null;
     final viewOptions = features.viewOptions
         ? PdfShellViewOptionsButton(
             preferences: prefs,
@@ -1320,6 +1329,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
         pageNumber: pageNumber,
         zoom: zoom,
         search: search,
+        searchToggle: searchToggle,
         viewOptions: viewOptions,
         panelSwitch: panelSwitch,
         save: save,

@@ -31,9 +31,14 @@ class PdfSearchField extends StatefulWidget {
     this.hintText = 'Search',
     this.showOptions = true,
     this.preferences,
+    this.onLeadingTap,
   });
 
   final PdfViewerController controller;
+
+  /// Makes the magnifier inside the field tappable (used to fold a
+  /// collapsible search back into its icon).
+  final VoidCallback? onLeadingTap;
 
   /// The text box's width; the count and the stepper buttons sit
   /// outside it, appearing only while a query is live.
@@ -128,7 +133,14 @@ class _PdfSearchFieldState extends State<PdfSearchField> {
                 hintText: widget.hintText == 'Search'
                     ? pdfL10n(context).searchFieldHint
                     : widget.hintText,
-                prefixIcon: const Icon(Icons.search, size: 18),
+                prefixIcon: widget.onLeadingTap == null
+                    ? const Icon(Icons.search, size: 18)
+                    : InkResponse(
+                        key: const ValueKey('pdf-search-collapse'),
+                        onTap: widget.onLeadingTap,
+                        radius: 18,
+                        child: const Icon(Icons.search, size: 18),
+                      ),
                 prefixIconConstraints:
                     const BoxConstraints(minWidth: 32, minHeight: 32),
                 isDense: true,
@@ -1196,6 +1208,69 @@ class PdfPanelToggleButton extends StatelessWidget {
               glyph!,
               style: const TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600, height: 1),
+            ),
+    );
+  }
+}
+
+
+/// A search that rests as a magnifier icon and unfolds into the full
+/// [PdfSearchField]; tapping the field's magnifier folds it back.
+class PdfCollapsibleSearch extends StatefulWidget {
+  const PdfCollapsibleSearch({
+    super.key,
+    required this.controller,
+    this.searchController,
+    this.focusNode,
+    this.showOptions = true,
+    this.preferences,
+  });
+
+  final PdfViewerController controller;
+  final TextEditingController? searchController;
+  final FocusNode? focusNode;
+  final bool showOptions;
+  final PdfEditingPreferences? preferences;
+
+  @override
+  State<PdfCollapsibleSearch> createState() => _PdfCollapsibleSearchState();
+}
+
+class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
+  bool _open = false;
+
+  void _expand() {
+    setState(() => _open = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _open) widget.focusNode?.requestFocus();
+    });
+  }
+
+  void _collapse() {
+    widget.focusNode?.unfocus();
+    setState(() => _open = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: AlignmentDirectional.centerStart,
+      child: _open
+          ? PdfSearchField(
+              controller: widget.controller,
+              searchController: widget.searchController,
+              focusNode: widget.focusNode,
+              preferences: widget.preferences,
+              showOptions: widget.showOptions,
+              onLeadingTap: _collapse,
+            )
+          : IconButton(
+              key: const ValueKey('pdf-search-expand'),
+              icon: const Icon(Icons.search),
+              tooltip: pdfL10n(context).searchFieldHint,
+              onPressed: _expand,
             ),
     );
   }
