@@ -190,6 +190,16 @@ class PdfEditorCommands extends ChangeNotifier {
     controller.addListener(_trackRecentTool);
   }
 
+  /// Opens the phone tools sheet. Set by the mobile toolbar while it is on
+  /// screen; null otherwise.
+  VoidCallback? toolSheetOpener;
+
+  /// Whether [openToolSheet] has a toolbar to open the sheet.
+  bool get canOpenToolSheet => toolSheetOpener != null;
+
+  /// Opens the phone tools sheet (group tabs, tool grid, settings).
+  void openToolSheet() => toolSheetOpener?.call();
+
   /// The commands provided above [context], or null.
   static PdfEditorCommands? maybeOf(BuildContext context) => context
       .dependOnInheritedWidgetOfExactType<PdfEditorCommandsScope>()
