@@ -295,6 +295,9 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
   bool get _replaceExpanded =>
       widget.preferences?.searchReplaceExpanded ?? _replaceExpandedLocal;
 
+  /// The find-to-mark (highlighter) section.
+  bool _markExpanded = false;
+
   /// Same split for the find-to-redact section.
   bool _redactExpandedLocal = false;
 
@@ -552,6 +555,19 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
                       ),
                     if (widget.editing != null)
                       PdfPanelToggleButton(
+                        key: const ValueKey('pdf-search-mark-toggle'),
+                        iconData: Icons.border_color,
+                        tooltip: Localizations.localeOf(context)
+                                    .languageCode ==
+                                'it'
+                            ? 'Marca i risultati'
+                            : 'Mark the results',
+                        selected: _markExpanded,
+                        onPressed: () =>
+                            setState(() => _markExpanded = !_markExpanded),
+                      ),
+                    if (widget.editing != null)
+                      PdfPanelToggleButton(
                         key: const ValueKey('pdf-search-redact-toggle'),
                         iconData: Icons.gradient,
                         tooltip: pdfL10n(context).searchRedact,
@@ -565,6 +581,12 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
                     controller: controller,
                     editing: widget.editing!,
                     field: _replaceField,
+                    geometry: geometry,
+                  ),
+                if (widget.editing != null && _markExpanded)
+                  _MarkBar(
+                    controller: controller,
+                    editing: widget.editing!,
                     geometry: geometry,
                   ),
                 if (widget.editing != null && _redactExpanded)
@@ -901,6 +923,121 @@ class _RedactBarState extends State<_RedactBar> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The find-to-mark row under the search panel's options bar: "Mark" (the
+/// current hit) and "Mark all" (every page-text hit) apply a text markup to
+/// the search results through [PdfEditingController.markMatchesWithMarkup].
+///
+/// The kind is the armed marker (highlight, underline, strike-out or squiggly)
+/// and the highlighter when none is armed; colour and opacity are the ones of
+/// the markup scope. Hits inside annotations have no page text and are
+/// skipped.
+class _MarkBar extends StatefulWidget {
+  const _MarkBar({
+    required this.controller,
+    required this.editing,
+    required this.geometry,
+  });
+
+  final PdfViewerController controller;
+  final PdfEditingController editing;
+  final PdfSidebarPanelGeometry geometry;
+
+  @override
+  State<_MarkBar> createState() => _MarkBarState();
+}
+
+class _MarkBarState extends State<_MarkBar> {
+  bool _busy = false;
+
+  Future<void> _mark(List<PdfSearchResult> results, {int? landOn}) async {
+    final controller = widget.controller;
+    final editing = widget.editing;
+    final query = controller.query;
+    final options = controller.searchOptions;
+    final presenter = PdfEditorPresenter.of(context);
+    final italian = Localizations.localeOf(context).languageCode == 'it';
+
+    setState(() => _busy = true);
+    try {
+      final count = editing.markMatchesWithMarkup(
+        editing.markupTool ?? PdfMarkupKind.highlight,
+        [
+          for (final r in results)
+            if (!r.isAnnotation) r.match,
+        ],
+      );
+      if (!mounted) return;
+      presenter.notice(
+        context,
+        PdfEditorNotice(
+          italian ? 'Marcati: $count' : 'Marked: $count',
+          onUndo: count > 0 && editing.canUndo ? editing.undo : null,
+        ),
+      );
+      if (count == 0) {
+        if (landOn != null) controller.goToMatch(landOn);
+        return;
+      }
+      // the new revision clears the viewer's search as it lands: run the query
+      // again and land on the next hit
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await controller.search(query, options: options);
+      if (landOn != null) controller.goToMatch(landOn);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final results = controller.searchResults;
+    final index = controller.currentMatch;
+    final current =
+        index >= 0 && index < results.length ? results[index] : null;
+    final ready = !_busy &&
+        !controller.isSearching &&
+        controller.query.isNotEmpty &&
+        results.any((r) => !r.isAnnotation);
+    final italian = Localizations.localeOf(context).languageCode == 'it';
+    final geometry = widget.geometry;
+    return Padding(
+      padding: EdgeInsetsDirectional.only(
+        start: 16 + geometry.contentStartInset,
+        end: 16 + geometry.contentEndInset,
+        bottom: 10,
+      ),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton(
+            key: const ValueKey('pdf-search-mark-one'),
+            style:
+                OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: ready && current != null && !current.isAnnotation
+                ? () => _mark([current],
+                    landOn: index + 1 < results.length ? index + 1 : index)
+                : null,
+            child: Text(italian ? 'Marca' : 'Mark',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: FilledButton.tonal(
+            key: const ValueKey('pdf-search-mark-all'),
+            style:
+                FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: ready ? () => _mark(results) : null,
+            child: Text(italian ? 'Marca tutti' : 'Mark all',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ]),
     );
   }
 }
