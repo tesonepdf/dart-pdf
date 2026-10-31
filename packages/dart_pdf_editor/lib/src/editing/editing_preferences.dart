@@ -370,6 +370,10 @@ class PdfEditingPreferences extends ChangeNotifier
       }
       _fingerDrawsInk =
           store.getBool('${_prefix}fingerDrawsInk') ?? _fingerDrawsInk;
+      final markerColorValue = store.getInt('${_prefix}markerColor');
+      if (markerColorValue != null) markerColor = Color(markerColorValue);
+      markerOpacity = store.getDouble('${_prefix}markerOpacity');
+      markerStrokeWidth = store.getDouble('${_prefix}markerStrokeWidth');
       const thumbnailSidebarKey = '${_prefix}showThumbnailSidebar';
       _hasShowThumbnailSidebarPreference =
           store.containsKey(thumbnailSidebarKey);
@@ -722,6 +726,43 @@ class PdfEditingPreferences extends ChangeNotifier
   void _writeToolStyles() =>
       _write((s) => s.setString(_toolStylesKey, jsonEncode(_toolStyles)));
 
+  /// The marker (text-markup tool) remembers its own last colour, opacity and
+  /// stroke width, saved the moment they change while it is armed and put
+  /// back every time it is armed again, across sessions.
+  Color? markerColor;
+  double? markerOpacity;
+  double? markerStrokeWidth;
+
+  /// Set by the controller while a text-markup tool is armed.
+  bool markerActive = false;
+  bool _applyingMarker = false;
+
+  void _recordMarker() {
+    if (!markerActive || _applyingMarker) return;
+    markerColor = _color;
+    markerOpacity = _opacity;
+    markerStrokeWidth = _strokeWidth;
+    _write((s) async {
+      await s.setInt('${_prefix}markerColor', _color.toARGB32());
+      await s.setDouble('${_prefix}markerOpacity', _opacity);
+      await s.setDouble('${_prefix}markerStrokeWidth', _strokeWidth);
+      return null;
+    });
+  }
+
+  /// Puts the remembered marker colour, opacity and stroke width back into
+  /// the live values.
+  void applyMarker({bool withColor = true}) {
+    _applyingMarker = true;
+    try {
+      if (withColor && markerColor != null) color = markerColor!;
+      if (markerOpacity != null) opacity = markerOpacity!;
+      if (markerStrokeWidth != null) strokeWidth = markerStrokeWidth!;
+    } finally {
+      _applyingMarker = false;
+    }
+  }
+
   /// Activates the style scope [scope], remembering only [fields] under it,
   /// and restores that scope's previously-saved style into the live values.
   ///
@@ -906,6 +947,7 @@ class PdfEditingPreferences extends ChangeNotifier
     _color = value;
     _writeText((s) => s.setInt('${_prefix}color', value.toARGB32()));
     if (recordStyleScope) _recordScopedText('color', value.toARGB32());
+    if (recordStyleScope) _recordMarker();
     notifyListeners();
   }
 
@@ -917,6 +959,7 @@ class PdfEditingPreferences extends ChangeNotifier
     _strokeWidth = value;
     _write((s) => s.setDouble('${_prefix}strokeWidth', value));
     _recordScoped('strokeWidth', value);
+    _recordMarker();
     notifyListeners();
   }
 
@@ -1154,6 +1197,7 @@ class PdfEditingPreferences extends ChangeNotifier
     _opacity = value;
     _writeText((s) => s.setDouble('${_prefix}opacity', value));
     _recordScopedText('opacity', value);
+    _recordMarker();
     notifyListeners();
   }
 
