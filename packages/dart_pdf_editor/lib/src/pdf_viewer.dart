@@ -3938,7 +3938,7 @@ class _PdfViewerState extends State<PdfViewer>
         : double.infinity; // pre-layout: every page counts as near
     int? best;
     var bestDistance = 1 << 30;
-    var offset = 0.0;
+    var offset = _leadMain;
     for (var i = 0; i < pages.length; i++) {
       final height = _pageHeight(i) + widget.pageSpacing;
       final top = offset;
@@ -4287,7 +4287,7 @@ class _PdfViewerState extends State<PdfViewer>
         policy.mode == PdfPageRasterWarmMode.nearby ? policy.window : 0;
     int? best;
     var bestDistance = 1 << 30;
-    var offset = 0.0;
+    var offset = _leadMain;
     for (var i = 0; i < pages.length; i++) {
       final height = _pageHeight(i) + widget.pageSpacing;
       final top = offset;
@@ -4899,7 +4899,9 @@ class _PdfViewerState extends State<PdfViewer>
             )
         : null;
 
-    _controller.clearSearch();
+    // Marking text (an annotation change) leaves the page text untouched, so
+    // the search matches stay valid; only a content change drops them.
+    if (contentPages.isNotEmpty) _controller.clearSearch();
     _clearSelection();
     _pageLabels = null;
     _outline = null;
@@ -5576,9 +5578,13 @@ class _PdfViewerState extends State<PdfViewer>
   /// the reference page at fit).
   double _crossInsetOf(int index) => (_crossView - _pageCross(index)) / 2;
 
+  /// Space kept free before the first page along the scroll axis (the
+  /// header drawn over the viewer); every page offset starts after it.
+  double get _leadMain => _horizontal ? 0.0 : widget.leadingPadding;
+
   /// The cumulative main-axis (scroll) offset at which page [index] begins.
   double _mainOffsetOf(int index) {
-    var offset = 0.0;
+    var offset = _leadMain;
     for (var i = 0; i < index; i++) {
       offset += _pageMain(i) + widget.pageSpacing;
     }
@@ -5695,7 +5701,7 @@ class _PdfViewerState extends State<PdfViewer>
 
   /// The list-space offset at which page [index]'s slot begins.
   double _slotStart(int index) {
-    var offset = 0.0;
+    var offset = _leadMain;
     for (var i = 0; i < index; i++) {
       offset += _scrollExtentOf(i);
     }
@@ -5789,7 +5795,7 @@ class _PdfViewerState extends State<PdfViewer>
     var last = -1;
     var qualityFirst = -1;
     var qualityLast = -1;
-    var offset = 0.0;
+    var offset = _leadMain;
     for (var i = 0; i < _pages.length; i++) {
       final main = _pageMain(i);
       // The page's own extent decides visibility; the spacing that follows it
@@ -5984,7 +5990,7 @@ class _PdfViewerState extends State<PdfViewer>
     final viewMain =
         -m.storage[_mainTranslate] / scale + _scroll.position.pixels;
     final viewCross = -m.storage[_crossTranslate] / scale;
-    var mainStart = 0.0;
+    var mainStart = _leadMain;
     for (var i = 0; i < _pages.length; i++) {
       final pageMain = _pageMain(i);
       if (viewMain < mainStart + pageMain + widget.pageSpacing ||
@@ -6569,7 +6575,7 @@ class _PdfViewerState extends State<PdfViewer>
     // list space: the scroll offset is only along the main axis
     final contentMain = _scroll.offset + _mainOf(local);
     final point = _axisOffset(contentMain, _crossOf(local));
-    var mainStart = 0.0;
+    var mainStart = _leadMain;
     for (var i = 0; i < _pages.length; i++) {
       final pageMain = _pageMain(i);
       if (contentMain <= mainStart + pageMain || i == _pages.length - 1) {
@@ -6600,7 +6606,7 @@ class _PdfViewerState extends State<PdfViewer>
     if (_viewWidth <= 0 || !_scroll.hasClients || _pages.isEmpty) return false;
     final contentMain = _scroll.offset + _mainOf(local);
     final contentCross = _crossOf(local);
-    var mainStart = 0.0;
+    var mainStart = _leadMain;
     for (var i = 0; i < _pages.length; i++) {
       final pageMain = _pageMain(i);
       if (contentMain < mainStart) return false; // the spacing before it
