@@ -986,6 +986,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _extendActiveStroke(Offset localPosition) {
     _penCursor = localPosition;
     _bumpCursor();
+    if (_tool == PdfEditTool.highlight && _activeStroke != null) {
+      _extendStripe(localPosition);
+      return;
+    }
     final page = _geometry.toPagePoint(localPosition);
     final pressures = _activeStrokePressures;
     final pressure = _pointerPressure ?? pressures?.last;
@@ -1007,6 +1011,52 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     } else {
       _activeStroke!.add(page);
       if (pressures != null) pressures.add(pressure ?? pressures.last);
+    }
+    _bumpActiveStroke();
+  }
+
+  // The highlighter lays down a straight stripe. Its direction (horizontal or
+  // vertical) is decided once, by the first movement, and never changes while
+  // the finger stays down. The stripe runs from the start to the finger along
+  // that direction - going back shortens it - and moving the finger across
+  // it slides the whole stripe, so it can be positioned without turning.
+  Offset? _stripeStart;
+  bool? _stripeHorizontal;
+
+  void _extendStripe(Offset local) {
+    final stroke = _activeStroke!;
+    final start = _stripeStart ??= () {
+      final first = stroke.first;
+      return _geometry.toViewOffset(first.$1, first.$2);
+    }();
+    final delta = local - start;
+    if (_stripeHorizontal == null && delta.distance >= 10) {
+      _stripeHorizontal = delta.dx.abs() >= delta.dy.abs();
+    }
+    final horizontal = _stripeHorizontal;
+    final Offset from;
+    final Offset to;
+    if (horizontal == null) {
+      from = start;
+      to = start;
+    } else if (horizontal) {
+      from = Offset(start.dx, local.dy);
+      to = local;
+    } else {
+      from = Offset(local.dx, start.dy);
+      to = local;
+    }
+    final pressures = _activeStrokePressures;
+    final pressure = _pointerPressure ?? pressures?.last;
+    _activeStroke!
+      ..clear()
+      ..add(_geometry.toPagePoint(from))
+      ..add(_geometry.toPagePoint(to));
+    if (pressures != null) {
+      final p = pressure ?? pressures.last;
+      pressures
+        ..clear()
+        ..addAll([p, p]);
     }
     _bumpActiveStroke();
   }
@@ -2043,6 +2093,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _bumpCursor();
         _activeStroke = [_geometry.toPagePoint(event.localPosition)];
         _inkShiftAnchorIndex = null;
+        _stripeStart = null;
+        _stripeHorizontal = null;
         _activeStrokePressures = pressure == null ? null : [pressure];
         _bumpActiveStroke();
       }
@@ -2269,7 +2321,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       final annotations = _controller.pageAt(widget.pageIndex).annotations;
       for (var slot = 0; slot < annotations.length; slot++) {
         final annotation = annotations[slot];
-        if (annotation.subtype != 'Ink' ||
+        if (!(annotation.subtype == 'Ink' ||
+                _markupSubtypes.contains(annotation.subtype)) ||
             annotation.isHidden ||
             !_controller.isAnnotationEditable(annotation)) {
           continue;
@@ -2308,6 +2361,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       }
     });
   }
+
+  /// Text-markup annotations the eraser removes (whole, when it touches one).
+  static const _markupSubtypes = {
+    'Highlight',
+    'Underline',
+    'StrikeOut',
+    'Squiggly',
+  };
 
   static bool _hitsRect((double, double) p, PdfRect rect, double radius) =>
       p.$1 >= rect.left - radius &&
@@ -5140,6 +5201,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _bumpCursor();
         _activeStroke = [_geometry.toPagePoint(position)];
         _inkShiftAnchorIndex = null;
+        _stripeStart = null;
+        _stripeHorizontal = null;
         // the first event decides: a pressure device varies the whole
         // stroke, anything else stays uniform
         _activeStrokePressures = pressure == null ? null : [pressure];

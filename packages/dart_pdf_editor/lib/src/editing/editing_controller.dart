@@ -7110,7 +7110,8 @@ class PdfEditingController extends ChangeNotifier {
     // the editor works by dictionary identity
     final targets = [
       for (final annotation in _page(pageIndex).annotations)
-        if (annotation.subtype == 'Ink' &&
+        if ((annotation.subtype == 'Ink' ||
+                _eraseMarkupSubtypes.contains(annotation.subtype)) &&
             !annotation.isHidden &&
             isAnnotationEditable(annotation))
           annotation,
@@ -7120,7 +7121,16 @@ class PdfEditingController extends ChangeNotifier {
       (editor) {
         var changed = false;
         for (final annotation in targets) {
-          if (annotation.inkList == null) {
+          if (_eraseMarkupSubtypes.contains(annotation.subtype)) {
+            // a text-markup stripe goes whole when the eraser reaches one of
+            // its lines
+            final quads =
+                annotation.behavior.markupQuads ?? [annotation.rect];
+            if (quads.any((quad) => _pathTouchesRect(path, quad, radius))) {
+              editor.removeAnnotation(pageIndex, annotation);
+              changed = true;
+            }
+          } else if (annotation.inkList == null) {
             // no centerline to slice - the rect is all we have
             if (_pathTouchesRect(path, annotation.rect, radius)) {
               editor.removeAnnotation(pageIndex, annotation);
@@ -7135,6 +7145,13 @@ class PdfEditingController extends ChangeNotifier {
       },
     );
   }
+
+  static const _eraseMarkupSubtypes = {
+    'Highlight',
+    'Underline',
+    'StrikeOut',
+    'Squiggly',
+  };
 
   static bool _pathTouchesRect(
     List<(double, double)> path,
