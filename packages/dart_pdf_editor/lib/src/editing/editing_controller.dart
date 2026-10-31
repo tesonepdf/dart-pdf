@@ -3313,6 +3313,36 @@ class PdfEditingController extends ChangeNotifier {
     );
   }
 
+  /// Stroke width, in PDF points, of a freehand marker stroke of [kind] on a
+  /// page [pageWidth] points wide: broad for the highlighter, thin for the
+  /// line markups.
+  static double markupStrokeWidth(PdfMarkupKind kind, double pageWidth) =>
+      pageWidth * (kind == PdfMarkupKind.highlight ? 0.024 : 0.004);
+
+  /// Paints a freehand marker stroke (page-space [stroke]) with the armed
+  /// markup colour and opacity, for places where there is no text to snap to
+  /// (scans, margins). One Ink annotation, one undo step.
+  void addMarkupStroke(
+    PdfMarkupKind kind,
+    int pageIndex,
+    List<(double, double)> stroke, {
+    required double pageWidth,
+  }) {
+    if (stroke.length < 2) return;
+    apply(
+      (editor) {
+        editor.addInk(
+          pageIndex,
+          [List.of(stroke)],
+          color: _colorValue,
+          strokeWidth: markupStrokeWidth(kind, pageWidth),
+          opacity: preferences.opacity,
+          author: preferences.author,
+        );
+      },
+    );
+  }
+
   /// Marks search [matches] with a text markup of [kind], as if the text under
   /// each hit had been selected: the hit boxes go through [addMarkup], so the
   /// current colour and opacity apply and the whole batch is one undo step.

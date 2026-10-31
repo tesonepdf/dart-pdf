@@ -8830,21 +8830,41 @@ class _PdfViewerState extends State<PdfViewer>
     return editing.selectableAnnotationAt(point.$1, point.$2, point.$3) == null;
   }
 
-  /// Whether a finger/stylus press at [local] starts a drag-to-mark: a
-  /// text-markup tool is armed and the press lands on text.
+  /// Whether a finger/stylus press at [local] may start a drag-to-mark: a
+  /// text-markup tool is armed and the press lands on a page. Over text the
+  /// drag snaps to words; anywhere else it paints a freehand stroke.
   bool _touchMarkupDragEnabledAt(Offset local) {
     final editing = widget.editing;
     if (editing == null || editing.markupTool == null) return false;
     if (editing.isHandMode || editing.isPickingColor) return false;
-    return _textSelectionStartAt(local, alongTolerance: 14) != null;
+    return _pageContainsListPoint(local);
   }
 
+  /// Freehand finger stroke being painted (list space), or null.
+  List<Offset>? _markStroke;
+  double _markStrokeWidth = 0;
+  bool _markIgnore = false;
+
   void _onTouchMarkStart(DragStartDetails details) {
+    _markIgnore = false;
     final start = _lastPointerLocal ?? details.localPosition;
     final position = _textSelectionStartAt(start, alongTolerance: 14);
-    if (position == null) return;
     _focusNode.requestFocus();
     _wordAnchor = null;
+    if (position == null) {
+      final editing = widget.editing;
+      final kind = editing?.markupTool;
+      final point = _pagePointAt(start);
+      if (editing == null || kind == null || point == null) return;
+      final box = _pages[point.$1].cropBox;
+      final scale = box.width <= 0 ? 1.0 : _pageWidth(point.$1) / box.width;
+      setState(() {
+        _markStroke = [start];
+        _markStrokeWidth =
+            PdfEditingController.markupStrokeWidth(kind, box.width) * scale;
+      });
+      return;
+    }
     setState(() {
       _touchSelecting = true;
       _selAnchor = position;
@@ -8853,9 +8873,59 @@ class _PdfViewerState extends State<PdfViewer>
     _controller._setSelection('');
   }
 
+  void _onTouchMarkUpdate(DragUpdateDetails details) {
+    if (_markIgnore) return;
+    final stroke = _markStroke;
+    if (stroke != null) {
+      final p = details.localPosition;
+      if ((p - stroke.last).distance < 1.0) return;
+      setState(() => stroke.add(p));
+      return;
+    }
+    _onSelectionUpdate(details);
+  }
+
+  /// A second finger landed after the mark began: the gesture is not a mark
+  /// any more, so drop it (lift and pinch again to zoom).
+  void _cancelTouchMark() {
+    _markIgnore = true;
+    if (_markStroke != null) {
+      setState(() => _markStroke = null);
+    } else {
+      _clearSelection();
+    }
+  }
+
+  void _commitMarkStroke(List<Offset> stroke) {
+    final editing = widget.editing;
+    final kind = editing?.markupTool;
+    if (editing == null || kind == null || stroke.length < 2) return;
+    final first = _pagePointAt(stroke.first);
+    if (first == null) return;
+    final page = first.$1;
+    final points = <(double, double)>[];
+    for (final p in stroke) {
+      final pt = _pagePointAt(p);
+      if (pt == null || pt.$1 != page) continue;
+      points.add((pt.$2, pt.$3));
+    }
+    if (points.length < 2) return;
+    editing.addMarkupStroke(kind, page, points,
+        pageWidth: _pages[page].cropBox.width);
+  }
+
   void _onTouchMarkEnd({bool cancelled = false}) {
+    final stroke = _markStroke;
+    if (stroke != null) {
+      setState(() => _markStroke = null);
+      if (!cancelled && !_markIgnore) _commitMarkStroke(stroke);
+      _markIgnore = false;
+      return;
+    }
     if (_touchSelecting) setState(() => _touchSelecting = false);
-    if (cancelled) {
+    final ignore = _markIgnore;
+    _markIgnore = false;
+    if (cancelled || ignore) {
       _clearSelection();
     } else {
       _applyArmedMarkup();
@@ -10511,7 +10581,8 @@ class _PdfViewerState extends State<PdfViewer>
                                       ..gestureSettings = gestureSettings
                                       ..isEnabled = _touchMarkupDragEnabledAt
                                       ..onStart = _onTouchMarkStart
-                                      ..onUpdate = _onSelectionUpdate
+                                      ..onUpdate = _onTouchMarkUpdate
+                                      ..onSecondFinger = _cancelTouchMark
                                       ..onEnd = ((_) => _onTouchMarkEnd())
                                       ..onCancel =
                                           () => _onTouchMarkEnd(cancelled: true),
@@ -10540,6 +10611,24 @@ class _PdfViewerState extends State<PdfViewer>
                                       // (list) space so it tracks the gesture;
                                       // its chrome counter-scales the zoom
                                       // transform below.
+                                      if (_markStroke != null &&
+                                          _markStroke!.length > 1 &&
+                                          widget.editing != null)
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: CustomPaint(
+                                              painter: _MarkStrokePainter(
+                                                List.of(_markStroke!),
+                                                widget.editing!.color
+                                                    .withValues(
+                                                        alpha: widget.editing!
+                                                            .preferences.opacity
+                                                            .clamp(0.0, 1.0)),
+                                                _markStrokeWidth,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       if (_marqueeStart != null &&
                                           _marqueeCurrent != null)
                                         Positioned.fill(
@@ -12267,10 +12356,10 @@ class _SelectionLongPressRecognizer extends LongPressGestureRecognizer {
   String get debugDescription => 'selection long press';
 }
 
-/// A finger or stylus drag that starts on text while a text-markup tool is
-/// armed. It claims the press at once - like a selection handle - so the list
-/// cannot scroll out from under the finger; [isEnabled] limits it to presses
-/// that land on text, anywhere else the page still scrolls.
+/// A one-finger drag while a text-markup tool is armed. It claims the press
+/// after a few pixels of movement - ahead of the list's scroll - so the page
+/// does not scroll under the finger; a second finger landing first makes it
+/// stand down, which leaves the pinch to [_EagerPinchRecognizer].
 class _TouchMarkupDragRecognizer extends PanGestureRecognizer {
   _TouchMarkupDragRecognizer({super.debugOwner})
       : super(supportedDevices: {
@@ -12280,15 +12369,85 @@ class _TouchMarkupDragRecognizer extends PanGestureRecognizer {
 
   bool Function(Offset localPosition)? isEnabled;
 
+  /// Called when another finger lands after the drag already claimed the
+  /// gesture.
+  void Function()? onSecondFinger;
+
+  int? _first;
+  Offset? _firstPosition;
+  bool _claimed = false;
+
   @override
   void addAllowedPointer(PointerDownEvent event) {
+    if (_first != null) {
+      if (_claimed) {
+        onSecondFinger?.call();
+      } else {
+        resolve(GestureDisposition.rejected);
+      }
+      return;
+    }
     if (isEnabled?.call(event.localPosition) != true) return;
+    _first = event.pointer;
+    _firstPosition = event.position;
+    _claimed = false;
     super.addAllowedPointer(event);
-    resolve(GestureDisposition.accepted);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event.pointer == _first &&
+        !_claimed &&
+        event is PointerMoveEvent &&
+        _firstPosition != null &&
+        (event.position - _firstPosition!).distance > 5) {
+      _claimed = true;
+      resolve(GestureDisposition.accepted);
+    }
+    super.handleEvent(event);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _first = null;
+    _firstPosition = null;
+    _claimed = false;
+    super.didStopTrackingLastPointer(pointer);
   }
 
   @override
   String get debugDescription => 'touch markup drag';
+}
+
+/// The live freehand marker stroke, drawn in list space as one path so
+/// overlapping parts do not darken.
+class _MarkStrokePainter extends CustomPainter {
+  _MarkStrokePainter(this.points, this.color, this.width);
+
+  final List<Offset> points;
+  final Color color;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkStrokePainter old) => true;
 }
 
 /// A selection handle's drag must beat the list's scroll drag - the
