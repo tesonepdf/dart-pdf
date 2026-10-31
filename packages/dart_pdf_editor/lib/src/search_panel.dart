@@ -26,6 +26,7 @@ class PdfSearchField extends StatefulWidget {
     super.key,
     required this.controller,
     this.width = 200,
+    this.showCount = true,
     this.searchController,
     this.focusNode,
     this.hintText = 'Search',
@@ -43,6 +44,10 @@ class PdfSearchField extends StatefulWidget {
   /// The text box's width; the count and the stepper buttons sit
   /// outside it, appearing only while a query is live.
   final double width;
+
+  /// Whether the "n/m" match counter shows beside the arrows (hosts with a
+  /// narrow header leave it out).
+  final bool showCount;
 
   /// Whether to show the match-case / whole-word / regex toggle buttons
   /// beside the field. They drive [PdfViewerController.searchOptions].
@@ -185,7 +190,8 @@ class _PdfSearchFieldState extends State<PdfSearchField> {
                   controller: controller, preferences: widget.preferences),
             ),
           if (hasQuery && !controller.isSearching) ...[
-            Padding(
+            if (widget.showCount)
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Text(
                 controller.matchCount == 0
@@ -1274,10 +1280,11 @@ class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
               // narrow screens: the field leaves room for the menu, the tool
               // control and the "more" button around it
               width: MediaQuery.sizeOf(context).width < 600
-                  ? (MediaQuery.sizeOf(context).width - 246)
-                      .clamp(70.0, 200.0)
+                  ? (MediaQuery.sizeOf(context).width - 240)
+                      .clamp(80.0, 200.0)
                       .toDouble()
                   : 200,
+              showCount: MediaQuery.sizeOf(context).width >= 600,
               controller: widget.controller,
               searchController: widget.searchController,
               focusNode: widget.focusNode,

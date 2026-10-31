@@ -542,7 +542,6 @@ class PdfEditingPreferences extends ChangeNotifier
       if (shapeFill != null) _shapeFillColor = Color(shapeFill);
       final scale = store.getString('${_prefix}measurementScale');
       if (scale != null) _measurementScale = PdfMeasurementScale.decode(scale);
-      _loadToolStyles(store.getString(_toolStylesKey));
       final stamps = store.getStringList('${_prefix}customStamps');
       if (stamps != null) {
         _customStamps = List.unmodifiable([
@@ -563,6 +562,12 @@ class PdfEditingPreferences extends ChangeNotifier
                 _stampTimeFormat;
       }
     }
+    // The per-tool styles load regardless of _modified. Arming a tool while
+    // the disk read is still in flight seeds that tool's defaults and counts
+    // as a write; skipping the stored styles then made the first write
+    // replace them with defaults, so every tool forgot its settings after a
+    // restart or an app update. Stored values win over the seeded defaults.
+    _mergeStoredToolStyles(store.getString(_toolStylesKey));
     // viewports are a write-mostly store, not user-set UI state, so they
     // load regardless of _modified and merge by key - any saved before the
     // disk read (a fast scroll) keeps its place
@@ -705,7 +710,7 @@ class PdfEditingPreferences extends ChangeNotifier
   // -------------------------------------------------------------------------
   // per-tool style memory
 
-  void _loadToolStyles(String? source) {
+  void _mergeStoredToolStyles(String? source) {
     if (source == null) return;
     try {
       final decoded = jsonDecode(source);
@@ -713,14 +718,17 @@ class PdfEditingPreferences extends ChangeNotifier
       decoded.forEach((key, value) {
         if (key is String && value is Map) {
           _toolStyles[key] = {
+            ...?_toolStyles[key],
             for (final entry in value.entries)
               if (entry.key is String) entry.key as String: entry.value,
           };
         }
       });
     } catch (_) {
-      // corrupt blob - drop it, the defaults stand
+      return; // corrupt blob - the defaults stand
     }
+    final scope = _styleScope;
+    if (scope != null) _restoreScope(scope);
   }
 
   void _writeToolStyles() =>
