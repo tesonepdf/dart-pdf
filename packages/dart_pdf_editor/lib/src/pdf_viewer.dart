@@ -8873,39 +8873,7 @@ class _PdfViewerState extends State<PdfViewer>
   /// The finger position, straightened onto the text line when it is over a
   /// word: the stroke keeps following the finger along the line but sits on
   /// the word's own height instead of wobbling.
-  Offset _snapMarkPoint(Offset p) {
-    final range = _wordRangeAt(p, tolerance: 6);
-    if (range == null) return p;
-    final page = range.$1.$1;
-    final text = _pageText(page);
-    final quads = text.quadsFor(range.$1.$2, range.$2.$2);
-    if (quads.isEmpty) return p;
-    var top = double.negativeInfinity;
-    var bottom = double.infinity;
-    var left = double.infinity;
-    var right = double.negativeInfinity;
-    for (final q in quads) {
-      final b = q.bounds;
-      if (b.top > top) top = b.top;
-      if (b.bottom < bottom) bottom = b.bottom;
-      if (b.left < left) left = b.left;
-      if (b.right > right) right = b.right;
-    }
-    final box = _pages[page].cropBox;
-    if (box.width <= 0 || box.height <= 0) return p;
-    final geometry = PdfPageGeometry(
-      cropBox: box,
-      rotation: _effectiveRotation(page),
-      viewSize: Size(_pageWidth(page), _pageHeight(page)),
-    );
-    final view = geometry
-        .toViewRect(PdfRect(left, bottom, right, top))
-        .shift(Offset(_pageContentX(page), _pageContentY(page)));
-    if (p.dx < view.left - 6 || p.dx > view.right + 6) return p;
-    _markSnapped = true;
-    _markSnapYs.add(view.center.dy);
-    return Offset(p.dx, view.center.dy);
-  }
+  Offset _snapMarkPoint(Offset p) => p;
 
   /// Every marker stroke is a straight line: horizontal (on the text line
   /// when it crossed words) or vertical, whichever way the finger mostly
@@ -9022,12 +8990,32 @@ class _PdfViewerState extends State<PdfViewer>
         (event.localPosition - lastLocal).distance < kDoubleTapSlop;
     if (!second) return;
     _lastTapUpStamp = null;
-    if (_wordRangeAt(event.localPosition) == null) return;
-    // the viewer's own tap recognizer fires after this raw event and would
-    // immediately clear the selection made here
+    final range = _wordRangeAt(event.localPosition);
+    if (range == null) return;
+    // the viewer's own tap recognizer fires after this raw event
     _suppressTap = true;
-    _selectWordAt(event.localPosition);
-    _applyArmedMarkup();
+    final tap = _pagePointAt(event.localPosition);
+    final kind = editing.markupTool;
+    if (tap == null || kind == null) return;
+    final page = range.$1.$1;
+    if (tap.$1 != page) return;
+    final quads = _pageText(page).quadsFor(range.$1.$2, range.$2.$2);
+    if (quads.isEmpty) return;
+    var left = double.infinity;
+    var right = double.negativeInfinity;
+    for (final q in quads) {
+      final b = q.bounds;
+      if (b.left < left) left = b.left;
+      if (b.right > right) right = b.right;
+    }
+    if (right <= left) return;
+    // along the whole word, at the height the finger touched
+    editing.addMarkupStroke(
+      kind,
+      page,
+      [(left, tap.$3), (right, tap.$3)],
+      pageWidth: _pages[page].cropBox.width,
+    );
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
