@@ -5355,7 +5355,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _textSelecting = true;
       return;
     }
-    if (mouseLike) {
+    // the Select tool never moves the page, whatever the pointer: a drag on
+    // empty page draws the selection rectangle (the Hand tool is for moving)
+    if (mouseLike || _tool == PdfEditTool.select) {
       _beginInteraction(PdfEditingInteractionIntent.marquee, details.kind);
       setState(() {
         _marqueeStart = position;
