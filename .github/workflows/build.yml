@@ -343,14 +343,9 @@ jobs:
               gh release upload "$android_tag" \
                 "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" --clobber
-              android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
-              old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
-                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "windows-x64.zip" and .name != "release-info.json") | .id')"
-              if [[ -n "$old_asset_ids" ]]; then
-                while IFS= read -r asset_id; do
-                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
-                done <<< "$old_asset_ids"
-              fi
+              # Subito note e titolo (il numero), poi release-info.json: cosi'
+              # l'intervallo in cui l'app vede ancora il numero vecchio e'
+              # di pochi secondi. La pulizia dei vecchi file viene dopo.
               # Se il tag era ancora una pre-release, diventa release normale.
               gh release edit "$android_tag" \
                 --repo "$GITHUB_REPOSITORY" \
@@ -358,6 +353,21 @@ jobs:
                 --notes "$android_notes" \
                 --prerelease=false \
                 --latest="$latest_flag"
+              gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
+              gh release upload "$android_tag" release-info.json \
+                --repo "$GITHUB_REPOSITORY" --clobber
+              android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
+              old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
+                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "windows-x64.zip" and .name != "release-info.json") | .id')"
+              if [[ -n "$old_asset_ids" ]]; then
+                while IFS= read -r asset_id; do
+                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+                done <<< "$old_asset_ids"
+                # elenco file aggiornato dopo la pulizia
+                gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
+                gh release upload "$android_tag" release-info.json \
+                  --repo "$GITHUB_REPOSITORY" --clobber
+              fi
             else
               gh release create "$android_tag" \
                 "${assets[@]}" \
@@ -366,12 +376,12 @@ jobs:
                 --title "$android_title" \
                 --notes "$android_notes" \
                 --latest="$latest_flag"
+              # Copia delle informazioni della release, scaricabile senza API
+              # (l'app la legge per prima: niente limite di richieste GitHub).
+              gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
+              gh release upload "$android_tag" release-info.json \
+                --repo "$GITHUB_REPOSITORY" --clobber
             fi
-            # Copia delle informazioni della release, scaricabile senza API
-            # (l'app la legge per prima: niente limite di richieste GitHub).
-            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
-            gh release upload "$android_tag" release-info.json \
-              --repo "$GITHUB_REPOSITORY" --clobber
           else
             echo "Il canale Android e' gia' alla build $current_build (>= $NUMERO): non lo sposto."
           fi
