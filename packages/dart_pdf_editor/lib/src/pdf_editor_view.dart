@@ -1992,7 +1992,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                 enabled: autoHide,
                 child: child,
               );
-          Widget buildViewer(double lead) => PdfViewer(
+          Widget buildViewer(double lead, double trail) => PdfViewer(
                           // PdfViewer binds its controller once, in initState: a host
                           // handing in a different one (its own in place of ours)
                           // gets a fresh viewer bound to it, not one left driving
@@ -2050,12 +2050,17 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           trailingPadding: showToolbar &&
                                   !dockToolbar &&
                                   prefs.toolbarDock == PdfPanelDock.bottom
-                              ? 144
-                              : 0,
+                              ? 144 + trail
+                              : trail,
                           pageLayout: widget.pageLayout,
                           initialFit: widget.initialFit,
                           toolShortcuts: availableShortcuts,
-                          backgroundColor: widget.backgroundColor,
+                          // phone: light grey bands above and below the page,
+                          // where the menus sit
+                          backgroundColor: compact && header != null
+                              ? (widget.backgroundColor ??
+                                  const Color(0xFFD9D9D9))
+                              : widget.backgroundColor,
                           pageColor: pageColor,
                           showAnnotations: prefs.showAnnotations,
                           hiddenAnnotationSubtypes:
@@ -2193,11 +2198,9 @@ class _PdfEditorViewState extends State<PdfEditorView> {
   }
 }
 
-/// Phone: stretches the document (different width and height proportions) so
-/// the first page fills the whole screen under the header, edge to edge.
-/// The viewer is laid out in a viewport [k] times taller than the screen and
-/// the result is scaled back by [k] vertically, so touch and layout stay
-/// consistent.
+/// Phone: the page keeps its proportions and sits in the middle of the
+/// screen; the free space above and below is a light grey band, where the
+/// header and the bottom menus are drawn.
 class _PdfStretchToFill extends StatelessWidget {
   const _PdfStretchToFill({
     required this.enabled,
@@ -2207,41 +2210,28 @@ class _PdfStretchToFill extends StatelessWidget {
   });
 
   final bool enabled;
+
+  /// Height of the header drawn over the top of the viewer.
   final double topInset;
 
   /// Height / width of the first page, or null when unknown.
   final double? pageAspect;
 
-  /// Builds the viewer with the given space to keep free above the pages.
-  final Widget Function(double leadingPadding) builder;
+  /// Builds the viewer with the space to keep free above the first page and
+  /// below the last.
+  final Widget Function(double leadingPadding, double trailingPadding) builder;
 
   @override
   Widget build(BuildContext context) {
     final aspect = pageAspect;
-    if (!enabled || aspect == null) return builder(enabled ? topInset : 0);
+    if (!enabled) return builder(0, 0);
+    if (aspect == null) return builder(topInset, 0);
     return LayoutBuilder(builder: (context, constraints) {
       final w = constraints.maxWidth;
       final h = constraints.maxHeight;
-      final avail = h - topInset;
-      if (!w.isFinite || !h.isFinite || w <= 0 || avail <= 0) {
-        return builder(topInset);
-      }
-      final k = (avail / (w * aspect)).clamp(0.5, 3.0).toDouble();
-      final innerHeight = h / k;
-      return ClipRect(
-        child: Transform(
-          transform: Matrix4.diagonal3Values(1, k, 1),
-          alignment: Alignment.topLeft,
-          child: OverflowBox(
-            alignment: Alignment.topLeft,
-            minWidth: w,
-            maxWidth: w,
-            minHeight: innerHeight,
-            maxHeight: innerHeight,
-            child: builder(topInset / k),
-          ),
-        ),
-      );
+      if (!w.isFinite || !h.isFinite) return builder(topInset, 0);
+      final gap = ((h - w * aspect) / 2).clamp(0.0, h).toDouble();
+      return builder(gap < topInset ? topInset : gap, gap);
     });
   }
 }
