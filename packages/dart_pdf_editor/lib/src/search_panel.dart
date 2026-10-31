@@ -1271,6 +1271,13 @@ class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
       alignment: AlignmentDirectional.centerStart,
       child: _open
           ? PdfSearchField(
+              // narrow screens: the field leaves room for the menu, the tool
+              // control and the "more" button around it
+              width: MediaQuery.sizeOf(context).width < 600
+                  ? (MediaQuery.sizeOf(context).width - 246)
+                      .clamp(70.0, 200.0)
+                      .toDouble()
+                  : 200,
               controller: widget.controller,
               searchController: widget.searchController,
               focusNode: widget.focusNode,
