@@ -8501,7 +8501,11 @@ class _PdfViewerState extends State<PdfViewer>
     }
     // Hand mode keeps this: a double-click still selects a word, even
     // though a plain drag grabs the document
-    if (event.kind != PointerDeviceKind.mouse || !_wordDrag) return;
+    if (event.kind != PointerDeviceKind.mouse) {
+      _markWordOnDoubleTap(event);
+      return;
+    }
+    if (!_wordDrag) return;
     final downLocal = _lastMouseDownLocal;
     if (downLocal == null ||
         (event.localPosition - downLocal).distance >= kTouchSlop) {
@@ -8824,6 +8828,75 @@ class _PdfViewerState extends State<PdfViewer>
     final point = _pagePointAt(local);
     if (point == null) return false;
     return editing.selectableAnnotationAt(point.$1, point.$2, point.$3) == null;
+  }
+
+  /// Whether a finger/stylus press at [local] starts a drag-to-mark: a
+  /// text-markup tool is armed and the press lands on text.
+  bool _touchMarkupDragEnabledAt(Offset local) {
+    final editing = widget.editing;
+    if (editing == null || editing.markupTool == null) return false;
+    if (editing.isHandMode || editing.isPickingColor) return false;
+    return _textSelectionStartAt(local, alongTolerance: 14) != null;
+  }
+
+  void _onTouchMarkStart(DragStartDetails details) {
+    final start = _lastPointerLocal ?? details.localPosition;
+    final position = _textSelectionStartAt(start, alongTolerance: 14);
+    if (position == null) return;
+    _focusNode.requestFocus();
+    _wordAnchor = null;
+    setState(() {
+      _touchSelecting = true;
+      _selAnchor = position;
+      _selFocus = position;
+    });
+    _controller._setSelection('');
+  }
+
+  void _onTouchMarkEnd({bool cancelled = false}) {
+    if (_touchSelecting) setState(() => _touchSelecting = false);
+    if (cancelled) {
+      _clearSelection();
+    } else {
+      _applyArmedMarkup();
+    }
+  }
+
+  Duration? _lastTapUpStamp;
+  Offset? _lastTapUpLocal;
+
+  /// With a text-markup tool armed, two quick taps on a word mark that word:
+  /// the touch counterpart of a mouse double-click. Detected from raw pointer
+  /// timing, like the mouse path, so no double-tap recognizer delays taps.
+  void _markWordOnDoubleTap(PointerUpEvent event) {
+    final editing = widget.editing;
+    final down = _lastPointerLocal;
+    final moved =
+        down == null || (event.localPosition - down).distance >= kTouchSlop;
+    if (editing == null ||
+        editing.markupTool == null ||
+        editing.isHandMode ||
+        editing.isPickingColor ||
+        moved) {
+      _lastTapUpStamp = null;
+      return;
+    }
+    final lastStamp = _lastTapUpStamp;
+    final lastLocal = _lastTapUpLocal;
+    _lastTapUpStamp = event.timeStamp;
+    _lastTapUpLocal = event.localPosition;
+    final second = lastStamp != null &&
+        lastLocal != null &&
+        event.timeStamp - lastStamp < kDoubleTapTimeout &&
+        (event.localPosition - lastLocal).distance < kDoubleTapSlop;
+    if (!second) return;
+    _lastTapUpStamp = null;
+    if (_wordRangeAt(event.localPosition) == null) return;
+    // the viewer's own tap recognizer fires after this raw event and would
+    // immediately clear the selection made here
+    _suppressTap = true;
+    _selectWordAt(event.localPosition);
+    _applyArmedMarkup();
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
@@ -10425,6 +10498,23 @@ class _PdfViewerState extends State<PdfViewer>
                                           ((_) => _onLongPressEnd())
                                       ..onLongPressCancel = () =>
                                           _onLongPressEnd(cancelled: true),
+                                  ),
+                                  // with a text-markup tool armed, a finger
+                                  // dragged over text marks it instead of
+                                  // scrolling the page
+                                  _TouchMarkupDragRecognizer:
+                                      GestureRecognizerFactoryWithHandlers<
+                                          _TouchMarkupDragRecognizer>(
+                                    () => _TouchMarkupDragRecognizer(
+                                        debugOwner: this),
+                                    (recognizer) => recognizer
+                                      ..gestureSettings = gestureSettings
+                                      ..isEnabled = _touchMarkupDragEnabledAt
+                                      ..onStart = _onTouchMarkStart
+                                      ..onUpdate = _onSelectionUpdate
+                                      ..onEnd = ((_) => _onTouchMarkEnd())
+                                      ..onCancel =
+                                          () => _onTouchMarkEnd(cancelled: true),
                                   ),
                                 },
                                 child: ColoredBox(
@@ -12175,6 +12265,30 @@ class _SelectionLongPressRecognizer extends LongPressGestureRecognizer {
 
   @override
   String get debugDescription => 'selection long press';
+}
+
+/// A finger or stylus drag that starts on text while a text-markup tool is
+/// armed. It claims the press at once - like a selection handle - so the list
+/// cannot scroll out from under the finger; [isEnabled] limits it to presses
+/// that land on text, anywhere else the page still scrolls.
+class _TouchMarkupDragRecognizer extends PanGestureRecognizer {
+  _TouchMarkupDragRecognizer({super.debugOwner})
+      : super(supportedDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.stylus,
+        });
+
+  bool Function(Offset localPosition)? isEnabled;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (isEnabled?.call(event.localPosition) != true) return;
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+
+  @override
+  String get debugDescription => 'touch markup drag';
 }
 
 /// A selection handle's drag must beat the list's scroll drag - the
