@@ -47,8 +47,8 @@ env:
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
   # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10001.
   NUM_SUFFIX: ''
-  # La prova parte da 10001 (mai confondibile con i numeri dell'ufficiale).
-  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10000' || '0' }}
+  # La prova ha gia' registrato 10014 numeri (mai confondibile con l'ufficiale).
+  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10014' || '0' }}
 
 jobs:
   version:
@@ -73,12 +73,20 @@ jobs:
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
           version="$((year - 2020)).${day}.${hour}${minute}"
-          # Il numero dopo il # dell'app e' quello della run su GitHub Actions:
-          # ufficiale = numero della run (es. run #103 -> app #103); prova =
-          # 10000 + numero della run del suo workflow (run #1 -> app #10001).
-          # GitHub numera da 1 ogni workflow e non lo si puo' cambiare: per
-          # questo la prova si distingue con l'offset di 10000.
-          number="$((NUM_BASE + ${{ github.run_number }}))"
+          # Ufficiale: il numero dopo il # dell'app e' quello della run su GitHub
+          # Actions (run #103 -> app #103).
+          # Prova: GitHub numera da 1 il suo workflow e non si puo' cambiare, quindi
+          # il numero continua da quello gia' pubblicato nella release della
+          # prova (marcatore app-build) e aggiunge 1, ma mai sotto NUM_BASE: la
+          # prova ha gia' consumato 10014 numeri (allineamento del 2026-10-31),
+          # il prossimo e' 10015.
+          if [[ "$NUM_BASE" -gt 0 ]]; then
+            ultimo="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ANDROID_TAG" --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
+            if [[ -z "$ultimo" || "$ultimo" -lt "$NUM_BASE" ]]; then ultimo="$NUM_BASE"; fi
+            number="$((ultimo + 1))"
+          else
+            number="${{ github.run_number }}"
+          fi
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -332,7 +340,7 @@ jobs:
           # pubblicato: cosi' una build non viene saltata perche' nel frattempo
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
-          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" || "$NUM_BASE" -gt 0 ]]; then
+          if [[ -z "$current_build" || "$NUMERO" -gt "$current_build" ]]; then
             android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
             android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
