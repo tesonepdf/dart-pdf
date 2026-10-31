@@ -241,6 +241,41 @@ jobs:
           path: app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 
+  web:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # prova della build web: se fallisce non ferma APK e release
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compila la web app
+        working-directory: app
+        env:
+          DART: dart
+          FLUTTER: flutter
+          PDF_BUILD_VERSION: ${{ needs.version.outputs.version }}
+          PDF_BUILD_NUMBER: ${{ needs.version.outputs.number }}
+        run: bash tool/build_web.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DartPDF-Web
+          path: app/build/web
+          retention-days: 7
+
   windows:
     needs: version
     if: ${{ github.event_name == 'workflow_dispatch' && !inputs.solo_contatore }}
