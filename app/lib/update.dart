@@ -715,71 +715,105 @@ class UpdateService extends ChangeNotifier {
       'User-Agent': 'DartPDF-update-checker',
     };
     try {
-      final response = await client
-          .get(releasesUri, headers: headers)
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) {
-        throw http.ClientException(
-          'GitHub returned HTTP ${response.statusCode}',
-          releasesUri,
-        );
-      }
-      final decoded = jsonDecode(response.body);
-      if (decoded is! List) {
-        throw const FormatException('Expected a GitHub release list');
-      }
-      final releases = decoded
-          .whereType<Map>()
-          .map((e) => ReleaseInfo.fromJson(e.cast<String, dynamic>()))
-          .whereType<ReleaseInfo>()
-          .toList();
-      if (nightlyUpdates) {
-        final nightlyResponse = await client
-            .get(nightlyReleaseUri, headers: headers)
+      final releases = <ReleaseInfo>[];
+      Object? listError;
+      try {
+        final response = await client
+            .get(releasesUri, headers: headers)
             .timeout(const Duration(seconds: 15));
-        // Before the first workflow run there simply is no nightly release.
-        if (nightlyResponse.statusCode != 404) {
-          if (nightlyResponse.statusCode != 200) {
-            throw http.ClientException(
-              'GitHub returned HTTP ${nightlyResponse.statusCode}',
-              nightlyReleaseUri,
-            );
-          }
-          final nightlyJson = jsonDecode(nightlyResponse.body);
-          if (nightlyJson is Map) {
-            final nightly = ReleaseInfo.fromJson(
-              nightlyJson.cast<String, dynamic>(),
-            );
-            if (nightly != null) {
-              releases.removeWhere((r) => r.tagName == nightly.tagName);
-              releases.add(nightly);
+        if (response.statusCode != 200) {
+          throw http.ClientException(
+            'GitHub returned HTTP ${response.statusCode}',
+            releasesUri,
+          );
+        }
+        final decoded = jsonDecode(response.body);
+        if (decoded is! List) {
+          throw const FormatException('Expected a GitHub release list');
+        }
+        releases.addAll(decoded
+            .whereType<Map>()
+            .map((e) => ReleaseInfo.fromJson(e.cast<String, dynamic>()))
+            .whereType<ReleaseInfo>());
+        if (nightlyUpdates) {
+          final nightlyResponse = await client
+              .get(nightlyReleaseUri, headers: headers)
+              .timeout(const Duration(seconds: 15));
+          // Before the first workflow run there simply is no nightly release.
+          if (nightlyResponse.statusCode != 404) {
+            if (nightlyResponse.statusCode != 200) {
+              throw http.ClientException(
+                'GitHub returned HTTP ${nightlyResponse.statusCode}',
+                nightlyReleaseUri,
+              );
+            }
+            final nightlyJson = jsonDecode(nightlyResponse.body);
+            if (nightlyJson is Map) {
+              final nightly = ReleaseInfo.fromJson(
+                nightlyJson.cast<String, dynamic>(),
+              );
+              if (nightly != null) {
+                releases.removeWhere((r) => r.tagName == nightly.tagName);
+                releases.add(nightly);
+              }
             }
           }
         }
+      } catch (e) {
+        listError = e;
       }
       if (_targetPlatform == TargetPlatform.android) {
-        final androidUri = Uri.https(
-          'api.github.com',
-          '/repos/$repoOwner/$repoName/releases/tags/$dartPdfAndroidTag',
-        );
-        final androidResponse = await client.get(androidUri, headers: headers);
-        if (androidResponse.statusCode != 404) {
-          if (androidResponse.statusCode != 200) {
-            throw http.ClientException(
-              'GitHub returned HTTP ${androidResponse.statusCode}',
-              androidUri,
-            );
+        // The release's own info file is a plain download, so it does not
+        // count against GitHub's API rate limit (the usual reason the check
+        // fails on a phone); the API is the fallback.
+        ReleaseInfo? androidRelease;
+        try {
+          final infoUri = Uri.https(
+            'github.com',
+            '/$repoOwner/$repoName/releases/download/$dartPdfAndroidTag/release-info.json',
+          );
+          final infoResponse = await client
+              .get(infoUri, headers: headers)
+              .timeout(const Duration(seconds: 15));
+          if (infoResponse.statusCode == 200) {
+            final infoJson = jsonDecode(infoResponse.body);
+            if (infoJson is Map) {
+              androidRelease =
+                  ReleaseInfo.fromJson(infoJson.cast<String, dynamic>());
+            }
           }
-          final androidJson = jsonDecode(androidResponse.body);
-          if (androidJson is Map) {
-            final androidRelease =
-                ReleaseInfo.fromJson(androidJson.cast<String, dynamic>());
-            if (androidRelease != null) {
-              releases.removeWhere((r) => r.tagName == androidRelease.tagName);
-              releases.add(androidRelease);
+        } catch (_) {
+          androidRelease = null;
+        }
+        if (androidRelease == null) {
+          final androidUri = Uri.https(
+            'api.github.com',
+            '/repos/$repoOwner/$repoName/releases/tags/$dartPdfAndroidTag',
+          );
+          final androidResponse =
+              await client.get(androidUri, headers: headers);
+          if (androidResponse.statusCode != 404) {
+            if (androidResponse.statusCode != 200) {
+              throw http.ClientException(
+                'GitHub returned HTTP ${androidResponse.statusCode}',
+                androidUri,
+              );
+            }
+            final androidJson = jsonDecode(androidResponse.body);
+            if (androidJson is Map) {
+              androidRelease =
+                  ReleaseInfo.fromJson(androidJson.cast<String, dynamic>());
             }
           }
         }
+        if (androidRelease != null) {
+          releases.removeWhere((r) => r.tagName == androidRelease!.tagName);
+          releases.add(androidRelease);
+        } else if (listError != null) {
+          throw listError;
+        }
+      } else if (listError != null) {
+        throw listError;
       }
       return releases;
     } finally {
