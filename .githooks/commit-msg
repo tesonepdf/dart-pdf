@@ -1,13 +1,20 @@
 #!/bin/sh
-# Mette davanti al messaggio il numero del commit (#N), contando TUTTI i commit
-# del repo (anche quelli arrivati da GitHub o fatti altrove). N coincide con il
-# numero build delle Release (git rev-list --count HEAD).
+# Mette davanti al messaggio il numero del commit (#N): lo stesso numero della
+# build su GitHub Actions e di Vercel.
+#  - main: N = commit del ramo + 24 (allinea il numero alla run di Actions)
+#  - prova-sviluppatore: N = 10000 + commit non ancora presenti in main
 f="$1"
 first=$(head -n1 "$f")
 case "$first" in
   "#"[0-9]*|Merge*|fixup!*|squash!*|Revert*) exit 0 ;;
 esac
-n=$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 ))
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$branch" = "prova-sviluppatore" ]; then
+  base=$(git rev-parse --verify -q origin/main || git rev-parse --verify -q main)
+  n=$(( 10000 + $(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0) + 1 ))
+else
+  n=$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 + 24 ))
+fi
 printf '#%s %s\n' "$n" "$first" > "$f.tmp"
 tail -n +2 "$f" >> "$f.tmp"
 mv "$f.tmp" "$f"
