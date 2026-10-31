@@ -5162,6 +5162,9 @@ class _EditorScreenState extends State<EditorScreen>
         // an authoring choice, so the View options menu drops "Page color…"
         // here and keeps it in edit mode.
         features: const PdfReaderFeatures(pageColorEditable: false),
+        initialFit: _usesAppMenuSheet(context)
+            ? PdfViewerFit.fill
+            : PdfViewerFit.page,
         pageRasterCachePolicy: pageRasterCachePolicy,
         pageRasterWarmPolicy: pageRasterWarmPolicy,
         tileRasterBackend: tileRasterBackend,
@@ -5170,8 +5173,10 @@ class _EditorScreenState extends State<EditorScreen>
     return PdfEditorView(
       key: ValueKey(tab),
       features: PdfEditorFeatures(undoRedo: !_usesAppMenuSheet(context)),
-      // phone: no dark band under a short page - the paper colour fills it
-      backgroundColor: _usesAppMenuSheet(context) ? Colors.white : null,
+      // phone: the page is zoomed until it fills the whole screen
+      initialFit: _usesAppMenuSheet(context)
+          ? PdfViewerFit.fill
+          : PdfViewerFit.page,
       documentId: tab.documentId,
       controller: tab.session,
       viewerController: tab.viewer,

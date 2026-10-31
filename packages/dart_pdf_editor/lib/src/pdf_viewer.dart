@@ -1186,6 +1186,11 @@ enum PdfViewerFit {
   /// browser PDF viewers. On viewports narrower than the page's own
   /// aspect ratio this is the same as [width].
   page,
+
+  /// The first page covers the whole viewport: zoomed until its height fills
+  /// the screen (the sides can be panned), so no empty band is left under a
+  /// short page.
+  fill,
 }
 
 /// How [PdfViewer] arranges the document's pages.
@@ -10236,8 +10241,11 @@ class _PdfViewerState extends State<PdfViewer>
           // cross/both axes respectively.)
           final firstMainAtFit =
               _pages.isNotEmpty ? _mainPointOf(0) * _fitScale : 0.0;
-          _layoutZoom =
-              widget.initialFit == PdfViewerFit.page && firstMainAtFit > 0
+          _layoutZoom = widget.initialFit == PdfViewerFit.fill &&
+                  firstMainAtFit > 0
+              ? ((_mainView - widget.leadingPadding) / firstMainAtFit)
+                  .clamp(1.0, widget.maxZoom)
+              : widget.initialFit == PdfViewerFit.page && firstMainAtFit > 0
                   ? (_mainView / firstMainAtFit).clamp(widget.minZoom, 1.0)
                   : 1.0;
         }
