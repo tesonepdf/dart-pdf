@@ -2406,6 +2406,7 @@ class PdfEditingController extends ChangeNotifier {
     if (value != PdfEditTool.eraser) _eraserToggledOn = false;
     _rememberToolLeft(value);
     _tool = value;
+    preferences.markerActive = false;
     _markupTool = null;
     _handMode = false;
     _activeSavedAnnotationId = null;
@@ -2454,6 +2455,7 @@ class PdfEditingController extends ChangeNotifier {
   set markupTool(PdfMarkupKind? value) {
     if (value == _markupTool) return;
     if (value == null) {
+      preferences.markerActive = false;
       preferences.snapshotActiveStyleScope(lockedFields: _lockedStyleFields);
       _markupTool = null;
       preferences.beginStyleScope(
@@ -2477,6 +2479,8 @@ class PdfEditingController extends ChangeNotifier {
     _cropModeArmed = false;
     _cropDraft = null;
     useMarkupStyleScope();
+    preferences.applyMarker(withColor: !_colorLocked);
+    preferences.markerActive = true;
     notifyListeners();
   }
 
