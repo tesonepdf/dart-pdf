@@ -79,7 +79,7 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                 try {
                     val bytes = call.argument<ByteArray>("bytes")!!
                     val rawName = call.argument<String>("name") ?: "documento.pdf"
-                    val number = call.argument<String>("number")!!
+                    val number = call.argument<String>("number")
                     val safe = rawName.replace(Regex("[^A-Za-z0-9._ -]"), "_")
                         .ifBlank { "documento" }
                     val fileName = if (safe.lowercase().endsWith(".pdf")) safe else "$safe.pdf"
@@ -98,7 +98,7 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra("jid", "$number@s.whatsapp.net")
+                        if (!number.isNullOrEmpty()) putExtra("jid", "$number@s.whatsapp.net")
                         setPackage(installed)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }

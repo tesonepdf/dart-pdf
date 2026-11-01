@@ -3596,16 +3596,15 @@ class _EditorScreenState extends State<EditorScreen>
     if (mounted && result.message != null) _toast(result.message!);
   }
 
-  /// Manda il documento (con le modifiche attuali) alla chat WhatsApp del
-  /// contatto salvato; la prima volta chiede il numero.
-  Future<void> _sendWhatsapp(DocumentTab tab, {bool changeContact = false}) async {
+  /// Manda il documento (con le modifiche attuali) su WhatsApp: a un contatto
+  /// salvato ([chooseSaved]) oppure scegliendo il contatto dentro WhatsApp.
+  Future<void> _sendWhatsapp(DocumentTab tab, {required bool chooseSaved}) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    var number = await WhatsappSend.savedNumber();
-    if (!mounted) return;
-    if (number == null || changeContact) {
-      number = await WhatsappSend.askNumber(context, current: number);
-      if (number == null || !mounted) return;
-      if (changeContact) return;
+    String? number;
+    if (chooseSaved) {
+      final contact = await WhatsappSend.pickContact(context);
+      if (contact == null || !mounted) return;
+      number = contact.number;
     }
     final bytes = await _shareableBytes(tab);
     if (!mounted) return;
@@ -5469,21 +5468,23 @@ class _EditorScreenState extends State<EditorScreen>
           ),
         if (hasDocument && WhatsappSend.supported && tab != null)
           AppMenuSheetEntry(
-            key: const ValueKey('menu-whatsapp'),
-            icon: Icons.send_outlined,
-            title: 'Invia su WhatsApp',
+            key: const ValueKey('menu-whatsapp-contact'),
+            icon: Icons.person_outline,
+            title: 'WhatsApp: contatto salvato',
             run: () {
-              if (tab != null) unawaited(_sendWhatsapp(tab));
+              if (tab != null) {
+                unawaited(_sendWhatsapp(tab, chooseSaved: true));
+              }
             },
           ),
         if (hasDocument && WhatsappSend.supported && tab != null)
           AppMenuSheetEntry(
-            key: const ValueKey('menu-whatsapp-contact'),
-            icon: Icons.person_outline,
-            title: 'Cambia contatto WhatsApp',
+            key: const ValueKey('menu-whatsapp'),
+            icon: Icons.send_outlined,
+            title: 'WhatsApp: scelgo il contatto',
             run: () {
               if (tab != null) {
-                unawaited(_sendWhatsapp(tab, changeContact: true));
+                unawaited(_sendWhatsapp(tab, chooseSaved: false));
               }
             },
           ),
