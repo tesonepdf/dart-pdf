@@ -42,6 +42,11 @@ class DiagnosticActivity : Activity() {
         line("Flag", "0x" + Integer.toHexString(i.flags))
         line("Chiamante", try { referrer } catch (e: Throwable) { null })
         line("Chiamante (activity)", try { callingPackage } catch (e: Throwable) { null })
+        line("Intent completo", try { i.toUri(0) } catch (e: Throwable) { null })
+        sb.append("\n--- App che aprono questo file (VIEW) ---\n")
+        handlers(i, Intent.ACTION_VIEW, sb)
+        sb.append("\n--- App che ricevono questo file (SEND) ---\n")
+        handlers(i, Intent.ACTION_SEND, sb)
         sb.append("\n--- Extra ---\n")
         try {
             val ex = i.extras
@@ -95,5 +100,26 @@ class DiagnosticActivity : Activity() {
             } catch (e: Throwable) { line("  Lettura", "errore: $e") }
         }
         return sb.toString()
+    }
+
+    private fun fileUri(i: Intent): Uri? = try {
+        i.data ?: @Suppress("DEPRECATION") i.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            ?: i.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
+    } catch (e: Throwable) { null }
+
+    private fun handlers(i: Intent, action: String, sb: StringBuilder) {
+        try {
+            val uri = fileUri(i)
+            val type = i.type ?: uri?.let { contentResolver.getType(it) } ?: "application/pdf"
+            val probe = Intent(action)
+            if (action == Intent.ACTION_VIEW) probe.setDataAndType(uri, type) else probe.setType(type)
+            sb.append("Richiesta: ").append(action.substringAfterLast('.')).append(" tipo ").append(type).append('\n')
+            val list = packageManager.queryIntentActivities(probe, 0)
+            if (list.isEmpty()) sb.append("nessuna\n")
+            for (r in list) {
+                val me = if (r.activityInfo.packageName == packageName) "  <-- DartPDF" else ""
+                sb.append(r.activityInfo.packageName).append(" / ").append(r.activityInfo.name.substringAfterLast('.')).append(me).append('\n')
+            }
+        } catch (e: Throwable) { sb.append("errore: ").append(e).append('\n') }
     }
 }
