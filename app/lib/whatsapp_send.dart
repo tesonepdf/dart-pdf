@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dart_pdf_editor/dart_pdf_editor.dart' show showPdfDialog;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -61,7 +62,7 @@ class WhatsappSend {
     final name = TextEditingController();
     final number = TextEditingController();
     String? error;
-    final result = await showDialog<WhatsappContact>(
+    final result = await showPdfDialog<WhatsappContact>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -120,7 +121,7 @@ class WhatsappSend {
       await _save([added]);
       return added;
     }
-    return showDialog<WhatsappContact>(
+    return showPdfDialog<WhatsappContact>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
