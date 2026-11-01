@@ -2321,10 +2321,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       final annotations = _controller.pageAt(widget.pageIndex).annotations;
       for (var slot = 0; slot < annotations.length; slot++) {
         final annotation = annotations[slot];
-        if (!(annotation.subtype == 'Ink' ||
-                _markupSubtypes.contains(annotation.subtype)) ||
-            annotation.isHidden ||
-            !_controller.isAnnotationEditable(annotation)) {
+        if (!_controller.eraserTargets(annotation)) {
           continue;
         }
         final tracked = _eraseSliced[slot];
@@ -2362,13 +2359,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     });
   }
 
-  /// Text-markup annotations the eraser removes (whole, when it touches one).
-  static const _markupSubtypes = {
-    'Highlight',
-    'Underline',
-    'StrikeOut',
-    'Squiggly',
-  };
 
   static bool _hitsRect((double, double) p, PdfRect rect, double radius) =>
       p.$1 >= rect.left - radius &&

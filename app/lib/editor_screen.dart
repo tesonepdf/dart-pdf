@@ -349,8 +349,9 @@ class _EditorScreenState extends State<EditorScreen>
   /// Mirrors dirty documents to durable storage (a private directory on
   /// native, IndexedDB on the web) so a crash never costs unsaved work, and
   /// hands back whatever a previous run lost. See autosave.dart.
-  late final AutosaveController _autosave = AutosaveController(
-      store: widget.unsavedChangesStore ?? openUnsavedChangesStore());
+  // Salvataggio automatico disattivato: nessuna copia dei documenti modificati
+  // viene scritta o riaperta da sola. Si salva solo quando lo chiede l'utente.
+  late final AutosaveController _autosave = AutosaveController(store: null);
 
   final _incoming = IncomingFileService();
   late final OnDeviceOcr _ocr = widget.ocr ?? OnDeviceOcr();
@@ -724,11 +725,7 @@ class _EditorScreenState extends State<EditorScreen>
             key: const ValueKey('update-dialog-download'),
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              unawaited(startUpdateInstall(
-                context,
-                updates: _updates,
-                installer: _updateInstaller,
-              ));
+              unawaited(_installUpdateAsking());
             },
             child: Text(_canInstallUpdate
                 ? l10n.updateInstallNow
@@ -737,6 +734,24 @@ class _EditorScreenState extends State<EditorScreen>
         ],
       ),
     ));
+  }
+
+  /// Prima di installare un aggiornamento chiede conferma se ci sono
+  /// documenti con modifiche non salvate: nulla viene salvato in automatico.
+  Future<void> _installUpdateAsking() async {
+    final dirty = _tabs.where((t) => t.isDirty).length;
+    if (dirty > 0) {
+      final proceed = await _confirmDiscard(
+        appL10n(context).editorUnsavedChangesCount(dirty),
+      );
+      if (!proceed || !mounted) return;
+    }
+    if (!mounted) return;
+    await startUpdateInstall(
+      context,
+      updates: _updates,
+      installer: _updateInstaller,
+    );
   }
 
   bool get _canInstallUpdate =>
@@ -759,11 +774,7 @@ class _EditorScreenState extends State<EditorScreen>
           key: const ValueKey('update-banner-download'),
           onPressed: () {
             messenger.hideCurrentMaterialBanner();
-            unawaited(startUpdateInstall(
-              context,
-              updates: _updates,
-              installer: _updateInstaller,
-            ));
+            unawaited(_installUpdateAsking());
           },
           child: Text(
               _canInstallUpdate ? l10n.updateInstallNow : l10n.editorDownload),
