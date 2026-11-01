@@ -58,6 +58,7 @@ import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
 import 'whatsapp_send.dart';
+import 'open_with_rank.dart';
 import 'update_installer.dart';
 import 'update_platform.dart';
 import 'web_launch.dart';
@@ -5515,7 +5516,16 @@ class _EditorScreenState extends State<EditorScreen>
               title: l.editorClearRecentFiles,
               run: () => unawaited(_recents.clear()),
             ),
-      toOrganize: [for (final action in organizeActions) entry(action)],
+      toOrganize: [
+        for (final action in organizeActions) entry(action),
+        if (OpenWithRank.supported)
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-open-with-rank'),
+            icon: Icons.vertical_align_top,
+            title: 'Porta DartPDF in cima ad "Apri con"',
+            run: () => unawaited(OpenWithRank.show()),
+          ),
+      ],
       readOnly: hasDocument ? _readOnly : null,
       onToggleReadOnly: () => setState(() => _readOnly = !_readOnly),
       app: [for (final action in appActions) entry(action)],

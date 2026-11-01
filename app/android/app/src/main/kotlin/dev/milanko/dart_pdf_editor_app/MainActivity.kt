@@ -108,6 +108,30 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                     result.error("whatsapp", e.message, null)
                 }
             }
+        // Apre l'elenco di sistema "Apri con" su un PDF minimo: scegliendo
+        // DartPDF l'app sale in cima all'elenco delle app usate di recente.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/openwith")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "show") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                try {
+                    val bytes = android.util.Base64.decode("JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCAyMjAgODBdL0NvbnRlbnRzIDQgMCBSL1Jlc291cmNlczw8L0ZvbnQ8PC9GMSA1IDAgUj4+Pj4+PgplbmRvYmoKNCAwIG9iago8PC9MZW5ndGggNDk+PgpzdHJlYW0KQlQgL0YxIDE0IFRmIDIwIDM1IFRkIChQcm9tZW1vcmlhIEFwcmkgY29uKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU0IDAwMDAwIG4gCjAwMDAwMDAxMDUgMDAwMDAgbiAKMDAwMDAwMDIxNiAwMDAwMCBuIAowMDAwMDAwMzEzIDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMzc2CiUlRU9GCg==", android.util.Base64.DEFAULT)
+                    val dir = File(cacheDir, "openwith").apply { mkdirs() }
+                    val file = File(dir, "promemoria.pdf")
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/pdf")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(intent)
+                    result.success("ok")
+                } catch (e: Exception) {
+                    result.error("openwith", e.message, null)
+                }
+            }
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         ch.setMethodCallHandler { call, result ->
             if (call.method == "getInitialFile") {
