@@ -69,6 +69,45 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
         }
         keyboardInputManager = (getSystemService(Context.INPUT_SERVICE) as InputManager)
             .also { it.registerInputDeviceListener(this, Handler(Looper.getMainLooper())) }
+        // Invia un PDF direttamente alla chat WhatsApp di un numero.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/whatsapp")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "send") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                try {
+                    val bytes = call.argument<ByteArray>("bytes")!!
+                    val rawName = call.argument<String>("name") ?: "documento.pdf"
+                    val number = call.argument<String>("number")!!
+                    val safe = rawName.replace(Regex("[^A-Za-z0-9._ -]"), "_")
+                        .ifBlank { "documento" }
+                    val fileName = if (safe.lowercase().endsWith(".pdf")) safe else "$safe.pdf"
+                    val dir = File(cacheDir, "whatsapp").apply { mkdirs() }
+                    dir.listFiles()?.forEach { it.delete() }
+                    val file = File(dir, fileName)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
+                    val installed = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull {
+                        try { packageManager.getPackageInfo(it, 0); true } catch (e: Exception) { false }
+                    }
+                    if (installed == null) {
+                        result.success("no_whatsapp")
+                        return@setMethodCallHandler
+                    }
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra("jid", "$number@s.whatsapp.net")
+                        setPackage(installed)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(intent)
+                    result.success("ok")
+                } catch (e: Exception) {
+                    result.error("whatsapp", e.message, null)
+                }
+            }
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         ch.setMethodCallHandler { call, result ->
             if (call.method == "getInitialFile") {

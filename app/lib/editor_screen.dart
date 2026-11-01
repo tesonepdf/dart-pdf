@@ -57,6 +57,7 @@ import 'unsaved_changes_store.dart';
 import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
+import 'whatsapp_send.dart';
 import 'update_installer.dart';
 import 'update_platform.dart';
 import 'web_launch.dart';
@@ -3595,6 +3596,34 @@ class _EditorScreenState extends State<EditorScreen>
     if (mounted && result.message != null) _toast(result.message!);
   }
 
+  /// Manda il documento (con le modifiche attuali) alla chat WhatsApp del
+  /// contatto salvato; la prima volta chiede il numero.
+  Future<void> _sendWhatsapp(DocumentTab tab, {bool changeContact = false}) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    var number = await WhatsappSend.savedNumber();
+    if (!mounted) return;
+    if (number == null || changeContact) {
+      number = await WhatsappSend.askNumber(context, current: number);
+      if (number == null || !mounted) return;
+      if (changeContact) return;
+    }
+    final bytes = await _shareableBytes(tab);
+    if (!mounted) return;
+    if (bytes == null) {
+      _toast('Documento non disponibile');
+      return;
+    }
+    try {
+      final r = await WhatsappSend.send(
+          bytes: bytes,
+          name: tab.title.isEmpty ? 'documento.pdf' : tab.title,
+          number: number);
+      if (r == 'no_whatsapp' && mounted) _toast('WhatsApp non installato');
+    } catch (_) {
+      if (mounted) _toast('Invio su WhatsApp non riuscito');
+    }
+  }
+
   /// The bytes [tab] would save, or null when it has none to give.
   Future<Uint8List?> _shareableBytes(DocumentTab tab) async {
     tab.session?.finishInk();
@@ -5436,6 +5465,26 @@ class _EditorScreenState extends State<EditorScreen>
             title: WidgetsLocalizations.of(context).shareButtonLabel,
             run: () {
               if (tab != null) unawaited(_save(tab));
+            },
+          ),
+        if (hasDocument && WhatsappSend.supported && tab != null)
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-whatsapp'),
+            icon: Icons.send_outlined,
+            title: 'Invia su WhatsApp',
+            run: () {
+              if (tab != null) unawaited(_sendWhatsapp(tab));
+            },
+          ),
+        if (hasDocument && WhatsappSend.supported && tab != null)
+          AppMenuSheetEntry(
+            key: const ValueKey('menu-whatsapp-contact'),
+            icon: Icons.person_outline,
+            title: 'Cambia contatto WhatsApp',
+            run: () {
+              if (tab != null) {
+                unawaited(_sendWhatsapp(tab, changeContact: true));
+              }
             },
           ),
         for (final action in plainDocumentActions) entry(action),
