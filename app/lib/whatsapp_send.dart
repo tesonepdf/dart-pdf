@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_log.dart';
+
 class WhatsappContact {
   const WhatsappContact(this.name, this.number);
   final String name;
@@ -47,6 +49,7 @@ class WhatsappSend {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_oldKey);
     await prefs.setString(_key, jsonEncode([for (final c in list) c.toJson()]));
+    AppLog.instance.ok('Contatti WhatsApp', 'Salvati ${list.length} contatti');
   }
 
   /// Solo cifre, con prefisso internazionale. Se il numero e' scritto con
@@ -195,10 +198,25 @@ class WhatsappSend {
     required Uint8List bytes,
     required String name,
     String? number,
-  }) =>
-      _channel.invokeMethod<String>('send', {
+  }) async {
+    final target = number == null || number.length < 4
+        ? 'contatto scelto in WhatsApp'
+        : 'numero che finisce per ${number.substring(number.length - 3)}';
+    try {
+      final r = await _channel.invokeMethod<String>('send', {
         'bytes': bytes,
         'name': name,
         'number': number,
       });
+      if (r == 'ok') {
+        AppLog.instance.ok('Invio WhatsApp', '"$name" inviato a $target');
+      } else {
+        AppLog.instance.error('Invio WhatsApp', 'Risposta: $r');
+      }
+      return r;
+    } catch (e) {
+      AppLog.instance.error('Invio WhatsApp', e);
+      rethrow;
+    }
+  }
 }

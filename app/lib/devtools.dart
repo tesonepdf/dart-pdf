@@ -19,6 +19,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_log.dart';
 import 'devtools_memory_stub.dart'
     if (dart.library.io) 'devtools_memory_io.dart' as memory;
 
@@ -331,8 +332,13 @@ class AppDevTools extends ChangeNotifier {
   }
 
   /// Adds an app-authored entry (the capture hooks use this too).
-  void addLog(String message, {DevLogLevel level = DevLogLevel.info}) =>
-      _record(level, message);
+  void addLog(String message, {DevLogLevel level = DevLogLevel.info}) {
+    _record(level, message);
+    // Gli errori espliciti dell'app finiscono anche nel Log di Impostazioni.
+    if (level == DevLogLevel.error) {
+      AppLog.instance.error('Errore interno', message);
+    }
+  }
 
   void clearLog() {
     _log.clear();
