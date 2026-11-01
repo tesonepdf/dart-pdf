@@ -211,6 +211,8 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <package android:name="com.microsoft.windowsintune.companyportal"/>
+        <package android:name="com.microsoft.office.outlook"/>
         <package android:name="com.whatsapp"/>
         <package android:name="com.whatsapp.w4b"/>
         <intent>
