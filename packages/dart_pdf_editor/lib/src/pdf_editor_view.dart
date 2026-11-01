@@ -2098,6 +2098,47 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                     right: 0,
                     child: autoHideBar(header, AxisDirection.up),
                   ),
+                  // telefono: il contatore dei risultati sta in una seconda
+                  // riga sotto la barra di ricerca
+                  Positioned(
+                    top: MediaQuery.paddingOf(context).top + kToolbarHeight,
+                    left: 0,
+                    right: 0,
+                    child: IgnorePointer(
+                      child: ListenableBuilder(
+                        listenable: Listenable.merge([pdfSearchOpen, _viewer]),
+                        builder: (context, _) {
+                          final v = _viewer;
+                          if (!pdfSearchOpen.value ||
+                              MediaQuery.sizeOf(context).width >= 600 ||
+                              v.query.isEmpty ||
+                              v.isSearching) {
+                            return const SizedBox.shrink();
+                          }
+                          final text = v.matchCount == 0
+                              ? '0/0'
+                              : '${v.currentMatch + 1}/${v.matchCount}';
+                          return Align(
+                            alignment: Alignment.topCenter,
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHigh,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(text,
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                   if (toolbar != null && dockToolbar)
                     Positioned(
                       left: 0,
