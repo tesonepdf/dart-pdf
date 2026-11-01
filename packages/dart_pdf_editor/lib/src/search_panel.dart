@@ -316,6 +316,27 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
   /// The find-to-mark (highlighter) section.
   bool _markExpanded = false;
 
+  /// Risultati scelti a mano (pressione lunga, poi tocchi) per "Marca" e
+  /// "Marca tutti tranne"; vale solo per l'elenco di risultati corrente.
+  final Set<int> _picked = {};
+  List<PdfSearchResult>? _pickedFor;
+
+  Set<int> get _pickedNow {
+    final results = widget.controller.searchResults;
+    if (!identical(_pickedFor, results)) {
+      _pickedFor = results;
+      _picked.clear();
+    }
+    return _picked;
+  }
+
+  void _togglePicked(int index) {
+    final picked = _pickedNow;
+    setState(() {
+      if (!picked.remove(index)) picked.add(index);
+    });
+  }
+
   /// Same split for the find-to-redact section.
   bool _redactExpandedLocal = false;
 
@@ -390,7 +411,8 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
     return ListTile(
       key: ValueKey('pdf-search-result-$index'),
       dense: true,
-      selected: index == widget.controller.currentMatch,
+      selected: index == widget.controller.currentMatch ||
+          _pickedNow.contains(index),
       selectedTileColor: scheme.secondaryContainer,
       selectedColor: scheme.onSecondaryContainer,
       // Annotation hits (note bodies, comments, free text) carry a small
@@ -401,7 +423,12 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
           : null,
       horizontalTitleGap: result.isAnnotation ? 8 : null,
       minLeadingWidth: result.isAnnotation ? 16 : null,
-      trailing: marked
+      trailing: _pickedNow.contains(index)
+          ? Icon(Icons.check_circle,
+              key: ValueKey('pdf-search-result-picked-$index'),
+              size: 18,
+              color: scheme.primary)
+          : marked
           ? Tooltip(
               message: pdfL10n(context).tbToolRedact,
               child: Icon(Icons.gradient,
@@ -424,7 +451,11 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
-      onTap: () => widget.controller.goToMatch(index),
+      onTap: () {
+        if (_pickedNow.isNotEmpty) _togglePicked(index);
+        widget.controller.goToMatch(index);
+      },
+      onLongPress: () => _togglePicked(index),
     );
   }
 
@@ -606,6 +637,8 @@ class _PdfSearchResultsPanelState extends State<PdfSearchResultsPanel> {
                     controller: controller,
                     editing: widget.editing!,
                     geometry: geometry,
+                    picked: _pickedNow,
+                    onPickedChanged: () => setState(() {}),
                   ),
                 if (widget.editing != null && _redactExpanded)
                   _RedactBar(
@@ -958,11 +991,15 @@ class _MarkBar extends StatefulWidget {
     required this.controller,
     required this.editing,
     required this.geometry,
+    required this.picked,
+    required this.onPickedChanged,
   });
 
   final PdfViewerController controller;
   final PdfEditingController editing;
   final PdfSidebarPanelGeometry geometry;
+  final Set<int> picked;
+  final VoidCallback onPickedChanged;
 
   @override
   State<_MarkBar> createState() => _MarkBarState();
@@ -989,6 +1026,8 @@ class _MarkBarState extends State<_MarkBar> {
         ],
       );
       if (!mounted) return;
+      widget.picked.clear();
+      widget.onPickedChanged();
       presenter.notice(
         context,
         PdfEditorNotice(
@@ -1024,35 +1063,71 @@ class _MarkBarState extends State<_MarkBar> {
         results.any((r) => !r.isAnnotation);
     final italian = Localizations.localeOf(context).languageCode == 'it';
     final geometry = widget.geometry;
+    final picked = widget.picked;
     return Padding(
       padding: EdgeInsetsDirectional.only(
         start: 16 + geometry.contentStartInset,
         end: 16 + geometry.contentEndInset,
         bottom: 10,
       ),
-      child: Row(children: [
-        Expanded(
-          child: OutlinedButton(
-            key: const ValueKey('pdf-search-mark-one'),
-            style:
-                OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
-            onPressed: ready && current != null && !current.isAnnotation
-                ? () => _mark([current],
-                    landOn: index + 1 < results.length ? index + 1 : index)
-                : null,
-            child: Text(italian ? 'Marca' : 'Mark',
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(
+              key: const ValueKey('pdf-search-mark-one'),
+              style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact),
+              onPressed: ready && picked.isNotEmpty
+                  ? () => _mark([
+                        for (final i in picked.toList()..sort())
+                          if (i < results.length) results[i],
+                      ])
+                  : ready && current != null && !current.isAnnotation
+                      ? () => _mark([current],
+                          landOn:
+                              index + 1 < results.length ? index + 1 : index)
+                      : null,
+              child: Text(
+                  picked.isNotEmpty
+                      ? (italian
+                          ? 'Marca (${picked.length})'
+                          : 'Mark (${picked.length})')
+                      : (italian ? 'Marca' : 'Mark'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.tonal(
+              key: const ValueKey('pdf-search-mark-all'),
+              style:
+                  FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+              onPressed: ready ? () => _mark(results) : null,
+              child: Text(italian ? 'Marca tutti' : 'Mark all',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
           child: FilledButton.tonal(
-            key: const ValueKey('pdf-search-mark-all'),
+            key: const ValueKey('pdf-search-mark-all-except'),
             style:
                 FilledButton.styleFrom(visualDensity: VisualDensity.compact),
-            onPressed: ready ? () => _mark(results) : null,
-            child: Text(italian ? 'Marca tutti' : 'Mark all',
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            onPressed: ready && picked.isNotEmpty
+                ? () => _mark([
+                      for (var i = 0; i < results.length; i++)
+                        if (!picked.contains(i)) results[i],
+                    ])
+                : null,
+            child: Text(
+                italian
+                    ? 'Marca tutti tranne i selezionati'
+                    : 'Mark all except selected',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ),
         ),
       ]),
