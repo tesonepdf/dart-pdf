@@ -3600,27 +3600,27 @@ class _EditorScreenState extends State<EditorScreen>
   /// Manda il documento (con le modifiche attuali) su WhatsApp: a un contatto
   /// salvato ([chooseSaved]) oppure scegliendo il contatto dentro WhatsApp.
   Future<void> _sendWhatsapp(DocumentTab tab, {required bool chooseSaved}) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    String? number;
-    if (chooseSaved) {
-      final contact = await WhatsappSend.pickContact(context);
-      if (contact == null || !mounted) return;
-      number = contact.number;
-    }
-    final bytes = await _shareableBytes(tab);
-    if (!mounted) return;
-    if (bytes == null) {
-      _toast('Documento non disponibile');
-      return;
-    }
     try {
+      FocusManager.instance.primaryFocus?.unfocus();
+      String? number;
+      if (chooseSaved) {
+        final contact = await WhatsappSend.pickContact(context);
+        if (contact == null || !mounted) return;
+        number = contact.number;
+      }
+      final bytes = await _shareableBytes(tab);
+      if (!mounted) return;
+      if (bytes == null) {
+        _toast('Documento non disponibile');
+        return;
+      }
       final r = await WhatsappSend.send(
           bytes: bytes,
           name: tab.title.isEmpty ? 'documento.pdf' : tab.title,
           number: number);
       if (r == 'no_whatsapp' && mounted) _toast('WhatsApp non installato');
-    } catch (_) {
-      if (mounted) _toast('Invio su WhatsApp non riuscito');
+    } catch (e) {
+      if (mounted) _toast('WhatsApp: $e');
     }
   }
 
