@@ -782,6 +782,25 @@ class _EditorScreenState extends State<EditorScreen>
         }
       }
     }
+    // Qualunque sia la scelta (anche "Non salvare"), i documenti aperti
+    // restano nei recenti: li si registra di nuovo prima di installare e si
+    // aspetta che la scrittura su disco sia finita.
+    await _recents.load();
+    for (final tab in _tabs.reversed) {
+      final path = tab.originPath;
+      final cachePath = tab.cachePath;
+      final hasSource = (path != null && path.isNotEmpty) ||
+          (cachePath != null && cachePath.isNotEmpty) ||
+          tab.originBookmark != null;
+      if (!hasSource) continue;
+      await _recents.add(
+        title: tab.title,
+        path: path,
+        cachePath: cachePath,
+        bookmark: tab.originBookmark,
+      );
+    }
+    if (!mounted) return;
     // Memorizza i documenti aperti e quello che si sta guardando, cosi'
     // l'app li riapre dopo l'aggiornamento.
     await _persistSession();
