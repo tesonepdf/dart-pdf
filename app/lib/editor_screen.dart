@@ -4986,6 +4986,8 @@ class _EditorScreenState extends State<EditorScreen>
   Widget build(BuildContext context) {
     final tab = _active;
     return Scaffold(
+      // La tastiera copre il documento senza spostarlo né ridimensionarlo.
+      resizeToAvoidBottomInset: false,
       appBar: _shellDrawsAppBar(tab) ? null : _buildAppBar(tab),
       body: CallbackShortcuts(
         // ⌘P (macOS) / Ctrl+P (Windows, Linux, web) print the active document.
