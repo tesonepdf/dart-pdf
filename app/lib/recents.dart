@@ -104,7 +104,11 @@ class RecentsStore extends ChangeNotifier {
 
   /// Loads the persisted list. Safe to call more than once; a no-op after the
   /// first successful load.
-  Future<void> load() async {
+  Future<void> load() => _loading ??= _doLoad();
+
+  Future<void>? _loading;
+
+  Future<void> _doLoad() async {
     if (_loaded) return;
     _loaded = true;
     try {
@@ -156,6 +160,7 @@ class RecentsStore extends ChangeNotifier {
       String? path,
       String? cachePath,
       String? bookmark}) async {
+    await load();
     final entry = RecentFile(
       title: title,
       path: path,
@@ -170,6 +175,7 @@ class RecentsStore extends ChangeNotifier {
   }
 
   Future<void> remove(String id) async {
+    await load();
     _items.removeWhere((e) => e.id == id);
     notifyListeners();
     await _persist();
@@ -177,6 +183,7 @@ class RecentsStore extends ChangeNotifier {
 
   /// Updates a document's display/share name, preserving its source and order.
   Future<void> rename(String id, String title) async {
+    await load();
     final index = _items.indexWhere((entry) => entry.id == id);
     if (index < 0 || _items[index].title == title) return;
     final entry = _items[index];
@@ -193,6 +200,7 @@ class RecentsStore extends ChangeNotifier {
   }
 
   Future<void> clear() async {
+    await load();
     _items.clear();
     notifyListeners();
     await _persist();
