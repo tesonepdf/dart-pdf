@@ -78,8 +78,8 @@ class RecentFile {
       );
 }
 
-/// A persisted, most-recent-first list of opened documents, capped to a small
-/// number. Backed by `shared_preferences`; when storage is unavailable (widget
+/// A persisted, most-recent-first list of opened documents, never trimmed on
+/// its own: entries leave only when the user removes them (or clears the list). Backed by `shared_preferences`; when storage is unavailable (widget
 /// tests) it degrades to an in-memory list so the UI stays deterministic with
 /// no mocking, mirroring how [PdfEditingPreferences] handles the same case.
 class RecentsStore extends ChangeNotifier {
@@ -87,7 +87,6 @@ class RecentsStore extends ChangeNotifier {
       : _resolveCacheKey = resolveCacheKey ?? resolveCachedPdfKey;
 
   static const _key = 'dart_pdf_editor_app.recents';
-  static const _cap = 20;
 
   final CachedPdfKeyResolver _resolveCacheKey;
   final List<RecentFile> _items = [];
@@ -166,7 +165,6 @@ class RecentsStore extends ChangeNotifier {
     );
     _items.removeWhere((e) => e.id == entry.id);
     _items.insert(0, entry);
-    if (_items.length > _cap) _items.removeRange(_cap, _items.length);
     notifyListeners();
     await _persist();
   }

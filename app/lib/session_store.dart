@@ -71,6 +71,11 @@ class SessionStore {
   final CachedPdfKeyResolver _resolveCacheKey;
 
   static const _key = 'dart_pdf_editor_app.session';
+  static const _activeKey = 'dart_pdf_editor_app.session_active';
+
+  /// Posizione (nell'elenco dei documenti) di quello che si stava guardando.
+  int _activeIndex = 0;
+  int get activeIndex => _activeIndex;
 
   List<SessionDocument> _documents = const [];
 
@@ -82,6 +87,7 @@ class SessionStore {
   Future<List<SessionDocument>> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      _activeIndex = prefs.getInt(_activeKey) ?? 0;
       final raw = prefs.getString(_key);
       if (raw == null) return _documents;
       final decoded = jsonDecode(raw);
@@ -113,10 +119,13 @@ class SessionStore {
   }
 
   /// Replaces the persisted open-document list with [documents] (tab order).
-  Future<void> save(List<SessionDocument> documents) async {
+  Future<void> save(List<SessionDocument> documents,
+      {int activeIndex = 0}) async {
     _documents = List.unmodifiable(documents);
+    _activeIndex = activeIndex;
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_activeKey, activeIndex);
       await prefs.setString(
           _key, jsonEncode(_documents.map((d) => d.toJson()).toList()));
     } catch (e) {

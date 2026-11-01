@@ -736,16 +736,55 @@ class _EditorScreenState extends State<EditorScreen>
     ));
   }
 
-  /// Prima di installare un aggiornamento chiede conferma se ci sono
-  /// documenti con modifiche non salvate: nulla viene salvato in automatico.
+  /// Prima di installare un aggiornamento chiede se salvare i documenti con
+  /// modifiche. Salva: salva e dopo l'aggiornamento si riapre con le modifiche.
+  /// Non salvare: si riapre com'e' sul disco, senza le modifiche. Il documento
+  /// che si stava guardando si riapre comunque (vedi la sessione).
   Future<void> _installUpdateAsking() async {
-    final dirty = _tabs.where((t) => t.isDirty).length;
-    if (dirty > 0) {
-      final proceed = await _confirmDiscard(
-        appL10n(context).editorUnsavedChangesCount(dirty),
+    final dirtyTabs = _tabs.where((t) => t.isDirty).toList();
+    if (dirtyTabs.isNotEmpty) {
+      final it = Localizations.localeOf(context).languageCode == 'it';
+      final choice = await showPdfDialog<int>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(it ? 'Salvare le modifiche?' : 'Save changes?'),
+          content: Text(it
+              ? 'Prima di aggiornare: vuoi salvare le modifiche ai documenti aperti? '
+                  'Dopo l\'aggiornamento il documento si riapre: con le modifiche se salvi, '
+                  'senza se non salvi.'
+              : 'Before updating: save the changes to your open documents? '
+                  'The document reopens after the update, with the changes if you '
+                  'save and without them if you don\'t.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(0),
+              child: Text(it ? 'Annulla' : 'Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(1),
+              child: Text(it ? 'Non salvare' : 'Don\'t save'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(2),
+              child: Text(it ? 'Salva' : 'Save'),
+            ),
+          ],
+        ),
       );
-      if (!proceed || !mounted) return;
+      if (choice == null || choice == 0 || !mounted) return;
+      if (choice == 2) {
+        for (final tab in dirtyTabs) {
+          await _save(tab);
+          if (!mounted) return;
+          // salvataggio annullato o fallito: non si aggiorna
+          if (tab.isDirty) return;
+        }
+      }
     }
+    // Memorizza i documenti aperti e quello che si sta guardando, cosi'
+    // l'app li riapre dopo l'aggiornamento.
+    await _persistSession();
     if (!mounted) return;
     await startUpdateInstall(
       context,
@@ -993,6 +1032,15 @@ class _EditorScreenState extends State<EditorScreen>
         _restoringSession = false;
       }
       if (unavailable.isNotEmpty) _warnFilesUnavailable(unavailable);
+      // Torna al documento che si stava guardando.
+      final wanted = _session.activeIndex;
+      if (wanted >= 0 && wanted < documents.length) {
+        final key = documents[wanted].readPath;
+        final at = key == null
+            ? -1
+            : _tabs.indexWhere((t) => t.originPath == key || t.cachePath == key);
+        if (at >= 0 && mounted) setState(() => _activeIndex = at);
+      }
       // Let the tab left active materialize now that restore is done.
       if (mounted) setState(() {});
     }
@@ -1164,6 +1212,8 @@ class _EditorScreenState extends State<EditorScreen>
     if (!widget.ownsApplicationSession || !_sessionLoaded) return;
     final documents = <SessionDocument>[];
     final seen = <String>{};
+    var activeInSession = 0;
+    final activeTab = _active;
     for (final tab in _tabs) {
       final path = tab.originPath;
       final cachePath = tab.cachePath;
@@ -1173,13 +1223,14 @@ class _EditorScreenState extends State<EditorScreen>
       // and are skipped.
       final key = (path != null && path.isNotEmpty) ? path : cachePath;
       if (key == null || key.isEmpty || !seen.add(key)) continue;
+      if (identical(tab, activeTab)) activeInSession = documents.length;
       documents.add(SessionDocument(
           title: tab.title,
           path: path ?? '',
           cachePath: cachePath,
           bookmark: tab.originBookmark));
     }
-    await _session.save(documents);
+    await _session.save(documents, activeIndex: activeInSession);
   }
 
   /// Serializes snapshot writes plus their Recent updates against pruning.
@@ -2845,7 +2896,7 @@ class _EditorScreenState extends State<EditorScreen>
         bookmark: entry.bookmark,
         cachePath: entry.cachePath,
         onOpenFailed: (_) {
-          unawaited(_recents.remove(entry.id));
+          // il registro dei recenti si svuota solo a richiesta dell'utente
           _pruneRecentCache();
           _toast(appL10n(context)
               .editorCouldNotReopen(pdfDisplayName(entry.title)));
@@ -2885,8 +2936,6 @@ class _EditorScreenState extends State<EditorScreen>
     } catch (e) {
       if (originPath == null && entry.cachePath != null) {
         await _recents.updateCachedAvailability({entry.cachePath!}, {});
-      } else {
-        await _recents.remove(entry.id);
       }
       _pruneRecentCache();
       if (!mounted) return;
@@ -2927,8 +2976,6 @@ class _EditorScreenState extends State<EditorScreen>
       );
       if (entry.path == null && entry.cachePath != null) {
         await _recents.updateCachedAvailability({entry.cachePath!}, {});
-      } else {
-        await _recents.remove(entry.id);
       }
       _pruneRecentCache();
       if (!mounted) return;
