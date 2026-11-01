@@ -2324,6 +2324,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         if (!_controller.eraserTargets(annotation)) {
           continue;
         }
+        if (_controller.preferences.eraserWholeStroke) {
+          if (!_eraseWholeSlots.contains(slot) &&
+              _controller.eraserHitsAnnotation(
+                  annotation, from, point, radius)) {
+            _eraseWholeSlots.add(slot);
+            _eraseRects[slot] = _geometry.toViewRect(annotation.rect);
+          }
+          continue;
+        }
         final tracked = _eraseSliced[slot];
         final strokes = tracked?.strokes ?? annotation.inkList;
         if (strokes == null) {
