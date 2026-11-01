@@ -7187,11 +7187,12 @@ class PdfEditingController extends ChangeNotifier {
         var changed = false;
         for (final annotation in targets) {
           if (_eraseMarkupSubtypes.contains(annotation.subtype)) {
-            // a text-markup stripe goes whole when the eraser reaches one of
-            // its lines
-            final quads =
-                annotation.behavior.markupQuads ?? [annotation.rect];
-            if (quads.any((quad) => _pathTouchesRect(path, quad, radius))) {
+            // la marcatura di testo perde solo il tratto toccato dalla gomma
+            if (annotation.behavior.markupQuads != null) {
+              if (editor.sliceMarkup(pageIndex, annotation, path, radius)) {
+                changed = true;
+              }
+            } else if (_pathTouchesRect(path, annotation.rect, radius)) {
               editor.removeAnnotation(pageIndex, annotation);
               changed = true;
             }
