@@ -118,7 +118,7 @@ class DiagnosticActivity : Activity() {
             val probe = Intent(action)
             if (action == Intent.ACTION_VIEW) probe.setDataAndType(uri, type) else probe.setType(type)
             sb.append("Richiesta: ").append(action.substringAfterLast('.')).append(" tipo ").append(type).append('\n')
-            val list = packageManager.queryIntentActivities(probe, 0)
+            val list = packageManager.queryIntentActivities(probe, android.content.pm.PackageManager.GET_RESOLVED_FILTER)
             if (list.isEmpty()) sb.append("nessuna\n")
             for (r in list) {
                 val me = if (r.activityInfo.packageName == packageName) "  <-- DartPDF" else ""
