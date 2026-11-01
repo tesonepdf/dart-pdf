@@ -46,8 +46,19 @@ internal class IncomingPdfHandler {
         } catch (_: Exception) {
             null
         }
-        val payload = mapOf("name" to (name?.takeIf { it.isNotBlank() } ?: "document.pdf"),
-            "bytes" to bytes)
+        // Se il provider non da' il nome (succede con Outlook e altre app),
+        // si prova con il titolo/oggetto della condivisione e con l'ultimo
+        // pezzo dell'indirizzo, prima di ripiegare su "document.pdf".
+        val extraName = listOf(Intent.EXTRA_TITLE, Intent.EXTRA_SUBJECT)
+            .mapNotNull { intent?.getStringExtra(it)?.trim() }
+            .firstOrNull { it.isNotEmpty() }
+        val pathName = uri.lastPathSegment?.substringAfterLast('/')
+            ?.takeIf { it.lowercase().endsWith(".pdf") }
+        val finalName = name?.takeIf { it.isNotBlank() }
+            ?: pathName
+            ?: extraName
+            ?: "document.pdf"
+        val payload = mapOf("name" to finalName, "bytes" to bytes)
         // Copy during the temporary read grant; no persistable/storage permission
         // is required. Dart caches the bytes for recents and uses Save As.
         if (initial) pending = payload else deliver(payload)
