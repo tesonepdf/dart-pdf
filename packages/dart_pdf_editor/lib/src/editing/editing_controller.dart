@@ -2404,6 +2404,8 @@ class PdfEditingController extends ChangeNotifier {
     // double-tap pairing (see [togglePencilEraser]) - the remembered tool
     // is only valid while the eraser stays the toggled-on partner
     if (value != PdfEditTool.eraser) _eraserToggledOn = false;
+    // la gomma legata a uno strumento vale solo finche' resta la gomma
+    if (value != PdfEditTool.eraser) _eraseFilter = null;
     _rememberToolLeft(value);
     _tool = value;
     preferences.markerActive = false;
@@ -7096,6 +7098,73 @@ class PdfEditingController extends ChangeNotifier {
   List<PdfCommentThread> commentThreads(int pageIndex) =>
       PdfCommentThread.forPage(_document, pageIndex);
 
+  // --- gomma dentro ogni strumento ----------------------------------------
+
+  /// Quando la gomma e' stata attivata dal pannello di uno strumento, cancella
+  /// solo i segni di quello strumento. Null: gomma generale (tratti a mano e
+  /// marcature di testo).
+  bool Function(PdfAnnotation)? _eraseFilter;
+
+  /// Il filtro dello strumento attivo (o della marcatura attiva), null se lo
+  /// strumento non lascia segni che la gomma possa cancellare.
+  bool Function(PdfAnnotation)? _filterForCurrentTool() {
+    final markup = _markupTool;
+    if (markup != null) {
+      final subtype = switch (markup) {
+        PdfMarkupKind.highlight => 'Highlight',
+        PdfMarkupKind.underline => 'Underline',
+        PdfMarkupKind.strikeOut => 'StrikeOut',
+        PdfMarkupKind.squiggly => 'Squiggly',
+      };
+      return (a) => a.subtype == subtype;
+    }
+    bool bySubtype(Set<String> types, PdfAnnotation a) =>
+        types.contains(a.subtype);
+    return switch (_tool) {
+      PdfEditTool.ink => (a) =>
+          a.subtype == 'Ink' && a.appearanceOpacity >= 0.99,
+      PdfEditTool.highlight => (a) =>
+          a.subtype == 'Ink' && a.appearanceOpacity < 0.99,
+      PdfEditTool.rectangle => (a) => bySubtype({'Square'}, a),
+      PdfEditTool.ellipse => (a) => bySubtype({'Circle'}, a),
+      PdfEditTool.line ||
+      PdfEditTool.arrow =>
+        (a) => bySubtype({'Line'}, a),
+      PdfEditTool.polyline => (a) => bySubtype({'PolyLine'}, a),
+      PdfEditTool.polygon ||
+      PdfEditTool.cloudPolygon =>
+        (a) => bySubtype({'Polygon'}, a),
+      PdfEditTool.freeText ||
+      PdfEditTool.callout ||
+      PdfEditTool.cloudCallout =>
+        (a) => bySubtype({'FreeText'}, a),
+      PdfEditTool.note => (a) => bySubtype({'Text'}, a),
+      _ => null,
+    };
+  }
+
+  /// Se lo strumento attivo ha una gomma propria nel suo pannello.
+  bool get canArmToolEraser => _filterForCurrentTool() != null;
+
+  /// Attiva la gomma limitata ai segni dello strumento attivo: cancella solo
+  /// quelli, non il resto.
+  void armEraserForCurrentTool() {
+    final filter = _filterForCurrentTool();
+    if (filter == null) return;
+    tool = PdfEditTool.eraser;
+    _eraseFilter = filter;
+    notifyListeners();
+  }
+
+  /// Se la gomma armata puo' cancellare [annotation].
+  bool eraserTargets(PdfAnnotation annotation) {
+    if (annotation.isHidden || !isAnnotationEditable(annotation)) return false;
+    final filter = _eraseFilter;
+    if (filter != null) return filter(annotation);
+    return annotation.subtype == 'Ink' ||
+        _eraseMarkupSubtypes.contains(annotation.subtype);
+  }
+
   /// Erases along [path] (page space) with the circle eraser: every
   /// ink annotation on [pageIndex] is sliced where the swept circle of
   /// [preferences.eraserRadius] crosses its strokes - strokes split, the rest
@@ -7110,11 +7179,7 @@ class PdfEditingController extends ChangeNotifier {
     // the editor works by dictionary identity
     final targets = [
       for (final annotation in _page(pageIndex).annotations)
-        if ((annotation.subtype == 'Ink' ||
-                _eraseMarkupSubtypes.contains(annotation.subtype)) &&
-            !annotation.isHidden &&
-            isAnnotationEditable(annotation))
-          annotation,
+        if (eraserTargets(annotation)) annotation,
     ];
     if (targets.isEmpty) return false;
     return apply(

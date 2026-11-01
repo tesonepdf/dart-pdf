@@ -4618,6 +4618,19 @@ class _StyleMenuState extends State<_StyleMenu> {
                       controller: controller,
                       fontPicker: widget.fontPicker,
                     ),
+                  if (!isEraser && controller.canArmToolEraser)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const ValueKey('pdf-tool-eraser'),
+                        icon: const Icon(Icons.auto_fix_normal),
+                        label: Text(
+                            Localizations.localeOf(context).languageCode == 'it'
+                                ? 'Gomma (solo questo strumento)'
+                                : 'Eraser (this tool only)'),
+                        onPressed: controller.armEraserForCurrentTool,
+                      ),
+                    ),
                   if (isEraser)
                     _slider(
                       key: const ValueKey('pdf-eraser-size'),
