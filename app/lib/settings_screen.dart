@@ -11,6 +11,7 @@ import 'language_names.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
 import 'official_update.dart';
+import 'open_with_rank.dart';
 import 'pdf_cache.dart';
 import 'recents.dart';
 import 'signature_trust.dart';
@@ -282,6 +283,18 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _showDefaultAppSetup(context),
                 ),
+                if (OpenWithRank.supported)
+                  ListTile(
+                    key: const ValueKey('settings-open-with-rank'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.vertical_align_top),
+                    title: const Text('Visualizzazione app in "Apri con"'),
+                    subtitle: const Text(
+                        'Apre l\'elenco di sistema: tocca DartPDF per farlo '
+                        'comparire tra le prime app'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => OpenWithRank.show(),
+                  ),
                 if (kIsWeb) const WebChannelSwitchTile(),
                 if (widget.onOpenDevTools != null)
                   ListTile(
