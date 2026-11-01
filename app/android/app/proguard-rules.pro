@@ -6,3 +6,11 @@
 -keep,allowoptimization class com.google.mlkit.** implements com.google.firebase.components.ComponentRegistrar {
     public <init>();
 }
+
+# shared_preferences (Android) is reached from Dart through JNI, which looks
+# the Kotlin methods up by their original signature. R8 renamed
+# kotlin.coroutines.Continuation (seen as "La9;" in the built app), so every
+# read/write of the settings, the recent files and the WhatsApp contacts
+# failed with NoSuchMethodError in the release build.
+-keep class kotlin.coroutines.Continuation { *; }
+-keep class io.flutter.plugins.sharedpreferences.** { *; }
