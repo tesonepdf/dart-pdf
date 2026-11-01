@@ -2,4 +2,5 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="updates" path="updates/" />
     <cache-path name="whatsapp" path="whatsapp/" />
+    <cache-path name="openwith" path="openwith/" />
 </paths>
