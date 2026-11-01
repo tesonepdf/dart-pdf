@@ -14,3 +14,16 @@
 # failed with NoSuchMethodError in the release build.
 -keep class kotlin.coroutines.Continuation { *; }
 -keep class io.flutter.plugins.sharedpreferences.** { *; }
+
+# Seconda parte: Dart raggiunge questi plugin tramite JNI, che cerca le classi
+# Kotlin per nome. R8 le eliminava (CoroutineSingletons) o le rinominava, e
+# ogni lettura/scrittura delle impostazioni falliva. Si tengono intere le
+# librerie coinvolte e si disattiva il rinominare dei nomi.
+-keep class kotlin.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class androidx.datastore.** { *; }
+-keep class com.github.dart_lang.jni.** { *; }
+-dontwarn kotlin.**
+-dontwarn kotlinx.coroutines.**
+-dontobfuscate
