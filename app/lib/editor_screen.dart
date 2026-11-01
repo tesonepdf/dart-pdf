@@ -3013,22 +3013,8 @@ class _EditorScreenState extends State<EditorScreen>
     return _availableRecentEntries().take(_maxRecentMenuItems).toList();
   }
 
-  Set<String> _openRecentIds() => {
-        for (final tab in _tabs)
-          if (tab.originPath != null && tab.originPath!.isNotEmpty)
-            tab.originPath!
-          else if (tab.cachePath != null && tab.cachePath!.isNotEmpty)
-            tab.cachePath!
-          else
-            tab.title,
-      };
-
   List<RecentFile> _availableRecentEntries() {
-    final openIds = _openRecentIds();
-    return [
-      for (final entry in _recents.items)
-        if (!openIds.contains(entry.id)) entry,
-    ];
+    return List<RecentFile>.of(_recents.items);
   }
 
   void _showRecentFiles() {
@@ -3037,7 +3023,6 @@ class _EditorScreenState extends State<EditorScreen>
         builder: (_) => RecentFilesScreen(
           recents: _recents,
           thumbnails: _recentThumbnails,
-          excludedIds: _openRecentIds(),
           onOpenRecent: (entry) => unawaited(_openRecent(entry)),
           onOpenRecentInNewWindow: _openRecentInNewWindow,
         ),
