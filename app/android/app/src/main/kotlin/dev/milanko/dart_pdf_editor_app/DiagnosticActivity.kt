@@ -156,7 +156,35 @@ class DiagnosticActivity : Activity() {
                 pi.receivers.orEmpty().map { it.name } + pi.providers.orEmpty().map { it.name })
             val mam = names.any { it.contains("intune", true) || it.contains(".mam.", true) || it.contains("MAM") }
             sb.append(" intune=").append(if (mam) "si" else "no")
+            sb.append("\n   ").append(extra(r.activityInfo.packageName))
         } catch (e: Throwable) { sb.append(" intune=?") }
+        return sb.toString()
+    }
+
+    private fun extra(pkg: String): String {
+        val sb = StringBuilder()
+        try {
+            @Suppress("DEPRECATION")
+            val pi = packageManager.getPackageInfo(
+                pkg,
+                android.content.pm.PackageManager.GET_PERMISSIONS or android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+            val ai = pi.applicationInfo
+            sb.append("sistema=").append(ai != null && (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0)
+            sb.append(" targetSdk=").append(ai?.targetSdkVersion)
+            sb.append(" permessi=").append(pi.requestedPermissions?.size ?: 0)
+            val perms = pi.requestedPermissions.orEmpty().filter {
+                it.endsWith("MANAGE_EXTERNAL_STORAGE") || it.endsWith("QUERY_ALL_PACKAGES") || it.endsWith("INTERNET")
+            }.map { it.substringAfterLast('.') }
+            sb.append(" (").append(perms.joinToString(",")).append(")")
+            val sig = pi.signingInfo?.apkContentsSigners?.firstOrNull()
+            if (sig != null) {
+                val h = java.security.MessageDigest.getInstance("SHA-256").digest(sig.toByteArray())
+                sb.append(" firma=").append(h.take(4).joinToString("") { "%02x".format(it) })
+            }
+        } catch (e: Throwable) { sb.append("errore: ").append(e) }
+        try {
+            sb.append(" installatore=").append(packageManager.getInstallSourceInfo(pkg).installingPackageName)
+        } catch (e: Throwable) { sb.append(" installatore=?") }
         return sb.toString()
     }
 }
