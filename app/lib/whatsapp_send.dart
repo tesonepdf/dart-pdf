@@ -54,46 +54,54 @@ class WhatsappSend {
     var digits = input.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.startsWith('00')) digits = digits.substring(2);
     if (digits.length == 10 && digits.startsWith('3')) digits = '39$digits';
-    return digits.length < 8 ? null : digits;
+    return digits.length < 6 ? null : digits;
   }
 
   static Future<WhatsappContact?> _askNewContact(BuildContext context) async {
     final name = TextEditingController();
     final number = TextEditingController();
+    String? error;
     final result = await showDialog<WhatsappContact>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuovo contatto'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(hintText: 'Nome'),
-          ),
-          TextField(
-            controller: number,
-            keyboardType: TextInputType.phone,
-            decoration:
-                const InputDecoration(hintText: 'Numero, es. 339 1234567'),
-          ),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final n = normalize(number.text);
-              if (n == null) return;
-              final label = name.text.trim();
-              Navigator.of(dialogContext)
-                  .pop(WhatsappContact(label.isEmpty ? n : label, n));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Nuovo contatto'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(hintText: 'Nome'),
+            ),
+            TextField(
+              controller: number,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                hintText: 'Numero, es. 339 1234567',
+                errorText: error,
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final n = normalize(number.text);
+                if (n == null) {
+                  setState(() => error = 'Numero non valido');
+                  return;
+                }
+                final label = name.text.trim();
+                Navigator.of(dialogContext)
+                    .pop(WhatsappContact(label.isEmpty ? n : label, n));
+              },
+              child: const Text('Salva'),
+            ),
+          ],
+        ),
       ),
     );
     name.dispose();
