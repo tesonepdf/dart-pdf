@@ -143,6 +143,36 @@
                 <data android:mimeType="image/*"/>
             </intent-filter>
         </activity>
+        <!-- Diagnostica: compare in "Apri con" e "Condividi" per qualsiasi file e
+             mostra cosa manda l'app che chiama (azione, tipo, indirizzo, categorie). -->
+        <activity
+            android:name=".DiagnosticActivity"
+            android:label="DartPDF Diagnostica"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Light">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <action android:name="android.intent.action.EDIT"/>
+                <action android:name="android.intent.action.SEND"/>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <category android:name="android.intent.category.OPENABLE"/>
+                <category android:name="android.intent.category.ALTERNATIVE"/>
+                <category android:name="android.intent.category.SELECTED_ALTERNATIVE"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:scheme="http"/>
+                <data android:scheme="https"/>
+            </intent-filter>
+        </activity>
         <!-- Lets the Snapshot tool hand PNG data to other apps through the
              Android clipboard. Text-only clipboard writes work without it;
              images need a content URI. -->
