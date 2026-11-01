@@ -7116,7 +7116,11 @@ class PdfEditingController extends ChangeNotifier {
         PdfMarkupKind.strikeOut => 'StrikeOut',
         PdfMarkupKind.squiggly => 'Squiggly',
       };
-      return (a) => a.subtype == subtype;
+      return (a) =>
+          a.subtype == subtype ||
+          (markup == PdfMarkupKind.highlight &&
+              a.subtype == 'Ink' &&
+              a.appearanceOpacity < 0.99);
     }
     bool bySubtype(Set<String> types, PdfAnnotation a) =>
         types.contains(a.subtype);
@@ -7185,8 +7189,20 @@ class PdfEditingController extends ChangeNotifier {
     return apply(
       (editor) {
         var changed = false;
+        final whole = preferences.eraserWholeStroke;
         for (final annotation in targets) {
-          if (_eraseMarkupSubtypes.contains(annotation.subtype)) {
+          if (whole) {
+            // tutto il tratto: cancella l'intera marcatura toccata
+            var hit = false;
+            for (var i = 0; i < path.length && !hit; i++) {
+              hit = eraserHitsAnnotation(
+                  annotation, i == 0 ? path[0] : path[i - 1], path[i], radius);
+            }
+            if (hit) {
+              editor.removeAnnotation(pageIndex, annotation);
+              changed = true;
+            }
+          } else if (_eraseMarkupSubtypes.contains(annotation.subtype)) {
             // la marcatura di testo perde solo il tratto toccato dalla gomma
             if (annotation.behavior.markupQuads != null) {
               if (editor.sliceMarkup(pageIndex, annotation, path, radius)) {
@@ -7210,6 +7226,17 @@ class PdfEditingController extends ChangeNotifier {
         if (changed) _selected.clear();
       },
     );
+  }
+
+  /// Se il segmento [from]-[to] della gomma tocca [annotation] (sul tratto
+  /// se e' a mano libera, sul rettangolo altrimenti).
+  bool eraserHitsAnnotation(PdfAnnotation annotation, (double, double) from,
+      (double, double) to, double radius) {
+    final strokes = annotation.inkList;
+    if (strokes != null) {
+      return pdfSliceInkStrokes(strokes, null, from, to, radius) != null;
+    }
+    return _pathTouchesRect([from, to], annotation.rect, radius);
   }
 
   static const _eraseMarkupSubtypes = {

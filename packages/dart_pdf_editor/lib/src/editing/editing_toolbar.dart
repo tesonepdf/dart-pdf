@@ -1802,10 +1802,12 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     final fields = _groupStyleFields(group);
     switch (group.kind) {
       case PdfEditToolGroup.markup:
+        if (tool == PdfEditTool.eraser) return _eraserControls(context);
         return [
           ..._colorCluster(context),
           if (widget.showColor && widget.showStyle) _MiniDivider(axis: axis),
           _opacitySlider(context),
+          ..._eraserControls(context),
           ..._tuneTrailing(context, fields, axis: axis),
         ];
       case PdfEditToolGroup.draw:
@@ -1819,6 +1821,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
         }
         if (tool == PdfEditTool.eraser) {
           return [
+            ..._eraserControls(context),
             ..._drawToolExtras(context),
             ..._tuneTrailing(context, fields, axis: axis),
           ];
@@ -1830,6 +1833,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
           _MiniDivider(axis: axis),
           _opacitySlider(context),
           ..._drawToolExtras(context),
+          ..._eraserControls(context),
           ..._tuneTrailing(context, fields, axis: axis),
         ];
       case PdfEditToolGroup.shapes:
@@ -1839,6 +1843,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
           _strokePresets(context),
           _MiniDivider(axis: axis),
           _opacitySlider(context),
+          ..._eraserControls(context),
           ..._tuneTrailing(context, fields, axis: axis),
         ];
       case PdfEditToolGroup.insert:
@@ -1847,6 +1852,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
           if (widget.showColor) _MiniDivider(axis: axis),
           _opacitySlider(context),
           ..._insertToolExtras(context),
+          ..._eraserControls(context),
           ..._tuneTrailing(context, fields, axis: axis),
         ];
       case PdfEditToolGroup.measure:
@@ -1856,6 +1862,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
           _strokePresets(context),
           _MiniDivider(axis: axis),
           _scaleChip(context),
+          ..._eraserControls(context),
           ..._tuneTrailing(context, fields, axis: axis),
         ];
       case PdfEditToolGroup.edit:
@@ -1863,6 +1870,61 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
       default:
         return const [];
     }
+  }
+
+  /// Gomma dentro il menu: pulsante che attiva la gomma dello strumento e,
+  /// a gomma attiva, scelta "solo dove passa" / "tutto il tratto" e spessore.
+  List<Widget> _eraserControls(BuildContext context) {
+    final it = Localizations.localeOf(context).languageCode == 'it';
+    final prefs = controller.preferences;
+    if (controller.tool != PdfEditTool.eraser) {
+      if (!controller.canArmToolEraser) return const [];
+      return [
+        IconButton(
+          key: const ValueKey('pdf-group-eraser'),
+          icon: const Icon(Icons.auto_fix_normal),
+          tooltip: it ? 'Gomma' : 'Eraser',
+          onPressed: controller.armEraserForCurrentTool,
+        ),
+      ];
+    }
+    final radius = prefs.eraserRadius;
+    return [
+      ChoiceChip(
+        key: const ValueKey('pdf-eraser-partial'),
+        label: Text(it ? 'Solo dove passa' : 'Only where it passes'),
+        selected: !prefs.eraserWholeStroke,
+        onSelected: (_) => prefs.eraserWholeStroke = false,
+      ),
+      ChoiceChip(
+        key: const ValueKey('pdf-eraser-whole'),
+        label: Text(it ? 'Tutto il tratto' : 'Whole stroke'),
+        selected: prefs.eraserWholeStroke,
+        onSelected: (_) => prefs.eraserWholeStroke = true,
+      ),
+      SizedBox(
+        width: 150,
+        child: Row(children: [
+          const Icon(Icons.circle_outlined, size: 18),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                key: const ValueKey('pdf-eraser-size-strip'),
+                value: radius.clamp(2, 40),
+                min: 2,
+                max: 40,
+                onChanged: (v) => prefs.eraserRadius = v.roundToDouble(),
+              ),
+            ),
+          ),
+          Text('${radius.round()}'),
+        ]),
+      ),
+    ];
   }
 
   /// Draw-tool sub-controls: the finger/pen toggle and the manual ink
@@ -3150,13 +3212,11 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (var row = 0; row < 2; row++)
+                      for (var row = 0; row < 3; row++)
                         Padding(
-                          padding: EdgeInsets.only(bottom: row == 0 ? 7 : 0),
+                          padding: EdgeInsets.only(bottom: row < 2 ? 7 : 0),
                           child: Row(children: [
-                            for (final g in panelGroups
-                                .skip(row == 0 ? 0 : 4)
-                                .take(row == 0 ? 4 : 3))
+                            for (final g in panelGroups.skip(row * 3).take(3))
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -3181,6 +3241,10 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                                   ),
                                 ),
                               ),
+                            for (var i = panelGroups.skip(row * 3).take(3).length;
+                                i < 3;
+                                i++)
+                              const Expanded(child: SizedBox.shrink()),
                           ]),
                         ),
                       const SizedBox(height: 14),

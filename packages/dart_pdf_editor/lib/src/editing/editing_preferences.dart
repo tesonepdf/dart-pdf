@@ -171,6 +171,7 @@ class PdfEditingPreferences extends ChangeNotifier
   double _strokeWidth = 2;
   double _cornerRadius = 0;
   double _eraserRadius = 8;
+  bool _eraserWholeStroke = false;
   bool _showVerticalCursorGuide = false;
   bool _showHorizontalCursorGuide = false;
   bool _smartAlignmentGuides = true;
@@ -304,6 +305,8 @@ class PdfEditingPreferences extends ChangeNotifier
           store.getDouble('${_prefix}cornerRadius') ?? _cornerRadius;
       _eraserRadius =
           store.getDouble('${_prefix}eraserRadius') ?? _eraserRadius;
+      _eraserWholeStroke =
+          store.getBool('${_prefix}eraserWholeStroke') ?? _eraserWholeStroke;
       _showVerticalCursorGuide =
           store.getBool('${_prefix}showVerticalCursorGuide') ??
               _showVerticalCursorGuide;
@@ -992,6 +995,16 @@ class PdfEditingPreferences extends ChangeNotifier
     _eraserRadius = value;
     _write((s) => s.setDouble('${_prefix}eraserRadius', value));
     _recordScoped('eraserRadius', value);
+    notifyListeners();
+  }
+
+  /// Gomma: true cancella tutto il tratto toccato, false solo dove passa.
+  bool get eraserWholeStroke => _eraserWholeStroke;
+
+  set eraserWholeStroke(bool value) {
+    if (value == _eraserWholeStroke) return;
+    _eraserWholeStroke = value;
+    _write((s) => s.setBool('${_prefix}eraserWholeStroke', value));
     notifyListeners();
   }
 
