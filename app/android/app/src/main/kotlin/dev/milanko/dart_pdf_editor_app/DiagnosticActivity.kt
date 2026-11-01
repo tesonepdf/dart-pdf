@@ -20,7 +20,25 @@ class DiagnosticActivity : Activity() {
             setPadding(32, 48, 32, 48)
             this.text = describe(intent)
         }
-        setContentView(ScrollView(this).apply { addView(text) })
+        val box = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        fun prova(testo: String, chooser: Boolean) = android.widget.Button(this).apply {
+            this.text = testo
+            setOnClickListener {
+                val uri = fileUri(intent)
+                val tipo = intent.type ?: "application/pdf"
+                val v = Intent(Intent.ACTION_VIEW).setDataAndType(uri, tipo)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                try {
+                    startActivity(if (chooser) Intent.createChooser(v, "Apri con") else v)
+                } catch (e: Throwable) {
+                    android.widget.Toast.makeText(this@DiagnosticActivity, "Errore: $e", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        box.addView(prova("PROVA APRI CON (elenco di sistema)", false))
+        box.addView(prova("PROVA APRI CON (chooser)", true))
+        box.addView(text)
+        setContentView(ScrollView(this).apply { addView(box) })
     }
 
     override fun onNewIntent(intent: Intent) {
