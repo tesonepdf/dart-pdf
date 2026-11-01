@@ -49,12 +49,21 @@ class WhatsappSend {
     await prefs.setString(_key, jsonEncode([for (final c in list) c.toJson()]));
   }
 
-  /// Solo cifre, con prefisso internazionale (un cellulare italiano da 10
-  /// cifre che inizia per 3 prende 39).
+  /// Solo cifre, con prefisso internazionale. Se il numero e' scritto con
+  /// "+" o "00" (es. +39 339 1234567) resta com'e'. Senza prefisso, un numero
+  /// italiano (cellulare che inizia per 3, fisso che inizia per 0, da 9 a 11
+  /// cifre) prende 39 davanti.
   static String? normalize(String input) {
-    var digits = input.replaceAll(RegExp(r'[^0-9]'), '');
+    final trimmed = input.trim();
+    var digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    final international = trimmed.startsWith('+') || digits.startsWith('00');
     if (digits.startsWith('00')) digits = digits.substring(2);
-    if (digits.length == 10 && digits.startsWith('3')) digits = '39$digits';
+    if (!international &&
+        digits.length >= 9 &&
+        digits.length <= 11 &&
+        (digits.startsWith('3') || digits.startsWith('0'))) {
+      digits = '39$digits';
+    }
     return digits.length < 6 ? null : digits;
   }
 
