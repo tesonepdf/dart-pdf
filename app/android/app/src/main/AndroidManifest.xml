@@ -80,6 +80,29 @@
                 <data android:pathPattern=".*\\.PDF"/>
                 <data android:pathPattern=".*\\..*\\.PDF"/>
             </intent-filter>
+            <!-- Intent senza tipo (solo indirizzo che finisce con .pdf) oppure con
+                 un tipo "application/..." insolito. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:scheme="http"/>
+                <data android:scheme="https"/>
+                <data android:host="*"/>
+                <data android:pathPattern=".*\\.pdf"/>
+                <data android:pathPattern=".*\\..*\\.pdf"/>
+                <data android:pathPattern=".*\\..*\\..*\\.pdf"/>
+                <data android:pathPattern=".*\\.PDF"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/*"/>
+            </intent-filter>
             <!-- Receive a PDF shared from another app. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
