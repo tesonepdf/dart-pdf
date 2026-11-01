@@ -103,6 +103,23 @@
                 <data android:scheme="file"/>
                 <data android:mimeType="application/*"/>
             </intent-filter>
+            <!-- Come sopra, ma per "modifica" e con tutte le categorie che alcune
+                 app aggiungono alla richiesta: se manca anche una sola categoria
+                 Android scarta l'app dall'elenco "Apri con". -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <action android:name="android.intent.action.EDIT"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <category android:name="android.intent.category.OPENABLE"/>
+                <category android:name="android.intent.category.ALTERNATIVE"/>
+                <category android:name="android.intent.category.SELECTED_ALTERNATIVE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/pdf"/>
+                <data android:mimeType="application/x-pdf"/>
+                <data android:mimeType="application/octet-stream"/>
+            </intent-filter>
             <!-- Receive a PDF shared from another app. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
