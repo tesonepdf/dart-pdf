@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'devtools.dart';
 import 'pdf_cache.dart';
+import 'app_log.dart';
 
 /// One entry in the "recent documents" list shown on the welcome screen.
 @immutable
@@ -146,8 +147,11 @@ class RecentsStore extends ChangeNotifier {
         ..addAll(loaded);
       _sort();
       notifyListeners();
+      AppLog.instance
+          .ok('Recenti', 'Caricati ${loaded.length} file recenti');
       if (rebased) await _persist();
     } catch (e) {
+      AppLog.instance.error('Recenti', 'Caricamento non riuscito: $e');
       // No storage (tests) - keep the in-memory list.
       AppDevTools.instance
           .addLog('recents load failed: $e', level: DevLogLevel.error);
@@ -238,7 +242,10 @@ class RecentsStore extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
           _key, jsonEncode(_items.map((e) => e.toJson()).toList()));
+      AppLog.instance
+          .ok('Recenti', 'Elenco salvato (${_items.length} file)');
     } catch (e) {
+      AppLog.instance.error('Recenti', 'Salvataggio non riuscito: $e');
       // No storage - nothing to persist.
       AppDevTools.instance
           .addLog('recents persist failed: $e', level: DevLogLevel.error);

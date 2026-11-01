@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
+import 'app_log_dialog.dart';
 import 'cached_documents_settings.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
@@ -350,6 +351,16 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   title: Text(appL10n(context).whatsNew),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => showWhatsNew(context),
+                ),
+                ListTile(
+                  key: const ValueKey('settings-app-log'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.fact_check_outlined),
+                  title: const Text('Log e problemi'),
+                  subtitle: const Text(
+                      'Cosa e\' andato bene e cosa no, con la spiegazione'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => showAppLog(context),
                 ),
                 ListTile(
                   key: const ValueKey('settings-licenses'),

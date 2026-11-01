@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'app_log.dart';
+
 // The perf_log entry, NOT the package entry: main.dart runs before the
 // deferred app.dart loading unit (the splash), and importing the entry here
 // would drag the whole editor stack into the initial web download that the
@@ -31,6 +33,7 @@ Future<void> main(List<String> args) async {
 
   // PackageInfo (loaded below) needs the binding; ensure it before awaiting.
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(AppLog.instance.install());
 
   // Windows only, and after the Dart plugin registrant has run so this wins:
   // the stock file_selector plugin dereferences a Flutter view the runner

@@ -17,6 +17,7 @@ import 'package:pdf_graphics/pdf_graphics.dart' show pdfDocumentLooksScanned;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
+import 'app_log.dart';
 import 'app_menu_sheet.dart';
 import 'autosave.dart';
 import 'combine_incoming.dart';
@@ -3457,6 +3458,8 @@ class _EditorScreenState extends State<EditorScreen>
       // The origin couldn't be written (moved, read-only) - say so, then offer
       // save-as rather than stopping at the error. The edits stay in the tab
       // either way.
+      AppLog.instance.error('Salvataggio documento',
+          'Non riuscito sul file originale "${tab.title}": ${result.message}');
       AppDevTools.instance.addLog(
           'in-place save failed: ${tab.title} - ${result.message}',
           level: DevLogLevel.error);
@@ -3468,6 +3471,7 @@ class _EditorScreenState extends State<EditorScreen>
       if (!mounted) return;
     }
     if (result.succeeded) {
+      AppLog.instance.ok('Salvataggio documento', 'Salvato "${tab.title}"');
       final path = result.path;
       final existingBookmark =
           path != null && path == tab.originPath ? tab.originBookmark : null;
