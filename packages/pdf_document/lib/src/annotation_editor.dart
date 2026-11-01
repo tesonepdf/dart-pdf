@@ -1044,6 +1044,113 @@ extension PdfAnnotationEditing on PdfEditor {
           ]),
       ]);
 
+  /// Cancella solo la parte di una marcatura di testo (evidenziatore,
+  /// sottolineato, barrato, ondulato) toccata dalla gomma: ogni riga marcata
+  /// viene tagliata nel tratto che il cerchio della gomma attraversa e il
+  /// resto resta. Se non resta nulla la marcatura e' rimossa.
+  ///
+  /// Restituisce se qualcosa e' cambiato.
+  bool sliceMarkup(
+    int pageIndex,
+    PdfAnnotation annotation,
+    List<(double, double)> path,
+    double radius,
+  ) {
+    final subtype = annotation.subtype;
+    if (!(subtype == 'Highlight' ||
+            subtype == 'Underline' ||
+            subtype == 'StrikeOut' ||
+            subtype == 'Squiggly') ||
+        path.isEmpty ||
+        radius <= 0) {
+      return false;
+    }
+    final quads = annotation.behavior.markupQuads;
+    if (quads == null || quads.isEmpty) return false;
+    // punti lungo il percorso, abbastanza fitti da non lasciare buchi
+    final points = <(double, double)>[];
+    final step = radius / 2;
+    for (var i = 0; i < path.length; i++) {
+      points.add(path[i]);
+      if (i + 1 < path.length) {
+        final (x0, y0) = path[i];
+        final (x1, y1) = path[i + 1];
+        final dx = x1 - x0, dy = y1 - y0;
+        final len = math.sqrt(dx * dx + dy * dy);
+        final n = (len / step).floor();
+        for (var k = 1; k < n; k++) {
+          points.add((x0 + dx * k / n, y0 + dy * k / n));
+        }
+      }
+    }
+    var changed = false;
+    final remaining = <PdfRect>[];
+    for (final q in quads) {
+      final cuts = <(double, double)>[];
+      for (final (px, py) in points) {
+        final dy = py < q.bottom
+            ? q.bottom - py
+            : (py > q.top ? py - q.top : 0.0);
+        if (dy >= radius) continue;
+        final half = math.sqrt(radius * radius - dy * dy);
+        cuts.add((px - half, px + half));
+      }
+      if (cuts.isEmpty) {
+        remaining.add(q);
+        continue;
+      }
+      cuts.sort((a, b) => a.$1.compareTo(b.$1));
+      var cursor = q.left;
+      var touched = false;
+      for (final (a, b) in cuts) {
+        if (b <= q.left || a >= q.right) continue;
+        touched = true;
+        if (a > cursor + 0.5) {
+          remaining.add(PdfRect(cursor, q.bottom, a, q.top));
+        }
+        if (b > cursor) cursor = b;
+      }
+      if (!touched) {
+        remaining.add(q);
+        continue;
+      }
+      changed = true;
+      if (q.right > cursor + 0.5) {
+        remaining.add(PdfRect(cursor, q.bottom, q.right, q.top));
+      }
+    }
+    if (!changed) return false;
+    if (remaining.isEmpty) {
+      removeAnnotation(pageIndex, annotation);
+      return true;
+    }
+    final form = annotation.normalAppearance;
+    final color = annotation.color ?? 0xFFD100;
+    final opacity = annotation.appearanceOpacity;
+    final rect = _boundsOf(remaining);
+    final (w, gs) = _markupContent(subtype, remaining, color, opacity);
+    final dict = annotation.dict;
+    dict['Rect'] = _rectArray(rect);
+    dict['QuadPoints'] = _quadPoints(remaining);
+    if (form != null) {
+      _replaceAppearance(
+        dict,
+        form,
+        rect,
+        w,
+        resources: _resources(extGState: gs),
+      );
+    } else {
+      dict['AP'] = CosDictionary({
+        'N': _updater.addObject(
+          _form(rect, w, resources: _resources(extGState: gs)),
+        ),
+      });
+    }
+    _markAnnotationChanged(pageIndex, dict);
+    return true;
+  }
+
   /// Erases the parts of an Ink [annotation] within [radius] page units
   /// of the eraser's swept [path] - the PSPDFKit-style circle eraser.
   /// Strokes split where the circle crosses them; /InkList, /Rect, and
