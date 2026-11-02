@@ -32,7 +32,7 @@ import 'escl_scan.dart';
 import 'file_io.dart';
 import 'image_clipboard.dart';
 import 'image_export.dart';
-import 'photo_size_setting.dart';
+import 'standard_sizes.dart';
 import 'image_to_pdf.dart';
 import 'image_source_picker.dart';
 import 'incoming_file.dart';
@@ -1297,8 +1297,7 @@ class _EditorScreenState extends State<EditorScreen>
   void _openBytes(Uint8List bytes, String title,
       {String? originPath, String? originBookmark}) {
     if (!looksLikePdf(bytes)) {
-      bytes = imageBytesToPdf(bytes,
-          sizeId: PhotoSizeSetting.instance.value);
+      bytes = imageBytesToPdf(bytes, sizeId: kAutoPhotoSize);
       title = imageTitleAsPdf(title);
     }
     _addTab(DocumentTab.document(
@@ -1592,9 +1591,8 @@ class _EditorScreenState extends State<EditorScreen>
         originBookmark = null;
       }
       final isPhoto = !looksLikePdf(rawBytes);
-      if (isPhoto) await PhotoSizeSetting.instance.load();
-      final bytes = await imageBytesToPdfAsync(rawBytes,
-          sizeId: PhotoSizeSetting.instance.value);
+      final bytes =
+          await imageBytesToPdfAsync(rawBytes, sizeId: kAutoPhotoSize);
       if (isPhoto) title = imageTitleAsPdf(title);
       AppDevTools.instance
           .addLog('open-trace: "$title" bytes ready — ${bytes.length} B; '
@@ -2464,6 +2462,103 @@ class _EditorScreenState extends State<EditorScreen>
     return pickDocumentFiles(appL10n(context).fileTypePdf);
   }
 
+  /// Importa foto (galleria o file) a grandezza reale su un foglio bianco.
+  /// Con [sizeId] la misura è quella scelta; senza, si decide dalla foto e,
+  /// se non si riconosce, si chiede.
+  Future<void> _importPhoto({String? sizeId}) async {
+    try {
+      final picked = await _pickPhotoFiles();
+      if (picked.isEmpty || !mounted) return;
+      for (final file in picked) {
+        final raw = await file.readAsBytes();
+        if (!mounted) return;
+        var id = sizeId;
+        if (id == null && !looksLikePdf(raw)) {
+          final photo = await uprightPhotoAsync(raw);
+          id = detectPhotoSizeId(photo.width, photo.height);
+          if (id == null) {
+            if (!mounted) return;
+            var choice = await _askPhotoSize();
+            if (choice == 'other') {
+              if (!mounted) return;
+              choice = await _pickStandardSize();
+            }
+            if (choice == null) continue;
+            id = choice.isEmpty ? null : choice;
+          }
+        }
+        final pdf = await imageBytesToPdfAsync(raw, sizeId: id);
+        if (!mounted) return;
+        _openBytes(pdf, imageTitleAsPdf(file.name));
+      }
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('photo import failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Foto non importata: ${openErrorSummary(e)}');
+    }
+  }
+
+  /// Importa con una misura scelta da tutto l'elenco.
+  Future<void> _importPhotoOtherSize() async {
+    final id = await _pickStandardSize();
+    if (id == null || !mounted) return;
+    await _importPhoto(sizeId: id);
+  }
+
+  /// Quando la forma della foto non si riconosce: chiede la misura.
+  Future<String?> _askPhotoSize() => showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Che misura ha?'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'card_cie'),
+              child: const Text('Carta (85,6 x 54 mm)'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'passport_id3'),
+              child: const Text('Passaporto (125 x 88 mm)'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'a4'),
+              child: const Text('Foglio A4 (210 x 297 mm)'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, ''),
+              child: const Text('Ingrandisci a tutta la larghezza del foglio'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, 'other'),
+              child: const Text('Altra misura…'),
+            ),
+          ],
+        ),
+      );
+
+  /// L'elenco di tutte le misure note, a tendine per argomento.
+  Future<String?> _pickStandardSize() => showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Scegli la misura'),
+          children: [
+            for (final group in StandardSizeGroup.values)
+              if (standardSizesIn(group).isNotEmpty)
+                ExpansionTile(
+                  title: Text(group.label),
+                  children: [
+                    for (final size in standardSizesIn(group))
+                      ListTile(
+                        dense: true,
+                        title: Text(size.name),
+                        subtitle: Text('${size.widthMm} x ${size.heightMm} mm'),
+                        onTap: () => Navigator.pop(context, size.id),
+                      ),
+                  ],
+                ),
+          ],
+        ),
+      );
+
   /// Più foto su un solo foglio A4 bianco, ognuna a grandezza reale (misura
   /// scelta nelle Impostazioni). Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
@@ -2471,7 +2566,6 @@ class _EditorScreenState extends State<EditorScreen>
     try {
       final picked = await _pickPhotoFiles();
       if (picked.isEmpty || !mounted) return;
-      await PhotoSizeSetting.instance.load();
       final photos = <UprightPhoto>[];
       for (final file in picked) {
         final raw = await file.readAsBytes();
@@ -2485,7 +2579,7 @@ class _EditorScreenState extends State<EditorScreen>
       }
       final rects = layoutPhotosOnSheet(
         [for (final p in photos) (width: p.width, height: p.height)],
-        PhotoSizeSetting.instance.value,
+        kAutoPhotoSize,
       );
       final tab = DocumentTab.document(
         title: _nextUntitledTitle(),
@@ -2511,14 +2605,15 @@ class _EditorScreenState extends State<EditorScreen>
   /// foglio A4: nel documento aperto, dopo la pagina in vista, oppure in un
   /// documento nuovo.
   Future<void> _importFromScanner() async {
-    final address = await askScannerAddress(context);
-    if (address == null || address.isEmpty || !mounted) return;
+    final settings = await askScannerSettings(context);
+    if (settings == null || settings.address.isEmpty || !mounted) return;
     _toast('Scansione in corso…', duration: const Duration(seconds: 6));
     try {
-      final jpeg = await EsclScanner.scanA4(address);
+      final jpeg =
+          await EsclScanner.scanA4(settings.address, dpi: settings.dpi);
       final pdf = PdfImageDocument.fromImageBytes(
         [jpeg],
-        dpi: 300,
+        dpi: settings.dpi.toDouble(),
         pageSize: PdfPageSize.a4,
         fit: PdfImageFit.contain,
       );
@@ -5561,13 +5656,29 @@ class _EditorScreenState extends State<EditorScreen>
   Future<void> _showAppMenuSheet(DocumentTab? tab) async {
     final l = appL10n(context);
     final hasDocument = tab?.session != null;
+    String? groupOf(_MenuAction action) {
+      if (action.sheet == _SheetPlacement.formData) return 'forms';
+      return switch (action.id) {
+        'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
+        'digital-signature' || 'ocr' => 'sign',
+        'compare' || 'insert-document' || 'insert-scan' => 'pages',
+        'import-form-data' => 'forms',
+        _ => null,
+      };
+    }
+
     AppMenuSheetEntry entry(_MenuAction action) => AppMenuSheetEntry(
       key: ValueKey('menu-${action.id}'),
       icon: action.icon,
       title: action.title,
       enabled: action.enabled,
       run: action.run,
+      group: groupOf(action),
     );
+    AppMenuSheetEntry importEntry(
+            String id, IconData icon, String title, VoidCallback run) =>
+        AppMenuSheetEntry(
+            key: ValueKey('menu-$id'), icon: icon, title: title, run: run);
     final allRecents = _recentMenuEntries();
     final documentActions = [
       if (hasDocument)
@@ -5594,7 +5705,33 @@ class _EditorScreenState extends State<EditorScreen>
         title: l.editorMenuSearchActions,
         run: _openCommandPalette,
       ),
-      file: [for (final action in _fileActions()) entry(action)],
+      file: [
+        for (final action in _fileActions())
+          if (action.id != 'photos-one-sheet' && action.id != 'scanner-import')
+            entry(action),
+      ],
+      importEntries: [
+        importEntry('import-auto', Icons.auto_awesome_outlined,
+            'Automatica (riconosce la misura)',
+            () => unawaited(_importPhoto())),
+        importEntry(
+            'import-cards',
+            Icons.badge_outlined,
+            'Carte: identità, credito, tessera sanitaria, patente',
+            () => unawaited(_importPhoto(sizeId: 'card_cie'))),
+        importEntry('import-passport', Icons.menu_book_outlined, 'Passaporto',
+            () => unawaited(_importPhoto(sizeId: 'passport_id3'))),
+        importEntry('import-photoid', Icons.face_outlined, 'Foto tessera',
+            () => unawaited(_importPhoto(sizeId: 'photo_id_it'))),
+        importEntry('import-a4', Icons.description_outlined, 'Foglio A4',
+            () => unawaited(_importPhoto(sizeId: 'a4'))),
+        importEntry('import-other', Icons.straighten_outlined,
+            'Altra misura…', () => unawaited(_importPhotoOtherSize())),
+        importEntry('photos-one-sheet', Icons.photo_library_outlined,
+            'Foto su un solo foglio…', () => unawaited(_photosOnOneSheet())),
+        importEntry('scanner-import', Icons.scanner_outlined,
+            'Importa da scanner…', () => unawaited(_importFromScanner())),
+      ],
       document: [
         if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
           AppMenuSheetEntry(
@@ -5613,6 +5750,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (hasDocument && _usesMobileShare)
           AppMenuSheetEntry(
             key: const ValueKey('menu-share'),
+            group: 'send',
             icon: Icons.share_outlined,
             title: WidgetsLocalizations.of(context).shareButtonLabel,
             run: () {
@@ -5622,6 +5760,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (hasDocument && WhatsappSend.supported && tab != null)
           AppMenuSheetEntry(
             key: const ValueKey('menu-whatsapp-contact'),
+            group: 'send',
             icon: Icons.person_outline,
             title: 'WhatsApp: contatto salvato',
             run: () {
@@ -5633,6 +5772,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (hasDocument && WhatsappSend.supported && tab != null)
           AppMenuSheetEntry(
             key: const ValueKey('menu-whatsapp'),
+            group: 'send',
             icon: Icons.send_outlined,
             title: 'WhatsApp: scelgo il contatto',
             run: () {
@@ -5673,6 +5813,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (OpenWithRank.supported)
           AppMenuSheetEntry(
             key: const ValueKey('menu-open-with-rank'),
+            group: 'app',
             icon: Icons.vertical_align_top,
             title: 'Porta DartPDF in cima ad "Apri con"',
             run: () => unawaited(OpenWithRank.show()),
