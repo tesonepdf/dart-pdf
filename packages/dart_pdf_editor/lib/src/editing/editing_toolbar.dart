@@ -2465,7 +2465,26 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             ? controller.cancelColorPick()
             : controller.startColorPick(),
       ),
+      // nel menu strumenti (telefono) il tasto delle opzioni avanzate sta
+      // qui, accanto ai colori, e non piu' nella barra in basso
+      ..._sheetTuneButton(context),
     ];
+  }
+
+  /// Il gruppo di cui il menu strumenti sta costruendo le impostazioni;
+  /// null fuori dal menu (barra desktop).
+  _ToolGroup? _sheetStyleGroup;
+
+  /// Tasto delle opzioni avanzate (spessore, opacita', carattere, stile...)
+  /// per il menu strumenti.
+  List<Widget> _sheetTuneButton(BuildContext context) {
+    final group = _sheetStyleGroup;
+    if (group == null) return const [];
+    return _tuneTrailing(
+      context,
+      _groupStyleFields(group),
+      compactTrigger: true,
+    ).where((w) => w is! _MiniDivider).toList();
   }
 
   /// Four quick stroke-width presets. The precise slider stays in the
@@ -2992,92 +3011,10 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
           ),
       ];
     }
-    final tune = _mobileTuneTrailing(context);
-    if (widget.showColor && controller.toolUsesColor) {
-      // The tune popup carries the full palette (see [_mobileTuneTrailing]),
-      // so a couple of quick swatches beside it are enough - and dropping the
-      // third keeps the whole cluster (swatches + tune) inside the narrow dock
-      // without overflowing.
-      return [
-        ..._mobileSwatches(context, count: 2),
-        ...tune
-      ];
-    }
-    return tune;
-  }
-
-  /// The tune popup trigger for the mobile dock's armed tool, or empty when
-  /// no tool is armed or its controls carry nothing to tune. Mirrors the
-  /// desktop strip's [_tuneTrailing] so the same stroke/opacity/font sliders
-  /// are one tap away on a phone. Unlike the desktop strip, the dock has room
-  /// for only a couple of swatches, so the popup also carries the tool's full
-  /// colour row (palette + custom picker) - otherwise a pen or highlighter
-  /// could only reach the rest of the palette from the tool sheet.
-  List<Widget> _mobileTuneTrailing(BuildContext context) {
-    final group = controller.markupTool != null
-        ? _groupForMarkup(controller.markupTool!)
-        : _groupForTool(controller.tool);
-    if (group == null) return const [];
-    return _tuneTrailing(
-      context,
-      _groupStyleFields(group),
-      compactTrigger: true,
-      toolColor: controller.toolUsesColor,
-    );
-  }
-
-  /// The colours used last (most recent first), whatever way they were set.
-  final List<Color> _recentColors = [];
-
-  /// The last [count] colours used, sized for the mobile dock: the current
-  /// colour first, then the one before it. Fills up from the palette until
-  /// enough colours have been used.
-  List<Color> _recentSwatchColors(int count) {
-    final current = controller.color;
-    _recentColors
-      ..remove(current)
-      ..insert(0, current);
-    if (_recentColors.length > 8) {
-      _recentColors.removeRange(8, _recentColors.length);
-    }
-    final shown = _recentColors.take(count).toList();
-    for (final color in widget.palette) {
-      if (shown.length >= count) break;
-      if (!shown.contains(color)) shown.add(color);
-    }
-    return shown;
-  }
-
-  /// The last [count] colours used, sized for the mobile dock.
-  List<Widget> _mobileSwatches(BuildContext context, {int count = 3}) {
-    final scheme = Theme.of(context).colorScheme;
-    final current = controller.displayColor;
-    var i = 0;
-    return [
-      for (final color in _recentSwatchColors(count))
-        Padding(
-          key: ValueKey('pdf-mobile-swatch-${i++}'),
-          padding: const EdgeInsets.symmetric(horizontal: 3),
-          // inside the text field's tap group: see _colorCluster
-          child: TextFieldTapRegion(
-              child: InkWell(
-            onTap: () => _applyColor(color),
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: current == color ? scheme.primary : scheme.outline,
-                  width: current == color ? 3 : 1,
-                ),
-              ),
-            ),
-          )),
-        ),
-    ];
+    // Colori e opzioni dello strumento attivo stanno solo nel menu strumenti
+    // (il tasto accanto al numero di pagina): la barra in basso non li
+    // mostra piu'.
+    return const [];
   }
 
   IconData _activeToolIcon(_ToolChoice choice) {
@@ -3493,9 +3430,15 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   /// The settings block under the sheet's tool grid - reuses the same
   /// inline clusters as the desktop strip, laid out in rows.
   List<Widget> _sheetSettings(BuildContext context, _ToolGroup group) {
-    final settings = _groupSettings(context, group)
-        .where((w) => w is! _MiniDivider)
-        .toList();
+    _sheetStyleGroup = group;
+    final List<Widget> settings;
+    try {
+      settings = _groupSettings(context, group)
+          .where((w) => w is! _MiniDivider)
+          .toList();
+    } finally {
+      _sheetStyleGroup = null;
+    }
     if (settings.isEmpty) return const [];
     return [
       const SizedBox(height: 14),
