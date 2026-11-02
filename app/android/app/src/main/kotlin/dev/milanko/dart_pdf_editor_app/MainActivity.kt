@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.Os
@@ -54,6 +55,10 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
     private var pendingPick: MethodChannel.Result? = null
     private val openDocumentRequestCode = 0x0D_0C
 
+    /// Risposta in attesa del selettore di cartelle (cartella di salvataggio).
+    private var pendingFolder: MethodChannel.Result? = null
+    private val pickFolderRequestCode = 0x0F_0D
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         keyboardChannel = MethodChannel(
@@ -69,6 +74,70 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
         }
         keyboardInputManager = (getSystemService(Context.INPUT_SERVICE) as InputManager)
             .also { it.registerInputDeviceListener(this, Handler(Looper.getMainLooper())) }
+        // Cartella di salvataggio scelta dall'utente (Storage Access Framework).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/savefolder")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pick" -> {
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                            addFlags(
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+                            )
+                        }
+                        pendingFolder = result
+                        try {
+                            startActivityForResult(intent, pickFolderRequestCode)
+                        } catch (e: Exception) {
+                            pendingFolder = null
+                            result.error("no_picker", e.message, null)
+                        }
+                    }
+                    "save" -> {
+                        val treeUri = Uri.parse(call.argument<String>("treeUri")!!)
+                        val name = call.argument<String>("name")!!
+                        val bytes = call.argument<ByteArray>("bytes")!!
+                        fileIoExecutor.execute {
+                            try {
+                                val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+                                val parent = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+                                val children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+                                var target: Uri? = null
+                                contentResolver.query(
+                                    children,
+                                    arrayOf(
+                                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                        DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                                    ),
+                                    null, null, null
+                                )?.use { c ->
+                                    while (c.moveToNext()) {
+                                        if (c.getString(1) == name) {
+                                            target = DocumentsContract.buildDocumentUriUsingTree(treeUri, c.getString(0))
+                                            break
+                                        }
+                                    }
+                                }
+                                if (target == null) {
+                                    target = DocumentsContract.createDocument(
+                                        contentResolver, parent, "application/pdf", name
+                                    )
+                                }
+                                val out = contentResolver.openOutputStream(target!!, "wt")
+                                    ?: throw FileNotFoundException("Impossibile aprire il file in scrittura")
+                                out.use { it.write(bytes) }
+                                runOnUiThread { result.success("ok") }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.error("save_failed", e.toString(), null) }
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         // Invia un PDF direttamente alla chat WhatsApp di un numero.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/whatsapp")
             .setMethodCallHandler { call, result ->
@@ -373,6 +442,35 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == pickFolderRequestCode) {
+            val folderReply = pendingFolder ?: return
+            pendingFolder = null
+            val tree = data?.data
+            if (resultCode != Activity.RESULT_OK || tree == null) {
+                folderReply.success(null)
+                return
+            }
+            try {
+                contentResolver.takePersistableUriPermission(
+                    tree,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                val docId = DocumentsContract.getTreeDocumentId(tree)
+                var label = docId.substringAfter(':', docId).ifEmpty { "Memoria interna" }
+                try {
+                    val docUri = DocumentsContract.buildDocumentUriUsingTree(tree, docId)
+                    contentResolver.query(
+                        docUri,
+                        arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                        null, null, null
+                    )?.use { c -> if (c.moveToFirst()) c.getString(0)?.let { label = it } }
+                } catch (_: Exception) {}
+                folderReply.success(mapOf("uri" to tree.toString(), "name" to label))
+            } catch (e: Exception) {
+                folderReply.error("pick_failed", e.toString(), null)
+            }
+            return
+        }
         if (requestCode != openDocumentRequestCode) return
         val reply = pendingPick ?: return
         pendingPick = null

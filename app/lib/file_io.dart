@@ -428,6 +428,8 @@ class SaveResult {
       SaveResult._('Saved $count files to $directory', succeeded: true);
   factory SaveResult.downloadedCount(int count) =>
       SaveResult._('Downloaded $count files', succeeded: true);
+  factory SaveResult.savedInFolder(String folder, String name) =>
+      SaveResult._('Salvato in $folder: $name', succeeded: true);
   factory SaveResult.shared() => const SaveResult._('Shared', succeeded: true);
   factory SaveResult.failed(Object error) =>
       SaveResult._('Save failed: $error');
