@@ -56,7 +56,7 @@ jobs:
           flutter test 2>&1 | tee /tmp/step.txt
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
-            echo "::error title=flutter test::$(tail -c 6000 /tmp/step.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=flutter test::$( (grep -A5 '❌' /tmp/step.txt | head -c 30000; tail -n 3 /tmp/step.txt) | sed ':a;N;$!ba;s/\n/%0A/g')"
           fi
           exit "$code"
 
