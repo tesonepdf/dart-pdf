@@ -704,10 +704,23 @@ class PdfEditingPreferences extends ChangeNotifier
     _recordScoped(field, value);
   }
 
+  /// Chiamata quando scrivere una preferenza su disco fallisce (colori,
+  /// spessori e altre scelte per strumento non verrebbero ricordati). L'app
+  /// la usa per scrivere l'errore nel suo Log.
+  static void Function(Object error, StackTrace stack)? onWriteError;
+
   void _write(Future<Object?> Function(PdfPreferencesStore store) write) {
     _modified = true;
     final store = _store;
-    if (store != null) unawaited(write(store));
+    if (store == null) return;
+    try {
+      unawaited(write(store).catchError((Object e, StackTrace st) {
+        onWriteError?.call(e, st);
+        return null;
+      }));
+    } catch (e, st) {
+      onWriteError?.call(e, st);
+    }
   }
 
   // -------------------------------------------------------------------------

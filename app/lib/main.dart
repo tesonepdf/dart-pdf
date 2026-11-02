@@ -6,6 +6,7 @@ import 'app_log.dart';
 // deferred app.dart loading unit (the splash), and importing the entry here
 // would drag the whole editor stack into the initial web download that the
 // deferred split exists to keep small.
+import 'package:dart_pdf_editor/dart_pdf_editor.dart' show PdfEditingPreferences;
 import 'package:dart_pdf_editor/perf_log.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -34,6 +35,8 @@ Future<void> main(List<String> args) async {
   // PackageInfo (loaded below) needs the binding; ensure it before awaiting.
   WidgetsFlutterBinding.ensureInitialized();
   unawaited(AppLog.instance.install());
+  PdfEditingPreferences.onWriteError = (e, s) => AppLog.instance
+      .error('Salvataggio scelte degli strumenti (colore, spessore...)', e, s);
 
   // Windows only, and after the Dart plugin registrant has run so this wins:
   // the stock file_selector plugin dereferences a Flutter view the runner

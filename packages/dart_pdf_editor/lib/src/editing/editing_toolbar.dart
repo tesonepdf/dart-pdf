@@ -2406,17 +2406,29 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
               child: InkWell(
             onTap: () => _applyColor(color),
             customBorder: const CircleBorder(),
+            // il colore scelto e' piu' grande, con un anello spesso e una
+            // spunta: si vede subito qual e' quello in uso
             child: Container(
-              width: 22,
-              height: 22,
+              width: current == color ? 32 : 22,
+              height: current == color ? 32 : 22,
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: current == color ? scheme.primary : scheme.outline,
-                  width: current == color ? 3 : 1,
+                  width: current == color ? 4 : 1,
                 ),
               ),
+              child: current == color
+                  ? Icon(
+                      Icons.check,
+                      size: 18,
+                      color: ThemeData.estimateBrightnessForColor(color) ==
+                              Brightness.dark
+                          ? Colors.white
+                          : Colors.black,
+                    )
+                  : null,
             ),
           )),
         ),
@@ -2429,7 +2441,13 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
               child: Material(
             key: const ValueKey('pdf-more-colors'),
             color: Colors.transparent,
-            shape: CircleBorder(side: BorderSide(color: scheme.outline)),
+            // un colore personalizzato (fuori dalla tavolozza) evidenzia il
+            // tasto della tavolozza con lo stesso anello spesso
+            shape: CircleBorder(
+              side: widget.palette.contains(current)
+                  ? BorderSide(color: scheme.outline)
+                  : BorderSide(color: scheme.primary, width: 4),
+            ),
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: () async {
