@@ -36,62 +36,15 @@ void main() {
     return (editing, viewer);
   }
 
-  testWidgets('the mobile dock shows the tune button for an armed draw tool',
+  testWidgets('the mobile dock shows no colours or tune button for a tool',
       (tester) async {
     final (editing, _) = await pumpMobileToolbar(tester);
 
-    // no tool armed: nothing to tune, no gear icon
+    // colours and advanced options live in the tools menu, not the dock
+    editing.tool = PdfEditTool.ink;
+    await tester.pump();
     expect(find.byIcon(Icons.tune), findsNothing);
-
-    // arm a stroke-using tool (freehand ink) - the tune trigger appears
-    editing.tool = PdfEditTool.ink;
-    await tester.pump();
-    expect(find.byIcon(Icons.tune), findsOneWidget);
-
-    // and it opens the style popup's stroke/opacity sliders
-    await tester.tap(find.byIcon(Icons.tune));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pdf-tune-stroke-width-slider')),
-        findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('pdf-tune-opacity-slider')), findsOneWidget);
-  });
-
-  testWidgets('the mobile tune popup offers the full palette for a pen',
-      (tester) async {
-    // The dock fits only two swatches beside the tune button, so the popup
-    // must reach the rest of the palette - a pen's style fields carry no
-    // colour row of their own (Ben: "I only see 2 colours and have to go
-    // into tools to see more").
-    final (editing, _) = await pumpMobileToolbar(tester);
-    editing.tool = PdfEditTool.ink;
-    await tester.pump();
-    expect(find.byKey(const ValueKey('pdf-mobile-swatch-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('pdf-mobile-swatch-2')), findsNothing);
-
-    await tester.tap(find.byIcon(Icons.tune));
-    await tester.pumpAndSettle();
-    final palette = PdfEditingToolbar.defaultPalette;
-    for (var i = 0; i < palette.length; i++) {
-      expect(find.byKey(ValueKey('pdf-tool-color-$i')), findsOneWidget);
-    }
-    expect(find.byKey(const ValueKey('pdf-tool-color-none')), findsNothing);
-
-    await tester
-        .tap(find.byKey(ValueKey('pdf-tool-color-${palette.length - 1}')));
-    await tester.pump();
-    expect(editing.color, palette.last);
-  });
-
-  testWidgets('a shape keeps its outline row, without a duplicate colour row',
-      (tester) async {
-    final (editing, _) = await pumpMobileToolbar(tester);
-    editing.tool = PdfEditTool.rectangle;
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.tune));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pdf-shape-outline-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('pdf-tool-color-0')), findsNothing);
+    expect(find.byKey(const ValueKey('pdf-mobile-swatch-0')), findsNothing);
   });
 
   testWidgets('the mobile dock shows the tune button for a selected annotation',
