@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_pdf_editor_app/app_info.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/update.dart';
+import 'test_finders.dart';
 
 ReleaseInfo _release(String tag) => ReleaseInfo(
       version: AppVersion.tryParse(tag)!,
@@ -93,6 +94,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     expect(
         find.byKey(const ValueKey('settings-check-updates')), findsOneWidget);
@@ -126,6 +128,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
     final check = find.byKey(const ValueKey('settings-check-updates'));
     await tester.ensureVisible(check);
     await tester.tap(check);
@@ -170,6 +173,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     final about = find.text('${AppInfo.displayName} ${AppInfo.displayVersion}');
     await tester.ensureVisible(about);
@@ -194,6 +198,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     await tester
         .ensureVisible(find.byKey(const ValueKey('settings-check-updates')));
@@ -226,6 +231,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     final toggle = find.byKey(const ValueKey('settings-nightly-updates'));
     expect(toggle, findsOneWidget);
@@ -408,6 +414,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
 
       expect(
         find.byKey(const ValueKey('settings-check-updates')),

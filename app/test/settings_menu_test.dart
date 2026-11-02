@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/editor_screen.dart';
+import 'test_finders.dart';
 
 void main() {
   late PdfEditingPreferences prefs;
@@ -23,6 +24,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
   }
 
   testWidgets('language picker writes the chosen locale to prefs',
