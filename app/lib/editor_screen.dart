@@ -58,6 +58,7 @@ import 'unsaved_changes_store.dart';
 import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
+import 'save_folder.dart';
 import 'whatsapp_send.dart';
 import 'open_with_rank.dart';
 import 'update_installer.dart';
@@ -3537,6 +3538,9 @@ class _EditorScreenState extends State<EditorScreen>
       BuildContext context, Uint8List bytes, String suggestedName) {
     final saveAs = widget.saveDocumentAs;
     if (saveAs != null) return saveAs(context, bytes, suggestedName);
+    // Android: si salva nella cartella scelta dall'utente (la prima volta la
+    // chiede), non piu' con il foglio di condivisione
+    if (SaveFolder.supported) return SaveFolder.save(context, bytes, suggestedName);
     return saveBytesAs(context, bytes, suggestedName,
         pdfLabel: appL10n(context).fileTypePdf);
   }

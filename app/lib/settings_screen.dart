@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log_dialog.dart';
+import 'save_folder.dart';
 import 'cached_documents_settings.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
@@ -347,6 +348,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => showWhatsNew(context),
                 ),
+                if (SaveFolder.supported) const _SaveFolderTile(),
                 ListTile(
                   key: const ValueKey('settings-app-log'),
                   contentPadding: EdgeInsets.zero,
@@ -961,6 +963,41 @@ class _SignatureTrustSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// Impostazioni: la cartella dove si salvano i PDF (solo Android).
+class _SaveFolderTile extends StatelessWidget {
+  const _SaveFolderTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: SaveFolder.changes,
+      builder: (context, _, __) => FutureBuilder<({String uri, String name})?>(
+        future: SaveFolder.current(),
+        builder: (context, snapshot) {
+          final folder = snapshot.data;
+          return ListTile(
+            key: const ValueKey('settings-save-folder'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.folder_outlined),
+            title: const Text('Cartella di salvataggio'),
+            subtitle: Text(folder?.name ??
+                'Non impostata: la scegli al primo salvataggio'),
+            trailing: folder == null
+                ? const Icon(Icons.chevron_right)
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Rimuovi',
+                    onPressed: SaveFolder.clear,
+                  ),
+            onTap: SaveFolder.pick,
+          );
+        },
+      ),
     );
   }
 }
