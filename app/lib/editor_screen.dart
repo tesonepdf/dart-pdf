@@ -12,6 +12,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart' show ImagePicker;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart' show pdfDocumentLooksScanned;
 import 'package:url_launcher/url_launcher.dart';
@@ -2429,12 +2430,46 @@ class _EditorScreenState extends State<EditorScreen>
     _addTab(tab);
   }
 
+  /// Sceglie le foto: su telefono prima chiede se prenderle dalla galleria
+  /// o dai file; altrove apre direttamente il selettore di file.
+  Future<List<XFile>> _pickPhotoFiles() async {
+    final onPhone = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    if (onPhone) {
+      final fromGallery = await showModalBottomSheet<bool>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Dalla galleria'),
+                onTap: () => Navigator.pop(context, true),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('Dai file'),
+                onTap: () => Navigator.pop(context, false),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (fromGallery == null) return const [];
+      if (fromGallery) return ImagePicker().pickMultiImage();
+    }
+    if (!mounted) return const [];
+    return pickDocumentFiles(appL10n(context).fileTypePdf);
+  }
+
   /// Più foto su un solo foglio A4 bianco, ognuna a grandezza reale (misura
   /// scelta nelle Impostazioni). Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
   Future<void> _photosOnOneSheet() async {
     try {
-      final picked = await pickDocumentFiles(appL10n(context).fileTypePdf);
+      final picked = await _pickPhotoFiles();
       if (picked.isEmpty || !mounted) return;
       await PhotoSizeSetting.instance.load();
       final photos = <UprightPhoto>[];
