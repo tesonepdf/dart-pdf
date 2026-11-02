@@ -199,12 +199,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return AlertDialog(
-      title: Text(appL10n(context).settingsTitle),
-      content: SizedBox(
-        width: 360,
-        child: SingleChildScrollView(
-          child: ListenableBuilder(
+    final Widget body = ListenableBuilder(
             listenable: Listenable.merge([widget.prefs, widget.recents]),
             builder: (context, _) => Column(
               mainAxisSize: MainAxisSize.min,
@@ -377,7 +372,34 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 ),
               ],
             ),
+          );
+    // sul telefono le Impostazioni occupano tutto lo schermo
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(appL10n(context).settingsTitle),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: appL10n(context).close,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: body,
+            ),
+          ),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: Text(appL10n(context).settingsTitle),
+      content: SizedBox(
+        width: 360,
+        child: SingleChildScrollView(
+          child: body,
         ),
       ),
       actions: [
