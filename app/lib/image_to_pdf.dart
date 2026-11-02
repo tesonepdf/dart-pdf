@@ -125,3 +125,70 @@ double photoDpi(int width, int height, String? sizeId) {
   }
   return math.max(size.dpiForPixelWidth(width), size.dpiForPixelHeight(height));
 }
+
+/// Una foto decodificata, dritta e pronta da incorporare in un PDF.
+class UprightPhoto {
+  const UprightPhoto(this.bytes, this.width, this.height);
+
+  /// JPEG (o PNG se ha trasparenza) con l'orientamento già applicato.
+  final Uint8List bytes;
+  final int width;
+  final int height;
+}
+
+/// Decodifica [bytes] e la rimette dritta (orientamento EXIF applicato).
+UprightPhoto uprightPhoto(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) {
+    throw const FormatException('formato immagine non riconosciuto');
+  }
+  final upright = img.bakeOrientation(decoded);
+  final data = upright.hasAlpha
+      ? Uint8List.fromList(img.encodePng(upright))
+      : Uint8List.fromList(img.encodeJpg(upright, quality: 92));
+  return UprightPhoto(data, upright.width, upright.height);
+}
+
+/// [uprightPhoto] fuori dal filo dell'interfaccia.
+Future<UprightPhoto> uprightPhotoAsync(Uint8List bytes) =>
+    compute(uprightPhoto, bytes);
+
+/// Posizioni iniziali di più foto su un foglio (coordinate PDF, in punti,
+/// origine in basso a sinistra): una sotto l'altra, centrate, a grandezza
+/// reale per la misura [sizeId]. Se non ci stanno si rimpiccioliscono tutte
+/// nella stessa proporzione. La prima sta in alto.
+List<PdfRect> layoutPhotosOnSheet(
+  List<({int width, int height})> photos,
+  String? sizeId, {
+  PdfPageSize page = PdfPageSize.a4,
+  double margin = 28.35,
+  double gap = 28.35,
+}) {
+  if (photos.isEmpty) return const [];
+  final widths = <double>[];
+  final heights = <double>[];
+  for (final p in photos) {
+    final dpi = photoDpi(p.width, p.height, sizeId);
+    widths.add(p.width * 72 / dpi);
+    heights.add(p.height * 72 / dpi);
+  }
+  final availW = page.width - 2 * margin;
+  final gaps = gap * (photos.length - 1);
+  final availH = page.height - 2 * margin - gaps;
+  final maxW = widths.reduce(math.max);
+  final sumH = heights.fold<double>(0, (a, b) => a + b);
+  var scale = 1.0;
+  if (maxW > availW) scale = math.min(scale, availW / maxW);
+  if (sumH > availH && availH > 0) scale = math.min(scale, availH / sumH);
+  final contentH = sumH * scale + gaps;
+  var top = page.height / 2 + contentH / 2;
+  final rects = <PdfRect>[];
+  for (var i = 0; i < photos.length; i++) {
+    final w = widths[i] * scale;
+    final h = heights[i] * scale;
+    final left = (page.width - w) / 2;
+    rects.add(PdfRect(left, top - h, left + w, top));
+    top -= h + gap;
+  }
+  return rects;
+}
