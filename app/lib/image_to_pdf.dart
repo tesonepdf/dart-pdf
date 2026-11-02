@@ -75,12 +75,36 @@ Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
     source = Uint8List.fromList(img.encodeJpg(upright, quality: 92));
   }
   final dpi = photoDpi(upright.width, upright.height, sizeId);
+  // Con una misura reale la foto sta a grandezza naturale al centro di un
+  // foglio A4 bianco, pronto per la stampa (se non ci sta, si riduce).
+  PdfPageSize? page;
+  var fit = PdfImageFit.contain;
+  const margin = 28.35;
+  if (sizeId != null && standardSizeById(sizeId) != null) {
+    final w = upright.width * 72 / dpi;
+    final h = upright.height * 72 / dpi;
+    const portrait = PdfPageSize.a4;
+    const landscape = PdfPageSize(841.89, 595.28);
+    bool fits(PdfPageSize p) =>
+        w <= p.width - 2 * margin && h <= p.height - 2 * margin;
+    if (fits(portrait)) {
+      page = portrait;
+      fit = PdfImageFit.none;
+    } else if (fits(landscape)) {
+      page = landscape;
+      fit = PdfImageFit.none;
+    } else {
+      page = w > h ? landscape : portrait;
+    }
+  }
   try {
-    return PdfImageDocument.fromImageBytes([source], dpi: dpi);
+    return PdfImageDocument.fromImageBytes([source],
+        dpi: dpi, pageSize: page, fit: fit, margin: page == null ? 0 : margin);
   } catch (_) {
     // e.g. a CMYK JPEG: re-encode the decoded pixels
     final png = Uint8List.fromList(img.encodePng(upright));
-    return PdfImageDocument.fromImageBytes([png], dpi: dpi);
+    return PdfImageDocument.fromImageBytes([png],
+        dpi: dpi, pageSize: page, fit: fit, margin: page == null ? 0 : margin);
   }
 }
 
