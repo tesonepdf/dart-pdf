@@ -15,7 +15,6 @@ import 'ocr_auto.dart';
 import 'official_update.dart';
 import 'open_with_rank.dart';
 import 'pdf_cache.dart';
-import 'photo_size_setting.dart';
 import 'recents.dart';
 import 'signature_trust.dart';
 import 'update.dart';
@@ -272,13 +271,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     title: 'Salvataggio',
                     children: [_SaveFolderTile()],
                   ),
-                _SettingsSection(
-                  title: 'Misura delle foto',
-                  children: [
-                    PhotoSizeSettingsSection(
-                        setting: PhotoSizeSetting.instance),
-                  ],
-                ),
                 _SettingsSection(
                   title: 'Strumenti',
                   children: [_ArrowStepsSection(prefs: widget.prefs)],

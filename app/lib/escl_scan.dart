@@ -9,6 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String kDefaultScannerAddress = '192.168.1.195';
 
 const _prefKey = 'dart_pdf_editor_app.scanner.address';
+const _dpiKey = 'dart_pdf_editor_app.scanner.dpi';
+
+/// Risoluzioni che si possono scegliere.
+const List<int> kScannerDpiChoices = [75, 100, 150, 200, 300, 600];
 
 /// L'ultimo indirizzo usato (o quello predefinito).
 Future<String> loadScannerAddress() async {
@@ -27,36 +31,72 @@ Future<void> saveScannerAddress(String address) async {
   } catch (_) {}
 }
 
-/// Chiede l'indirizzo dello scanner (testo normale, già compilato).
-Future<String?> askScannerAddress(BuildContext context) async {
+/// Chiede indirizzo e risoluzione (DPI) dello scanner, già compilati con
+/// l'ultima scelta.
+Future<({String address, int dpi})?> askScannerSettings(
+    BuildContext context) async {
   final controller = TextEditingController(text: await loadScannerAddress());
+  var dpi = 300;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    dpi = prefs.getInt(_dpiKey) ?? 300;
+  } catch (_) {}
+  if (!kScannerDpiChoices.contains(dpi)) dpi = 300;
   if (!context.mounted) return null;
-  final result = await showDialog<String>(
+  final result = await showDialog<({String address, int dpi})>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Importa da scanner'),
-      content: TextField(
-        controller: controller,
-        keyboardType: TextInputType.url,
-        decoration: const InputDecoration(
-          labelText: 'Indirizzo dello scanner',
-          helperText: 'Telefono e scanner sulla stessa rete Wi-Fi',
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('Importa da scanner'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Indirizzo dello scanner',
+                helperText: 'Telefono e scanner sulla stessa rete Wi-Fi',
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Risoluzione (DPI)'),
+            DropdownButton<int>(
+              isExpanded: true,
+              value: dpi,
+              items: [
+                for (final d in kScannerDpiChoices)
+                  DropdownMenuItem(value: d, child: Text('$d DPI')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => dpi = value);
+              },
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context)
+                .pop((address: controller.text.trim(), dpi: dpi)),
+            child: const Text('Scansiona'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annulla'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-          child: const Text('Scansiona'),
-        ),
-      ],
     ),
   );
   controller.dispose();
-  if (result != null && result.isNotEmpty) await saveScannerAddress(result);
+  if (result != null && result.address.isNotEmpty) {
+    await saveScannerAddress(result.address);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_dpiKey, result.dpi);
+    } catch (_) {}
+  }
   return result;
 }
 
@@ -67,11 +107,11 @@ class EsclScanner {
 
   static const _timeout = Duration(seconds: 8);
 
-  /// Scansiona una pagina A4 dal piano di vetro a 300 dpi. Restituisce il
+  /// Scansiona una pagina A4 dal piano di vetro alla risoluzione [dpi]. Restituisce il
   /// JPEG della pagina intera.
-  static Future<Uint8List> scanA4(String address) async {
+  static Future<Uint8List> scanA4(String address, {int dpi = 300}) async {
     final base = await _findBase(address);
-    final job = await _startJob(base);
+    final job = await _startJob(base, dpi);
     final page = await _nextDocument(job);
     unawaited(_deleteJob(job));
     return page;
@@ -95,7 +135,7 @@ class EsclScanner {
     throw Exception('Scanner non raggiungibile a $address');
   }
 
-  static String _settings() => '<?xml version="1.0" encoding="UTF-8"?>'
+  static String _settings(int dpi) => '<?xml version="1.0" encoding="UTF-8"?>'
       '<scan:ScanSettings '
       'xmlns:pwg="http://www.pwg.org/schemas/2010/12/sm" '
       'xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03">'
@@ -108,17 +148,17 @@ class EsclScanner {
       '</pwg:ScanRegion></pwg:ScanRegions>'
       '<scan:InputSource>Platen</scan:InputSource>'
       '<scan:ColorMode>RGB24</scan:ColorMode>'
-      '<scan:XResolution>300</scan:XResolution>'
-      '<scan:YResolution>300</scan:YResolution>'
+      '<scan:XResolution>$dpi</scan:XResolution>'
+      '<scan:YResolution>$dpi</scan:YResolution>'
       '<pwg:DocumentFormat>image/jpeg</pwg:DocumentFormat>'
       '</scan:ScanSettings>';
 
-  static Future<Uri> _startJob(String base) async {
+  static Future<Uri> _startJob(String base, int dpi) async {
     final res = await http
         .post(
           Uri.parse('$base/eSCL/ScanJobs'),
           headers: {'Content-Type': 'text/xml'},
-          body: _settings(),
+          body: _settings(dpi),
         )
         .timeout(const Duration(seconds: 20));
     final location = res.headers['location'];

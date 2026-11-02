@@ -7,6 +7,19 @@ import 'package:pdf_document/pdf_document.dart';
 
 import 'standard_sizes.dart';
 
+/// Valore speciale di `sizeId`: la misura si decide dalla foto.
+const String kAutoPhotoSize = 'auto';
+
+/// Riconosce la misura dalla forma della foto: una carta (identità, credito,
+/// tessera sanitaria, patente: tutte 85,6 x 54 mm) ha un rapporto lati di
+/// circa 1,586. Null se la forma non è riconoscibile con sicurezza.
+String? detectPhotoSizeId(int width, int height) {
+  if (width <= 0 || height <= 0) return null;
+  final ratio = math.max(width, height) / math.min(width, height);
+  if ((ratio - 85.6 / 53.98).abs() / (85.6 / 53.98) <= 0.06) return 'card_cie';
+  return null;
+}
+
 const _imageExtensions = {
   'jpg',
   'jpeg',
@@ -73,6 +86,9 @@ Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
     source = Uint8List.fromList(img.encodePng(upright));
   } else {
     source = Uint8List.fromList(img.encodeJpg(upright, quality: 92));
+  }
+  if (sizeId == kAutoPhotoSize) {
+    sizeId = detectPhotoSizeId(upright.width, upright.height);
   }
   final dpi = photoDpi(upright.width, upright.height, sizeId);
   // Con una misura reale la foto sta a grandezza naturale al centro di un
@@ -168,7 +184,10 @@ List<PdfRect> layoutPhotosOnSheet(
   final widths = <double>[];
   final heights = <double>[];
   for (final p in photos) {
-    final dpi = photoDpi(p.width, p.height, sizeId);
+    final id = sizeId == kAutoPhotoSize
+        ? detectPhotoSizeId(p.width, p.height)
+        : sizeId;
+    final dpi = photoDpi(p.width, p.height, id);
     widths.add(p.width * 72 / dpi);
     heights.add(p.height * 72 / dpi);
   }

@@ -15,8 +15,12 @@ class AppMenuSheetEntry {
     required this.run,
     this.subtitle,
     this.enabled = true,
+    this.group,
   });
 
+  /// Il gruppo a tendina in cui sta la voce (vedi [kMenuGroups]); null =
+  /// "Documento aperto".
+  final String? group;
   final Key key;
   final IconData icon;
   final String title;
@@ -41,6 +45,7 @@ Future<VoidCallback?> showAppMenuSheet(
   required VoidCallback onToggleReadOnly,
   required List<AppMenuSheetEntry> app,
   List<AppMenuSheetEntry> toOrganize = const [],
+  List<AppMenuSheetEntry> importEntries = const [],
 }) =>
     showModalBottomSheet<VoidCallback>(
       context: context,
@@ -59,6 +64,7 @@ Future<VoidCallback?> showAppMenuSheet(
         onToggleReadOnly: onToggleReadOnly,
         app: app,
         toOrganize: toOrganize,
+        importEntries: importEntries,
       ),
     );
 
@@ -76,7 +82,11 @@ class AppMenuSheet extends StatefulWidget {
     required this.onToggleReadOnly,
     required this.app,
     this.toOrganize = const [],
+    this.importEntries = const [],
   });
+
+  /// Le voci di importazione (foto, scanner...).
+  final List<AppMenuSheetEntry> importEntries;
 
   /// The open document's name, shown at the top of the menu.
   final String? title;
@@ -103,6 +113,17 @@ class AppMenuSheet extends StatefulWidget {
   @override
   State<AppMenuSheet> createState() => _AppMenuSheetState();
 }
+
+/// I gruppi a tendina delle azioni sul documento, nell'ordine in cui
+/// compaiono: id e titolo.
+const List<({String id, String title})> kMenuGroups = [
+  (id: 'doc', title: 'Documento aperto'),
+  (id: 'send', title: 'Condividi e invia'),
+  (id: 'save', title: 'Salva, stampa, esporta'),
+  (id: 'sign', title: 'Firma e testo (OCR)'),
+  (id: 'pages', title: 'Pagine'),
+  (id: 'forms', title: 'Moduli e dati'),
+];
 
 /// A page inside the sheet that a folded group opens.
 typedef _SubPage = ({String id, String title, List<AppMenuSheetEntry> items});
@@ -136,9 +157,38 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
     );
   }
 
+  Widget _group(String id, String title, List<Widget> children,
+          {bool open = false}) =>
+      ExpansionTile(
+        key: ValueKey('app-menu-group-$id'),
+        initiallyExpanded: open,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: EdgeInsets.zero,
+        title: Text(
+          title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        children: children,
+      );
+
   Widget _buildMain(BuildContext context) {
     final l = appL10n(context);
-    final appItemCount = widget.app.length + (widget.readOnly == null ? 0 : 1);
+    final all = [...widget.document, ...widget.toOrganize];
+    List<AppMenuSheetEntry> inGroup(String g) => [
+          for (final e in all)
+            if ((e.group ?? 'doc') == g) e,
+        ];
+    final appExtra = inGroup('app');
+    final hasApp = widget.readOnly != null ||
+        widget.app.isNotEmpty ||
+        appExtra.isNotEmpty;
     return Column(
       key: const ValueKey('app-menu-sheet'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -154,65 +204,60 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
           ),
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
         const Divider(height: 24),
-        if (widget.file.length + 1 >= 2)
-          _SectionLabel(l.editorMenuSectionFile),
-        for (final entry in widget.file) _row(entry),
-        ListTile(
-          key: const ValueKey('menu-open-recent'),
-          leading: const Icon(Icons.history),
-          title: Text(l.editorOpenRecent),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => setState(
-            () => _page = (
-              id: 'recent',
-              title: l.editorOpenRecent,
-              items: [
-                widget.viewAllRecentFiles,
-                if (widget.recentFiles.isEmpty)
-                  AppMenuSheetEntry(
-                    key: const ValueKey('menu-no-recent-files'),
-                    icon: Icons.history_toggle_off,
-                    title: l.editorNoRecentFiles,
-                    run: () {},
-                    enabled: false,
-                  )
-                else
-                  ...widget.recentFiles,
-                if (widget.clearRecentFiles case final clear?)
-                  clear,
-              ],
+        _group(
+          'file',
+          l.editorMenuSectionFile,
+          [
+            for (final entry in widget.file) _row(entry),
+            ListTile(
+              key: const ValueKey('menu-open-recent'),
+              leading: const Icon(Icons.history),
+              title: Text(l.editorOpenRecent),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => setState(
+                () => _page = (
+                  id: 'recent',
+                  title: l.editorOpenRecent,
+                  items: [
+                    widget.viewAllRecentFiles,
+                    if (widget.recentFiles.isEmpty)
+                      AppMenuSheetEntry(
+                        key: const ValueKey('menu-no-recent-files'),
+                        icon: Icons.history_toggle_off,
+                        title: l.editorNoRecentFiles,
+                        run: () {},
+                        enabled: false,
+                      )
+                    else
+                      ...widget.recentFiles,
+                    if (widget.clearRecentFiles case final clear?) clear,
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
+          open: true,
         ),
-        if (widget.document.isNotEmpty) ...[
-          const Divider(height: 24),
-          if (widget.document.length >= 2)
-            _SectionLabel(l.editorMenuSectionDocument),
-          for (final entry in widget.document) _row(entry),
-        ],
-        if (widget.toOrganize.isNotEmpty) ...[
-          const Divider(height: 24),
-          _SectionLabel(
-            Localizations.localeOf(context).languageCode == 'it'
-                ? 'Da organizzare'
-                : 'To organize',
-          ),
-          for (final entry in widget.toOrganize) _row(entry),
-        ],
-        if (appItemCount > 0) ...[
-          const Divider(height: 24),
-          if (appItemCount >= 2) _SectionLabel(l.editorMenuSectionApp),
-        ],
-        if (widget.readOnly case final readOnly?)
-          SwitchListTile(
-            key: const ValueKey('menu-read-only'),
-            secondary: const Icon(Icons.visibility_outlined),
-            title: Text(l.editorMenuReadOnly),
-            value: readOnly,
-            onChanged: (_) =>
-                Navigator.of(context).pop(widget.onToggleReadOnly),
-          ),
-        for (final entry in widget.app) _row(entry),
+        if (widget.importEntries.isNotEmpty)
+          _group('import', 'Importa',
+              [for (final entry in widget.importEntries) _row(entry)]),
+        for (final g in kMenuGroups)
+          if (inGroup(g.id).isNotEmpty)
+            _group(g.id, g.title, [for (final e in inGroup(g.id)) _row(e)]),
+        if (hasApp)
+          _group('app', l.editorMenuSectionApp, [
+            if (widget.readOnly case final readOnly?)
+              SwitchListTile(
+                key: const ValueKey('menu-read-only'),
+                secondary: const Icon(Icons.visibility_outlined),
+                title: Text(l.editorMenuReadOnly),
+                value: readOnly,
+                onChanged: (_) =>
+                    Navigator.of(context).pop(widget.onToggleReadOnly),
+              ),
+            for (final entry in widget.app) _row(entry),
+            for (final entry in appExtra) _row(entry),
+          ]),
       ],
     );
   }
@@ -300,25 +345,4 @@ class _SearchField extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The same quiet 11px uppercase header the popup and tool sheet use.
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: Text(
-          text.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
 }
