@@ -27,6 +27,7 @@ import 'devtools_panel.dart';
 import 'digital_signature.dart';
 import 'doc_scan.dart';
 import 'document_tab.dart';
+import 'escl_scan.dart';
 import 'file_io.dart';
 import 'image_clipboard.dart';
 import 'image_export.dart';
@@ -2428,6 +2429,87 @@ class _EditorScreenState extends State<EditorScreen>
     _addTab(tab);
   }
 
+  /// Più foto su un solo foglio A4 bianco, ognuna a grandezza reale (misura
+  /// scelta nelle Impostazioni). Le foto sono immagini normali del documento:
+  /// si ingrandisce la pagina e si spostano col dito.
+  Future<void> _photosOnOneSheet() async {
+    try {
+      final picked = await pickDocumentFiles(appL10n(context).fileTypePdf);
+      if (picked.isEmpty || !mounted) return;
+      await PhotoSizeSetting.instance.load();
+      final photos = <UprightPhoto>[];
+      for (final file in picked) {
+        final raw = await file.readAsBytes();
+        if (looksLikePdf(raw)) continue;
+        photos.add(await uprightPhotoAsync(raw));
+      }
+      if (!mounted) return;
+      if (photos.isEmpty) {
+        _toast('Scegli almeno una foto.');
+        return;
+      }
+      final rects = layoutPhotosOnSheet(
+        [for (final p in photos) (width: p.width, height: p.height)],
+        PhotoSizeSetting.instance.value,
+      );
+      final tab = DocumentTab.document(
+        title: _nextUntitledTitle(),
+        bytes: PdfBlankDocument.create(pageSize: PdfPageSize.a4),
+        preferences: _prefs,
+        initiallyDirty: true,
+      );
+      _readOnly = false;
+      _addTab(tab);
+      final session = tab.session;
+      if (session == null) return;
+      for (var i = 0; i < photos.length; i++) {
+        await session.addImageInRectAsync(0, rects[i], photos[i].bytes);
+      }
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('photos on one sheet failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Foto non aggiunte: ${openErrorSummary(e)}');
+    }
+  }
+
+  /// Riceve una pagina da uno scanner di rete (eSCL) e la mette in un
+  /// foglio A4: nel documento aperto, dopo la pagina in vista, oppure in un
+  /// documento nuovo.
+  Future<void> _importFromScanner() async {
+    final address = await askScannerAddress(context);
+    if (address == null || address.isEmpty || !mounted) return;
+    _toast('Scansione in corso…', duration: const Duration(seconds: 6));
+    try {
+      final jpeg = await EsclScanner.scanA4(address);
+      final pdf = PdfImageDocument.fromImageBytes(
+        [jpeg],
+        dpi: 300,
+        pageSize: PdfPageSize.a4,
+        fit: PdfImageFit.contain,
+      );
+      if (!mounted) return;
+      final tab = _active;
+      final session = tab?.session;
+      if (tab != null && session != null && !_readOnly) {
+        final at = (tab.viewer?.currentPage ?? 0) + 1;
+        session.insertPagesFromBytes(pdf, at: at);
+        _revealInsertedPage(at);
+      } else {
+        _readOnly = false;
+        _addTab(DocumentTab.document(
+          title: _nextScanTitle(),
+          bytes: pdf,
+          preferences: _prefs,
+          initiallyDirty: true,
+        ));
+      }
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('scanner import failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Scanner: ${openErrorSummary(e)}');
+    }
+  }
+
   void _newWindow() {
     final open = widget.onNewWindow;
     if (open == null) return;
@@ -4421,6 +4503,18 @@ class _EditorScreenState extends State<EditorScreen>
           title: l.editorMenuScanDocument,
           run: () => unawaited(_newDocumentFromScan()),
         ),
+      _MenuAction(
+        id: 'photos-one-sheet',
+        icon: Icons.photo_library_outlined,
+        title: 'Foto su un solo foglio…',
+        run: () => unawaited(_photosOnOneSheet()),
+      ),
+      _MenuAction(
+        id: 'scanner-import',
+        icon: Icons.scanner_outlined,
+        title: 'Importa da scanner…',
+        run: () => unawaited(_importFromScanner()),
+      ),
       _MenuAction(
         id: 'open',
         icon: Icons.folder_open,
