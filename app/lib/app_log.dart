@@ -193,8 +193,13 @@ class AppLog extends ChangeNotifier {
   static const maxEntries = 500;
 
   final List<AppLogEntry> _entries = [];
-  Timer? _saveTimer;
+  bool _saving = false;
+  bool _dirty = false;
   bool _loaded = false;
+
+  /// Vero quando il Log salvato e' stato letto: prima di allora non si
+  /// scrive su disco, per non cancellare le voci precedenti.
+  bool _ready = false;
   bool _installed = false;
 
   /// Vero se non si riesce a scrivere il Log su disco: resta in memoria
@@ -228,9 +233,15 @@ class AppLog extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_key);
-      if (raw == null) return;
+      if (raw == null) {
+        _markReady();
+        return;
+      }
       final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
+      if (decoded is! List) {
+        _markReady();
+        return;
+      }
       final saved = [
         for (final m in decoded.whereType<Map>())
           AppLogEntry.fromJson(m.cast<String, dynamic>()),
@@ -238,11 +249,18 @@ class AppLog extends ChangeNotifier {
       _entries.insertAll(0, saved);
       _trim();
       notifyListeners();
+      _markReady();
     } catch (e) {
       persistFailed = true;
       _add(AppLogLevel.errore, 'Log',
           'Lettura del Log salvato non riuscita: $e');
+      _markReady();
     }
+  }
+
+  void _markReady() {
+    _ready = true;
+    if (_entries.isNotEmpty) _scheduleSave();
   }
 
   void ok(String context, String message) =>
@@ -312,8 +330,21 @@ class AppLog extends ChangeNotifier {
   }
 
   void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 1), _save);
+    if (!_ready) return;
+    _dirty = true;
+    if (_saving) return;
+    _saving = true;
+    scheduleMicrotask(_drain);
+  }
+
+  /// Scrive su disco, riunendo in una sola scrittura le voci arrivate
+  /// mentre quella precedente era in corso.
+  Future<void> _drain() async {
+    while (_dirty) {
+      _dirty = false;
+      await _save();
+    }
+    _saving = false;
   }
 
   Future<void> _save() async {
