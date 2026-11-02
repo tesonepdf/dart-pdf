@@ -30,6 +30,7 @@ import 'document_tab.dart';
 import 'file_io.dart';
 import 'image_clipboard.dart';
 import 'image_export.dart';
+import 'photo_size_setting.dart';
 import 'image_to_pdf.dart';
 import 'image_source_picker.dart';
 import 'incoming_file.dart';
@@ -1294,7 +1295,8 @@ class _EditorScreenState extends State<EditorScreen>
   void _openBytes(Uint8List bytes, String title,
       {String? originPath, String? originBookmark}) {
     if (!looksLikePdf(bytes)) {
-      bytes = imageBytesToPdf(bytes);
+      bytes = imageBytesToPdf(bytes,
+          sizeId: PhotoSizeSetting.instance.value);
       title = imageTitleAsPdf(title);
     }
     _addTab(DocumentTab.document(
@@ -1588,7 +1590,9 @@ class _EditorScreenState extends State<EditorScreen>
         originBookmark = null;
       }
       final isPhoto = !looksLikePdf(rawBytes);
-      final bytes = await imageBytesToPdfAsync(rawBytes);
+      if (isPhoto) await PhotoSizeSetting.instance.load();
+      final bytes = await imageBytesToPdfAsync(rawBytes,
+          sizeId: PhotoSizeSetting.instance.value);
       if (isPhoto) title = imageTitleAsPdf(title);
       AppDevTools.instance
           .addLog('open-trace: "$title" bytes ready — ${bytes.length} B; '
