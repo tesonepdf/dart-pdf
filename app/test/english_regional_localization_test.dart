@@ -7,6 +7,7 @@ import 'package:dart_pdf_editor_app/settings_screen.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'test_finders.dart';
 
 void main() {
   for (final region in ['AU', 'GB', 'US']) {
@@ -36,6 +37,7 @@ void main() {
       // need not settle for the Settings route and licence link to be ready.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
+      await expandSettingsSections(tester, settle: false);
       final tile = find.byKey(const ValueKey('settings-licenses'));
       await tester.ensureVisible(tile);
       expect(

@@ -35,6 +35,8 @@ void main() {
     expect(prefs.locale, isNull);
     expect(find.byKey(const ValueKey('settings-language')), findsOneWidget);
 
+    await tester.ensureVisible(find.byKey(const ValueKey('settings-language')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('settings-language')));
     await tester.pumpAndSettle();
     // The menu lists each language by its native name; pick Spanish.

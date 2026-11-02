@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/l10n/app_delegates.dart';
 import 'package:dart_pdf_editor_app/l10n/app_localizations.dart';
+import 'test_finders.dart';
 
 void main() {
   final pki = TestRevocationPki.generate(random: Random(24));
@@ -177,6 +178,7 @@ void main() {
       ));
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
 
       final toggle = find.byKey(const ValueKey('settings-aatl'));
       await tester.ensureVisible(toggle);
