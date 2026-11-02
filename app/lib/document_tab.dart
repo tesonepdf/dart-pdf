@@ -272,6 +272,10 @@ class DocumentTab {
   /// `EditorScreen._maybeAutoOcr`), so it runs at most once per tab.
   bool autoOcrChecked = false;
 
+  /// Whether automatic OCR is analysing this tab right now: the tab is shown
+  /// read-only until the recognised text is applied.
+  bool autoOcrRunning = false;
+
   /// The writable on-disk origin (desktop), when the document was opened from
   /// a real path. Save writes back here; updated when a Save As lands on a new
   /// path. Null means save-as only.
