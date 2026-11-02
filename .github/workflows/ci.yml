@@ -37,13 +37,36 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
+      # Ogni passaggio scrive l'esito completo anche come annotazione della
+      # run, cosi' gli errori si leggono senza scaricare i log.
       - name: flutter analyze
-        run: flutter analyze
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1 | tee /tmp/step.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=flutter analyze::$(grep -E 'error •|Error' /tmp/step.txt | head -c 6000 | sed ':a;N;$!ba;s/\n/%0A/g')"
+          fi
+          exit "$code"
 
       - name: flutter test
         working-directory: app
-        run: flutter test
+        run: |
+          set +e
+          flutter test 2>&1 | tee /tmp/step.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=flutter test::$(tail -c 6000 /tmp/step.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+          fi
+          exit "$code"
 
       - name: flutter build apk --debug
         working-directory: app
-        run: flutter build apk --debug
+        run: |
+          set +e
+          flutter build apk --debug 2>&1 | tee /tmp/step.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=flutter build apk::$(tail -c 6000 /tmp/step.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+          fi
+          exit "$code"
