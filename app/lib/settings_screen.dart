@@ -206,171 +206,205 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(appL10n(context).settingsAppearance,
-                    style: theme.textTheme.titleSmall),
-                const SizedBox(height: 8),
-                SegmentedButton<PdfThemePreference>(
-                  segments: [
-                    ButtonSegment(
-                        value: PdfThemePreference.system,
-                        icon: const Icon(Icons.brightness_auto),
-                        label: Text(appL10n(context).settingsThemeSystem)),
-                    ButtonSegment(
-                        value: PdfThemePreference.light,
-                        icon: const Icon(Icons.light_mode),
-                        label: Text(appL10n(context).settingsThemeLight)),
-                    ButtonSegment(
-                        value: PdfThemePreference.dark,
-                        icon: const Icon(Icons.dark_mode),
-                        label: Text(appL10n(context).settingsThemeDark)),
-                  ],
-                  selected: {widget.prefs.themePreference},
-                  onSelectionChanged: (s) =>
-                      widget.prefs.themePreference = s.first,
-                ),
-                const SizedBox(height: 16),
-                Text(appL10n(context).settingsLanguage,
-                    style: theme.textTheme.titleSmall),
-                const SizedBox(height: 8),
-                _LanguagePicker(prefs: widget.prefs),
-                const Divider(height: 32),
-                Row(
+                _SettingsSection(
+                  title: 'Aspetto e lingua',
                   children: [
-                    Expanded(
-                      child: Text(appL10n(context).settingsRecentFiles,
-                          style: theme.textTheme.titleSmall),
+                    Text(appL10n(context).settingsAppearance,
+                        style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    SegmentedButton<PdfThemePreference>(
+                      segments: [
+                        ButtonSegment(
+                            value: PdfThemePreference.system,
+                            icon: const Icon(Icons.brightness_auto),
+                            label: Text(appL10n(context).settingsThemeSystem)),
+                        ButtonSegment(
+                            value: PdfThemePreference.light,
+                            icon: const Icon(Icons.light_mode),
+                            label: Text(appL10n(context).settingsThemeLight)),
+                        ButtonSegment(
+                            value: PdfThemePreference.dark,
+                            icon: const Icon(Icons.dark_mode),
+                            label: Text(appL10n(context).settingsThemeDark)),
+                      ],
+                      selected: {widget.prefs.themePreference},
+                      onSelectionChanged: (s) =>
+                          widget.prefs.themePreference = s.first,
                     ),
-                    TextButton(
-                      onPressed: widget.recents.isEmpty
-                          ? null
-                          : () => widget.recents.clear(),
-                      child: Text(appL10n(context).clear),
+                    const SizedBox(height: 16),
+                    Text(appL10n(context).settingsLanguage,
+                        style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    _LanguagePicker(prefs: widget.prefs),
+                  ],
+                ),
+                _SettingsSection(
+                  title: 'File recenti',
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(appL10n(context).settingsRecentFiles,
+                              style: theme.textTheme.titleSmall),
+                        ),
+                        TextButton(
+                          onPressed: widget.recents.isEmpty
+                              ? null
+                              : () => widget.recents.clear(),
+                          child: Text(appL10n(context).clear),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      appL10n(context)
+                          .settingsRecentCount(widget.recents.items.length),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    if (canManageCachedPdfs) ...[
+                      const Divider(height: 32),
+                      CachedDocumentsSettings(recents: widget.recents),
+                    ],
+                  ],
+                ),
+                if (SaveFolder.supported)
+                  const _SettingsSection(
+                    title: 'Salvataggio',
+                    children: [_SaveFolderTile()],
+                  ),
+                _SettingsSection(
+                  title: 'Strumenti',
+                  children: [_ArrowStepsSection(prefs: widget.prefs)],
+                ),
+                if ((SignatureTrust.platformDefault?.aatl != null) ||
+                    OnDeviceOcr.isSupported)
+                  _SettingsSection(
+                    title: 'Testo e firme',
+                    children: [
+                      if (SignatureTrust.platformDefault case final trust?
+                          when trust.aatl != null)
+                        _SignatureTrustSection(
+                            trust: trust, setting: trust.aatl!),
+                      if (SignatureTrust.platformDefault?.aatl != null &&
+                          OnDeviceOcr.isSupported)
+                        const Divider(height: 32),
+                      if (OnDeviceOcr.isSupported)
+                        _TextRecognitionSection(setting: widget.autoOcr),
+                    ],
+                  ),
+                _SettingsSection(
+                  title: 'Sistema',
+                  children: [
+                    ListTile(
+                      key: const ValueKey('settings-default-app'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.assignment_turned_in_outlined),
+                      title: Text(appL10n(context).settingsSetUpAsDefault),
+                      subtitle: Text(_defaultAppSubtitle(context)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _showDefaultAppSetup(context),
+                    ),
+                    if (OpenWithRank.supported)
+                      ListTile(
+                        key: const ValueKey('settings-open-with-rank'),
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.vertical_align_top),
+                        title: const Text('Visualizzazione app in "Apri con"'),
+                        subtitle: const Text(
+                            'Apre l\'elenco di sistema: tocca DartPDF per '
+                            'farlo comparire tra le prime app'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => OpenWithRank.show(),
+                      ),
+                    if (kIsWeb) const WebChannelSwitchTile(),
+                    if (widget.onOpenDevTools != null)
+                      ListTile(
+                        key: const ValueKey('settings-devtools'),
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.build_outlined),
+                        title: Text(appL10n(context).settingsDeveloperTools),
+                        subtitle: Text(
+                            appL10n(context).settingsDeveloperToolsSubtitle),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          widget.onOpenDevTools!();
+                        },
+                      ),
+                  ],
+                ),
+                if (widget.updates != null && widget.updates!.supported)
+                  _SettingsSection(
+                    title: 'Aggiornamenti app',
+                    children: [
+                      _UpdateSection(
+                        updates: widget.updates!,
+                        installer: widget.updateInstaller,
+                      ),
+                    ],
+                  ),
+                _SettingsSection(
+                  title: 'Log e problemi',
+                  children: [
+                    ListTile(
+                      key: const ValueKey('settings-app-log'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.fact_check_outlined),
+                      title: const Text('Apri il Log'),
+                      subtitle: const Text(
+                          'Cosa e\' andato bene e cosa no, con la spiegazione'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showAppLog(context),
                     ),
                   ],
                 ),
-                Text(
-                  appL10n(context)
-                      .settingsRecentCount(widget.recents.items.length),
-                  style: theme.textTheme.bodySmall,
-                ),
-                if (canManageCachedPdfs) ...[
-                  const Divider(height: 32),
-                  CachedDocumentsSettings(recents: widget.recents),
-                ],
-                if (SignatureTrust.platformDefault case final trust?
-                    when trust.aatl != null) ...[
-                  const Divider(height: 32),
-                  _SignatureTrustSection(trust: trust, setting: trust.aatl!),
-                ],
-                if (OnDeviceOcr.isSupported) ...[
-                  const Divider(height: 32),
-                  _TextRecognitionSection(setting: widget.autoOcr),
-                ],
-                const Divider(height: 32),
-                _ArrowStepsSection(prefs: widget.prefs),
-                const Divider(height: 32),
-                Text(appL10n(context).settingsSystem,
-                    style: theme.textTheme.titleSmall),
-                ListTile(
-                  key: const ValueKey('settings-default-app'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.assignment_turned_in_outlined),
-                  title: Text(appL10n(context).settingsSetUpAsDefault),
-                  subtitle: Text(_defaultAppSubtitle(context)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showDefaultAppSetup(context),
-                ),
-                if (OpenWithRank.supported)
-                  ListTile(
-                    key: const ValueKey('settings-open-with-rank'),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.vertical_align_top),
-                    title: const Text('Visualizzazione app in "Apri con"'),
-                    subtitle: const Text(
-                        'Apre l\'elenco di sistema: tocca DartPDF per farlo '
-                        'comparire tra le prime app'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => OpenWithRank.show(),
-                  ),
-                if (kIsWeb) const WebChannelSwitchTile(),
-                if (widget.onOpenDevTools != null)
-                  ListTile(
-                    key: const ValueKey('settings-devtools'),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.build_outlined),
-                    title: Text(appL10n(context).settingsDeveloperTools),
-                    subtitle:
-                        Text(appL10n(context).settingsDeveloperToolsSubtitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      widget.onOpenDevTools!();
-                    },
-                  ),
-                if (widget.updates != null && widget.updates!.supported) ...[
-                  const Divider(height: 32),
-                  _UpdateSection(
-                    updates: widget.updates!,
-                    installer: widget.updateInstaller,
-                  ),
-                ],
-                const Divider(height: 32),
-                Text(appL10n(context).settingsAbout,
-                    style: theme.textTheme.titleSmall),
-                const SizedBox(height: 4),
-                Text(
-                  '${AppInfo.displayName} ${AppInfo.displayVersion}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
-                const SizedBox(height: 4),
-                TextButton.icon(
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  icon: const Icon(Icons.code, size: 18),
-                  label: Text(appL10n(context).settingsViewSource),
-                  onPressed: () => launchUrl(Uri.parse(AppInfo.sourceUrl),
-                      mode: LaunchMode.externalApplication),
-                ),
-                ListTile(
-                  key: const ValueKey('settings-report-issue'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.bug_report_outlined),
-                  title: Text(appL10n(context).settingsReportIssue),
-                  trailing: const Icon(Icons.open_in_new, size: 18),
-                  onTap: () => launchUrl(Uri.parse(AppInfo.feedbackIssueUrl),
-                      mode: LaunchMode.externalApplication),
-                ),
-                ListTile(
-                  key: const ValueKey('settings-whats-new'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.new_releases_outlined),
-                  title: Text(appL10n(context).whatsNew),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showWhatsNew(context),
-                ),
-                if (SaveFolder.supported) const _SaveFolderTile(),
-                ListTile(
-                  key: const ValueKey('settings-app-log'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.fact_check_outlined),
-                  title: const Text('Log e problemi'),
-                  subtitle: const Text(
-                      'Cosa e\' andato bene e cosa no, con la spiegazione'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showAppLog(context),
-                ),
-                ListTile(
-                  key: const ValueKey('settings-licenses'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.article_outlined),
-                  title: Text(MaterialLocalizations.of(context)
-                      .viewLicensesButtonLabel),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showLicensePage(
-                    context: context,
-                    applicationName: AppInfo.displayName,
-                    applicationVersion: AppInfo.displayVersion,
-                  ),
+                _SettingsSection(
+                  title: 'Informazioni',
+                  children: [
+                    Text(
+                      '${AppInfo.displayName} ${AppInfo.displayVersion}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 4),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      icon: const Icon(Icons.code, size: 18),
+                      label: Text(appL10n(context).settingsViewSource),
+                      onPressed: () => launchUrl(Uri.parse(AppInfo.sourceUrl),
+                          mode: LaunchMode.externalApplication),
+                    ),
+                    ListTile(
+                      key: const ValueKey('settings-report-issue'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.bug_report_outlined),
+                      title: Text(appL10n(context).settingsReportIssue),
+                      trailing: const Icon(Icons.open_in_new, size: 18),
+                      onTap: () => launchUrl(
+                          Uri.parse(AppInfo.feedbackIssueUrl),
+                          mode: LaunchMode.externalApplication),
+                    ),
+                    ListTile(
+                      key: const ValueKey('settings-whats-new'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.new_releases_outlined),
+                      title: Text(appL10n(context).whatsNew),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showWhatsNew(context),
+                    ),
+                    ListTile(
+                      key: const ValueKey('settings-licenses'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.article_outlined),
+                      title: Text(MaterialLocalizations.of(context)
+                          .viewLicensesButtonLabel),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showLicensePage(
+                        context: context,
+                        applicationName: AppInfo.displayName,
+                        applicationVersion: AppInfo.displayVersion,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -997,6 +1031,49 @@ class _SaveFolderTile extends StatelessWidget {
             onTap: SaveFolder.pick,
           );
         },
+      ),
+    );
+  }
+}
+
+
+/// Una sezione delle Impostazioni: scheda chiusa con il titolo, che si apre
+/// toccandola (come un menu a tendina).
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: ValueKey('settings-section-$title'),
+            title: Text(
+              title.toUpperCase(),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
       ),
     );
   }
