@@ -471,7 +471,13 @@ class _EditorScreenState extends State<EditorScreen>
       _tabs.isEmpty ? null : _tabs[_activeIndex.clamp(0, _tabs.length - 1)];
 
   /// Whole-app read-only toggle: swaps [PdfEditorView] for [PdfReader].
-  bool _readOnly = false;
+  bool _readOnlyChoice = false;
+
+  /// Read-only when the user chose it, or while automatic OCR is still
+  /// analysing the shown document: the tools unlock when the text layer lands.
+  bool get _readOnly =>
+      _readOnlyChoice || (_active?.autoOcrRunning ?? false);
+  set _readOnly(bool value) => _readOnlyChoice = value;
   bool _digitallySigning = false;
 
   void _onLocalAnnotationCopy() {
@@ -3147,7 +3153,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// job ends. Read-only mode makes no edits, so it is skipped too.
   void _maybeAutoOcr(DocumentTab tab) {
     final controller = tab.session;
-    if (tab.autoOcrChecked || controller == null || _readOnly) return;
+    if (tab.autoOcrChecked || controller == null || _readOnlyChoice) return;
     if (!OnDeviceOcr.isSupported) return;
     tab.autoOcrChecked = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -3170,34 +3176,39 @@ class _EditorScreenState extends State<EditorScreen>
       DocumentTab tab, PdfEditingController controller) async {
     final snapshot = OcrSessionSnapshot.of(controller);
     AppDevTools.instance.addLog('auto OCR: "${tab.title}" looks scanned');
-    await _ocr.start(
-      context,
-      // A copy: after an undo, the next edit overwrites the session buffer
-      // past that revision, and the job reads its snapshot lazily.
-      bytes: Uint8List.fromList(controller.bytes),
-      title: tab.title,
-      automatic: true,
-      onToast: (message) {
-        if (mounted) _toast(message);
-      },
-      onRecognized: (spans) {
-        if (!mounted || !_tabs.contains(tab) || tab.session != controller) {
-          return;
-        }
-        if (spans.isEmpty) return;
-        final l10n = appL10n(context);
-        final written = applyOcrToSession(controller, snapshot, spans);
-        if (written == null) {
-          _toast(l10n.ocrAutoDocumentChanged);
-        } else if (written > 0) {
-          if (_autoOcr.offered) {
-            _toast(l10n.ocrAutoResult);
-          } else {
-            unawaited(_offerAutoOcrChoice());
+    setState(() => tab.autoOcrRunning = true);
+    try {
+      await _ocr.start(
+        context,
+        // A copy: after an undo, the next edit overwrites the session buffer
+        // past that revision, and the job reads its snapshot lazily.
+        bytes: Uint8List.fromList(controller.bytes),
+        title: tab.title,
+        automatic: true,
+        onToast: (message) {
+          if (mounted) _toast(message);
+        },
+        onRecognized: (spans) {
+          if (!mounted || !_tabs.contains(tab) || tab.session != controller) {
+            return;
           }
-        }
-      },
-    );
+          if (spans.isEmpty) return;
+          final l10n = appL10n(context);
+          final written = applyOcrToSession(controller, snapshot, spans);
+          if (written == null) {
+            _toast(l10n.ocrAutoDocumentChanged);
+          } else if (written > 0) {
+            if (_autoOcr.offered) {
+              _toast(l10n.ocrAutoResult);
+            } else {
+              unawaited(_offerAutoOcrChoice());
+            }
+          }
+        },
+      );
+    } finally {
+      if (mounted) setState(() => tab.autoOcrRunning = false);
+    }
   }
 
   /// After the first automatic OCR, asks once whether to keep doing it for
@@ -4591,7 +4602,7 @@ class _EditorScreenState extends State<EditorScreen>
       PopupMenuItem<VoidCallback>(
         key: const ValueKey('menu-read-only'),
         height: _appMenuItemHeight(),
-        value: () => setState(() => _readOnly = !_readOnly),
+        value: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
         child: _appMenuTile(
           icon: Icons.visibility_outlined,
           title: appL10n(context).editorMenuReadOnly,
@@ -4739,7 +4750,7 @@ class _EditorScreenState extends State<EditorScreen>
         icon: Icons.visibility_outlined,
         source: l.paletteSourceMenu,
         selected: _readOnly,
-        run: () => setState(() => _readOnly = !_readOnly),
+        run: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
       ));
     }
 
@@ -5535,7 +5546,7 @@ class _EditorScreenState extends State<EditorScreen>
           ),
       ],
       readOnly: hasDocument ? _readOnly : null,
-      onToggleReadOnly: () => setState(() => _readOnly = !_readOnly),
+      onToggleReadOnly: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
       app: [for (final action in appActions) entry(action)],
     );
     if (!mounted) return;
