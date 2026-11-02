@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_pdf_editor_app/app_info.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/whats_new.dart';
+import 'test_finders.dart';
 
 /// An [AssetBundle] that serves one string for the changelog key.
 class _FakeBundle extends CachingAssetBundle {
@@ -411,6 +412,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
 
       final tile = find.byKey(const ValueKey('settings-whats-new'));
       await tester.ensureVisible(tile);
@@ -434,6 +436,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
 
       expect(
           find.byKey(const ValueKey('settings-report-issue')), findsOneWidget);
@@ -469,6 +472,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Settings'));
         await tester.pumpAndSettle();
+        await expandSettingsSections(tester);
         final tile = find.byKey(ValueKey(key));
         await tester.ensureVisible(tile);
         await tester.pumpAndSettle();
