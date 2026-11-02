@@ -13,7 +13,8 @@ Finder findMiddleEllipsisText(String value) => find.byWidgetPredicate(
 
 /// Opens every collapsible section of the Settings dialog, so the tests can
 /// find the controls inside them.
-Future<void> expandSettingsSections(WidgetTester tester) async {
+Future<void> expandSettingsSections(WidgetTester tester,
+    {bool settle = true}) async {
   final sections = find.byWidgetPredicate((w) =>
       w is ExpansionTile &&
       w.key is ValueKey<String> &&
@@ -24,8 +25,12 @@ Future<void> expandSettingsSections(WidgetTester tester) async {
         .descendant(of: sections.at(i), matching: find.byType(ListTile))
         .first;
     await tester.ensureVisible(header);
-    await tester.pumpAndSettle();
+    settle
+        ? await tester.pumpAndSettle()
+        : await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(header);
-    await tester.pumpAndSettle();
+    settle
+        ? await tester.pumpAndSettle()
+        : await tester.pump(const Duration(milliseconds: 500));
   }
 }

@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/ocr.dart';
 import 'package:dart_pdf_editor_app/ocr_auto.dart';
+import 'test_finders.dart';
 
 final _word = PdfOcrSpan(text: 'Invoice', bounds: PdfRect(72, 700, 160, 716));
 
@@ -243,6 +244,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
 
       final toggle = find.byKey(const ValueKey('settings-auto-ocr'));
       await tester.ensureVisible(toggle);
