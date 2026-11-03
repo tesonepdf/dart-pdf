@@ -93,8 +93,9 @@ List<SheetPlacement> layoutSheetCrops(
 }
 
 /// Crea il PDF con tutti i ritagli sui fogli A4.
-Uint8List composeSheets(List<SheetCrop> crops) {
-  final placements = layoutSheetCrops([for (final c in crops) c.size]);
+Uint8List composeSheets(List<SheetCrop> crops,
+    {List<SheetPlacement>? placements}) {
+  placements ??= layoutSheetCrops([for (final c in crops) c.size]);
   final sheets = placements.fold<int>(1, (m, p) => math.max(m, p.sheet + 1));
   final doc = PdfDocument.open(
       PdfBlankDocument.create(pageSize: PdfPageSize.a4, pageCount: sheets));
@@ -156,7 +157,6 @@ class ComposeSheetScreen extends StatefulWidget {
 class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   final List<SheetCrop> _crops = [];
   String? _message;
-  bool _busy = false;
 
   Future<void> _pickPdf() async {
     try {
@@ -191,20 +191,12 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   }
 
   Future<void> _create() async {
-    setState(() => _busy = true);
-    // lascia disegnare l'indicatore prima del lavoro
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    try {
-      final bytes = composeSheets(_crops);
-      if (mounted) Navigator.of(context).pop(bytes);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _message = 'PDF non creato: $e';
-        });
-      }
-    }
+    final bytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute<Uint8List>(
+        builder: (_) => _SheetPreviewScreen(crops: List.of(_crops)),
+      ),
+    );
+    if (bytes != null && mounted) Navigator.of(context).pop(bytes);
   }
 
   @override
@@ -276,7 +268,7 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _busy ? null : _pickPdf,
+                      onPressed: _pickPdf,
                       icon: const Icon(Icons.add),
                       label: const Text('Aggiungi da un PDF…'),
                     ),
@@ -284,14 +276,8 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _crops.isEmpty || _busy ? null : _create,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Crea PDF'),
+                      onPressed: _crops.isEmpty ? null : _create,
+                      child: const Text('Disponi sui fogli'),
                     ),
                   ),
                 ],
@@ -533,4 +519,271 @@ class _SelectionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_SelectionPainter old) => old.selection != selection;
+}
+
+/// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole.
+class _SheetPreviewScreen extends StatefulWidget {
+  const _SheetPreviewScreen({required this.crops});
+
+  final List<SheetCrop> crops;
+
+  @override
+  State<_SheetPreviewScreen> createState() => _SheetPreviewScreenState();
+}
+
+class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
+  static const double _pageW = 595.28;
+  static const double _pageH = 841.89;
+
+  late List<SheetPlacement> _placements;
+  int _sheet = 0;
+  int? _selected;
+  int _token = 0;
+  Uint8List? _png;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _placements = layoutSheetCrops([for (final c in widget.crops) c.size]);
+    _render();
+  }
+
+  int get _sheets =>
+      _placements.fold<int>(1, (m, p) => math.max(m, p.sheet + 1));
+
+  Future<void> _render() async {
+    final token = ++_token;
+    try {
+      final bytes = composeSheets(widget.crops, placements: _placements);
+      final doc = PdfDocument.open(bytes);
+      final png = await PdfPageExport.exportPage(doc.page(_sheet), scale: 1.6);
+      if (!mounted || token != _token) return;
+      setState(() {
+        _png = png;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted && token == _token) setState(() => _error = '$e');
+    }
+  }
+
+  /// Toglie i fogli rimasti vuoti e rinumera gli altri.
+  void _normalize() {
+    final used = {for (final p in _placements) p.sheet}.toList()..sort();
+    final map = {for (var i = 0; i < used.length; i++) used[i]: i};
+    _placements = [
+      for (final p in _placements)
+        SheetPlacement(map[p.sheet]!, p.x, p.y, p.scale),
+    ];
+    final sel = _selected;
+    if (sel != null) {
+      _sheet = _placements[sel].sheet;
+    } else {
+      _sheet = math.min(_sheet, _sheets - 1);
+    }
+  }
+
+  void _moveTo(int index, double x, double y) {
+    final c = widget.crops[index];
+    final p = _placements[index];
+    final w = c.size.width * p.scale;
+    final h = c.size.height * p.scale;
+    _placements[index] = SheetPlacement(
+      p.sheet,
+      x.clamp(0.0, math.max(0.0, _pageW - w)),
+      y.clamp(0.0, math.max(0.0, _pageH - h)),
+      p.scale,
+    );
+  }
+
+  void _moveSheet(int delta) {
+    final i = _selected;
+    if (i == null) return;
+    final target = _placements[i].sheet + delta;
+    if (target < 0) return;
+    final p = _placements[i];
+    _placements[i] = SheetPlacement(target, p.x, p.y, p.scale);
+    _moveTo(i, p.x, p.y);
+    setState(_normalize);
+    _render();
+  }
+
+  Future<void> _create() async {
+    setState(() => _busy = true);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    try {
+      final bytes = composeSheets(widget.crops, placements: _placements);
+      if (mounted) Navigator.of(context).pop(bytes);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = 'PDF non creato: $e';
+        });
+      }
+    }
+  }
+
+  Widget _sheetView(BoxConstraints constraints) {
+    var w = constraints.maxWidth;
+    var h = w * _pageH / _pageW;
+    if (h > constraints.maxHeight) {
+      h = constraints.maxHeight;
+      w = h * _pageW / _pageH;
+    }
+    final k = w / _pageW;
+    final children = <Widget>[
+      if (_png != null)
+        Image.memory(_png!, fit: BoxFit.fill, gaplessPlayback: true)
+      else
+        const ColoredBox(color: Color(0xFFFFFFFF)),
+    ];
+    for (var i = 0; i < widget.crops.length; i++) {
+      final p = _placements[i];
+      if (p.sheet != _sheet) continue;
+      final c = widget.crops[i];
+      final cw = c.size.width * p.scale;
+      final ch = c.size.height * p.scale;
+      final selected = _selected == i;
+      children.add(Positioned(
+        left: p.x * k,
+        top: (_pageH - p.y - ch) * k,
+        width: cw * k,
+        height: ch * k,
+        child: GestureDetector(
+          onTap: () => setState(() => _selected = i),
+          onPanStart: (_) => setState(() => _selected = i),
+          onPanUpdate: (d) {
+            final q = _placements[i];
+            setState(() => _moveTo(i, q.x + d.delta.dx / k, q.y - d.delta.dy / k));
+          },
+          onPanEnd: (_) => _render(),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: selected ? const Color(0x222196F3) : null,
+              border: Border.all(
+                color: selected
+                    ? const Color(0xFF2196F3)
+                    : const Color(0x882196F3),
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Container(
+                color: const Color(0xFF2196F3),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text('${i + 1}',
+                    style: const TextStyle(
+                        color: Color(0xFFFFFFFF), fontSize: 11)),
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+    return SizedBox(
+      width: w,
+      height: h,
+      child: Stack(fit: StackFit.expand, children: children),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sheets = _sheets;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Disponi sui fogli')),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(_error ??
+                'Trascina i ritagli dove vuoi. Tocca un ritaglio per '
+                    'spostarlo in un altro foglio.',
+                style: _error == null
+                    ? null
+                    : TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Center(child: LayoutBuilder(builder: (context, c) {
+                return _sheetView(c);
+              })),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _sheet > 0
+                    ? () {
+                        setState(() {
+                          _sheet--;
+                          _selected = null;
+                        });
+                        _render();
+                      }
+                    : null,
+              ),
+              Text('Foglio ${_sheet + 1} di $sheets'),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _sheet < sheets - 1
+                    ? () {
+                        setState(() {
+                          _sheet++;
+                          _selected = null;
+                        });
+                        _render();
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _selected == null ? null : () => _moveSheet(-1),
+                      child: const Text('Foglio prima'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _selected == null ? null : () => _moveSheet(1),
+                      child: const Text('Foglio dopo'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _busy ? null : _create,
+                      child: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Crea PDF'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
