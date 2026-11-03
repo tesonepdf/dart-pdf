@@ -165,6 +165,37 @@ UprightPhoto uprightPhoto(Uint8List bytes) {
   return UprightPhoto(data, upright.width, upright.height);
 }
 
+/// Come [uprightPhoto], ma con la misura reale [sizeId]: se la foto ha meno
+/// pixel di quelli che servono per stare a [kSheetPhotoDpi] alla grandezza
+/// vera, viene ingrandita fino a quei pixel (mai rimpicciolita).
+UprightPhoto uprightPhotoForSize(({Uint8List bytes, String? sizeId}) args) {
+  final decoded = img.decodeImage(args.bytes);
+  if (decoded == null) {
+    throw const FormatException('formato immagine non riconosciuto');
+  }
+  var upright = img.bakeOrientation(decoded);
+  if (args.sizeId != null && standardSizeById(args.sizeId!) != null) {
+    final dpi = photoDpi(upright.width, upright.height, args.sizeId);
+    if (dpi < kSheetPhotoDpi) {
+      final f = kSheetPhotoDpi / dpi;
+      upright = img.copyResize(
+        upright,
+        width: (upright.width * f).round(),
+        height: (upright.height * f).round(),
+        interpolation: img.Interpolation.cubic,
+      );
+    }
+  }
+  final data = upright.hasAlpha
+      ? Uint8List.fromList(img.encodePng(upright))
+      : Uint8List.fromList(img.encodeJpg(upright, quality: 92));
+  return UprightPhoto(data, upright.width, upright.height);
+}
+
+/// [uprightPhotoForSize] fuori dal filo dell'interfaccia.
+Future<UprightPhoto> uprightPhotoForSizeAsync(Uint8List bytes, String? sizeId) =>
+    compute(uprightPhotoForSize, (bytes: bytes, sizeId: sizeId));
+
 /// [uprightPhoto] fuori dal filo dell'interfaccia.
 Future<UprightPhoto> uprightPhotoAsync(Uint8List bytes) =>
     compute(uprightPhoto, bytes);
