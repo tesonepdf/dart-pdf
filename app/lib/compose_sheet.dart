@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:dart_pdf_editor/dart_pdf_editor.dart' show PdfPageExport;
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:pdf_document/pdf_document.dart';
 
 import 'file_io.dart';
@@ -20,11 +24,27 @@ class SheetCrop {
     required this.page,
     required this.region,
     required this.rotation,
+    required this.sourceBytes,
+    required this.pageSize,
+    required this.fraction,
+    this.preview,
   });
 
   /// Nome del PDF di provenienza.
   final String name;
   final PdfDocument source;
+
+  /// I byte del PDF di provenienza (servono per salvare la composizione).
+  final Uint8List sourceBytes;
+
+  /// Immagine della pagina intera, per la miniatura (può mancare).
+  final Uint8List? preview;
+
+  /// Misura della pagina come si vede, in punti.
+  final ({double width, double height}) pageSize;
+
+  /// La parte scelta in frazioni della pagina vista (0..1, in alto a sinistra).
+  final Rect fraction;
 
   /// Pagina di provenienza, da 0.
   final int page;
@@ -138,6 +158,204 @@ PdfRect regionFromSelection(Rect sel, PdfRect box, int rotation) {
   );
 }
 
+/// Disegna una pagina per l'anteprima e le miniature.
+Future<Uint8List> renderPagePreview(PdfPage page) {
+  final size = pdfRegionDisplaySize(page.cropBox, page.rotation);
+  final scale = 1600 / math.max(size.width, size.height);
+  return PdfPageExport.exportPage(page, scale: scale);
+}
+
+/// La composizione (PDF di partenza, ritagli e posizioni) come file di testo.
+Uint8List encodeComposition(
+    List<SheetCrop> crops, List<SheetPlacement>? placements) {
+  final sources = <SheetCrop>[];
+  int indexOf(SheetCrop c) {
+    final i = sources.indexWhere((o) => identical(o.sourceBytes, c.sourceBytes));
+    if (i >= 0) return i;
+    sources.add(c);
+    return sources.length - 1;
+  }
+
+  final cropList = <Map<String, Object>>[];
+  for (final c in crops) {
+    cropList.add({
+      'source': indexOf(c),
+      'page': c.page,
+      'region': [c.region.left, c.region.bottom, c.region.right, c.region.top],
+      'rotation': c.rotation,
+      'fraction': [
+        c.fraction.left,
+        c.fraction.top,
+        c.fraction.right,
+        c.fraction.bottom,
+      ],
+    });
+  }
+  final map = <String, Object>{
+    'version': 1,
+    'sources': [
+      for (final c in sources)
+        {'name': c.name, 'data': base64Encode(c.sourceBytes)},
+    ],
+    'crops': cropList,
+    if (placements != null)
+      'placements': [
+        for (final p in placements) [p.sheet, p.x, p.y, p.scale],
+      ],
+  };
+  return Uint8List.fromList(utf8.encode(jsonEncode(map)));
+}
+
+/// Il contrario di [encodeComposition].
+Future<({List<SheetCrop> crops, List<SheetPlacement>? placements})>
+    decodeComposition(Uint8List data) async {
+  final map = jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
+  final names = <String>[];
+  final byteList = <Uint8List>[];
+  final docs = <PdfDocument>[];
+  for (final item in map['sources'] as List<dynamic>) {
+    final m = item as Map<String, dynamic>;
+    final bytes = base64Decode(m['data'] as String);
+    names.add(m['name'] as String);
+    byteList.add(bytes);
+    docs.add(PdfDocument.open(bytes));
+  }
+  final previews = <String, Uint8List>{};
+  final crops = <SheetCrop>[];
+  for (final item in map['crops'] as List<dynamic>) {
+    final m = item as Map<String, dynamic>;
+    final si = m['source'] as int;
+    final pageIndex = m['page'] as int;
+    final page = docs[si].page(pageIndex);
+    final key = '$si:$pageIndex';
+    Uint8List? preview = previews[key];
+    if (preview == null) {
+      try {
+        preview = await renderPagePreview(page);
+        previews[key] = preview;
+      } catch (_) {
+        preview = null;
+      }
+    }
+    final r = (m['region'] as List<dynamic>).map((v) => (v as num).toDouble());
+    final rr = r.toList();
+    final f = (m['fraction'] as List<dynamic>)
+        .map((v) => (v as num).toDouble())
+        .toList();
+    crops.add(SheetCrop(
+      name: names[si],
+      source: docs[si],
+      page: pageIndex,
+      region: PdfRect(rr[0], rr[1], rr[2], rr[3]),
+      rotation: m['rotation'] as int,
+      sourceBytes: byteList[si],
+      pageSize: pdfRegionDisplaySize(page.cropBox, page.rotation),
+      fraction: Rect.fromLTRB(f[0], f[1], f[2], f[3]),
+      preview: preview,
+    ));
+  }
+  List<SheetPlacement>? placements;
+  final rawPlacements = map['placements'];
+  if (rawPlacements is List<dynamic>) {
+    placements = [
+      for (final item in rawPlacements)
+        SheetPlacement(
+          (item as List<dynamic>)[0] as int,
+          (item[1] as num).toDouble(),
+          (item[2] as num).toDouble(),
+          (item[3] as num).toDouble(),
+        ),
+    ];
+  }
+  return (crops: crops, placements: placements);
+}
+
+/// Salva la composizione in un file: si condivide sul telefono, finestra di
+/// salvataggio sul computer, scaricamento sul web.
+Future<void> saveComposition(BuildContext context, List<SheetCrop> crops,
+    List<SheetPlacement>? placements) async {
+  const name = 'composizione.json';
+  final file = XFile.fromData(encodeComposition(crops, placements),
+      mimeType: 'application/json', name: name);
+  if (kIsWeb) {
+    await file.saveTo(name);
+    return;
+  }
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android || TargetPlatform.iOS:
+      await SharePlus.instance.share(ShareParams(
+        files: [file],
+        fileNameOverrides: [name],
+        title: name,
+        sharePositionOrigin: const Rect.fromLTWH(0, 0, 1, 1),
+      ));
+    default:
+      final location = await getSaveLocation(
+        suggestedName: name,
+        acceptedTypeGroups: [_compositionTypeGroup],
+      );
+      if (location != null) await file.saveTo(location.path);
+  }
+}
+
+XTypeGroup get _compositionTypeGroup => XTypeGroup(
+      label: 'Composizione',
+      extensions: const ['json'],
+      mimeTypes: const ['application/json'],
+      uniformTypeIdentifiers: const ['public.json'],
+    );
+
+/// Miniatura della parte scelta.
+class _CropThumbnail extends StatelessWidget {
+  const _CropThumbnail(this.crop);
+
+  final SheetCrop crop;
+
+  @override
+  Widget build(BuildContext context) {
+    final png = crop.preview;
+    if (png == null) {
+      return const SizedBox(width: 56, height: 56, child: Icon(Icons.crop));
+    }
+    final pw = crop.pageSize.width;
+    final ph = crop.pageSize.height;
+    final f = crop.fraction;
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0x33000000)),
+        ),
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: f.width * pw,
+            height: f.height * ph,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.topLeft,
+                minWidth: pw,
+                maxWidth: pw,
+                minHeight: ph,
+                maxHeight: ph,
+                child: Transform.translate(
+                  offset: Offset(-f.left * pw, -f.top * ph),
+                  child: Image.memory(png,
+                      width: pw,
+                      height: ph,
+                      fit: BoxFit.fill,
+                      gaplessPlayback: true),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Apre "Componi foglio". Restituisce il PDF creato, o null se si annulla.
 Future<Uint8List?> showComposeSheet(BuildContext context) =>
     Navigator.of(context).push<Uint8List>(
@@ -156,6 +374,7 @@ class ComposeSheetScreen extends StatefulWidget {
 
 class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   final List<SheetCrop> _crops = [];
+  List<SheetPlacement>? _savedPlacements;
   String? _message;
 
   Future<void> _pickPdf() async {
@@ -163,26 +382,30 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
       final files = await pickPdfFiles(appL10n(context).fileTypePdf);
       if (files.isEmpty || !mounted) return;
       final file = files.first;
-      final document = PdfDocument.open(await file.readAsBytes());
+      final bytes = await file.readAsBytes();
+      final document = PdfDocument.open(bytes);
       if (document.pageCount == 0) {
         setState(() => _message = 'Il PDF non ha pagine.');
         return;
       }
       if (!mounted) return;
-      await _openPicker(file.name, document);
+      await _openPicker(file.name, bytes, document);
     } catch (e) {
       if (mounted) setState(() => _message = 'PDF non aperto: $e');
     }
   }
 
-  Future<void> _openPicker(String name, PdfDocument document) {
+  Future<void> _openPicker(
+      String name, Uint8List bytes, PdfDocument document) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => _CropPickerScreen(
           name: name,
+          bytes: bytes,
           document: document,
           onAdd: (crop) => setState(() {
             _message = null;
+            _savedPlacements = null;
             _crops.add(crop);
           }),
         ),
@@ -190,10 +413,31 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
     );
   }
 
+  Future<void> _openComposition() async {
+    try {
+      final file = await openFile(acceptedTypeGroups: [_compositionTypeGroup]);
+      if (file == null || !mounted) return;
+      final result = await decodeComposition(await file.readAsBytes());
+      if (!mounted) return;
+      setState(() {
+        _message = null;
+        _crops
+          ..clear()
+          ..addAll(result.crops);
+        _savedPlacements = result.placements;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _message = 'Composizione non aperta: $e');
+    }
+  }
+
   Future<void> _create() async {
     final bytes = await Navigator.of(context).push<Uint8List>(
       MaterialPageRoute<Uint8List>(
-        builder: (_) => _SheetPreviewScreen(crops: List.of(_crops)),
+        builder: (_) => _SheetPreviewScreen(
+          crops: List.of(_crops),
+          initialPlacements: _savedPlacements,
+        ),
       ),
     );
     if (bytes != null && mounted) Navigator.of(context).pop(bytes);
@@ -202,7 +446,23 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Componi foglio')),
+      appBar: AppBar(
+        title: const Text('Componi foglio'),
+        actions: [
+          IconButton(
+            tooltip: 'Apri composizione…',
+            icon: const Icon(Icons.folder_open_outlined),
+            onPressed: _openComposition,
+          ),
+          if (_crops.isNotEmpty)
+            IconButton(
+              tooltip: 'Salva composizione',
+              icon: const Icon(Icons.save_alt),
+              onPressed: () =>
+                  saveComposition(context, _crops, _savedPlacements),
+            ),
+        ],
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -224,16 +484,15 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
             child: ReorderableListView.builder(
               buildDefaultDragHandles: false,
               itemCount: _crops.length,
-              onReorderItem: (from, to) =>
-                  setState(() => _crops.insert(to, _crops.removeAt(from))),
+              onReorderItem: (from, to) => setState(() {
+                _savedPlacements = null;
+                _crops.insert(to, _crops.removeAt(from));
+              }),
               itemBuilder: (context, index) {
                 final crop = _crops[index];
                 return ListTile(
                   key: ObjectKey(crop),
-                  leading: CircleAvatar(
-                    radius: 14,
-                    child: Text('${index + 1}'),
-                  ),
+                  leading: _CropThumbnail(crop),
                   title: Text(crop.name,
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(crop.description),
@@ -243,12 +502,16 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
                       IconButton(
                         tooltip: 'Altro ritaglio da questo PDF',
                         icon: const Icon(Icons.add_box_outlined),
-                        onPressed: () => _openPicker(crop.name, crop.source),
+                        onPressed: () =>
+                            _openPicker(crop.name, crop.sourceBytes, crop.source),
                       ),
                       IconButton(
                         tooltip: 'Togli',
                         icon: const Icon(Icons.close),
-                        onPressed: () => setState(() => _crops.removeAt(index)),
+                        onPressed: () => setState(() {
+                          _savedPlacements = null;
+                          _crops.removeAt(index);
+                        }),
                       ),
                       ReorderableDragStartListener(
                         index: index,
@@ -294,11 +557,13 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
 class _CropPickerScreen extends StatefulWidget {
   const _CropPickerScreen({
     required this.name,
+    required this.bytes,
     required this.document,
     required this.onAdd,
   });
 
   final String name;
+  final Uint8List bytes;
   final PdfDocument document;
   final void Function(SheetCrop crop) onAdd;
 
@@ -330,10 +595,7 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       _error = null;
     });
     try {
-      final page = widget.document.page(index);
-      final size = pdfRegionDisplaySize(page.cropBox, page.rotation);
-      final scale = 1600 / math.max(size.width, size.height);
-      final png = await PdfPageExport.exportPage(page, scale: scale);
+      final png = await renderPagePreview(widget.document.page(index));
       if (!mounted || token != _token) return;
       setState(() => _png = png);
     } catch (e) {
@@ -366,6 +628,10 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       page: _page,
       region: region,
       rotation: rotation,
+      sourceBytes: widget.bytes,
+      pageSize: pdfRegionDisplaySize(box, rotation),
+      fraction: whole ? const Rect.fromLTWH(0, 0, 1, 1) : _sel!,
+      preview: _png,
     ));
     setState(() {
       _added++;
@@ -523,9 +789,10 @@ class _SelectionPainter extends CustomPainter {
 
 /// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole.
 class _SheetPreviewScreen extends StatefulWidget {
-  const _SheetPreviewScreen({required this.crops});
+  const _SheetPreviewScreen({required this.crops, this.initialPlacements});
 
   final List<SheetCrop> crops;
+  final List<SheetPlacement>? initialPlacements;
 
   @override
   State<_SheetPreviewScreen> createState() => _SheetPreviewScreenState();
@@ -546,7 +813,11 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _placements = layoutSheetCrops([for (final c in widget.crops) c.size]);
+    final saved = widget.initialPlacements;
+    _placements = saved != null && saved.length == widget.crops.length
+        ? List.of(saved)
+        : layoutSheetCrops([for (final c in widget.crops) c.size]);
+    _normalize();
     _render();
   }
 
@@ -596,6 +867,22 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
       y.clamp(0.0, math.max(0.0, _pageH - h)),
       p.scale,
     );
+  }
+
+  double _maxScale(int i) {
+    final c = widget.crops[i];
+    return math.max(
+        0.2, math.min(_pageW / c.size.width, _pageH / c.size.height));
+  }
+
+  /// Cambia la misura tenendo fermo l'angolo in alto a sinistra.
+  void _resize(int i, double scale) {
+    final p = _placements[i];
+    final c = widget.crops[i];
+    final top = p.y + c.size.height * p.scale;
+    _placements[i] =
+        SheetPlacement(p.sheet, p.x, top - c.size.height * scale, scale);
+    _moveTo(i, _placements[i].x, _placements[i].y);
   }
 
   void _moveSheet(int delta) {
@@ -695,7 +982,17 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
   Widget build(BuildContext context) {
     final sheets = _sheets;
     return Scaffold(
-      appBar: AppBar(title: const Text('Disponi sui fogli')),
+      appBar: AppBar(
+        title: const Text('Disponi sui fogli'),
+        actions: [
+          IconButton(
+            tooltip: 'Salva composizione',
+            icon: const Icon(Icons.save_alt),
+            onPressed: () =>
+                saveComposition(context, widget.crops, _placements),
+          ),
+        ],
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -746,6 +1043,27 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
               ),
             ],
           ),
+          if (_selected != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text('Misura ${(_placements[_selected!].scale * 100).round()}%'),
+                  Expanded(
+                    child: Slider(
+                      value: _placements[_selected!]
+                          .scale
+                          .clamp(0.1, _maxScale(_selected!)),
+                      min: 0.1,
+                      max: _maxScale(_selected!),
+                      onChanged: (v) =>
+                          setState(() => _resize(_selected!, v)),
+                      onChangeEnd: (_) => _render(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           SafeArea(
             top: false,
             child: Padding(
