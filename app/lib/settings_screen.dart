@@ -95,16 +95,15 @@ Future<void> _showDefaultAppSetup(BuildContext context) {
   );
 }
 
-/// Opens the app settings sheet: theme mode, recent-files management, the
-/// update check, and the About section. Style defaults (tool colours, stroke,
+/// Opens the app settings sheet: theme mode, recent-files management and
+/// the About section (the update checks have their own screen, see
+/// [showAppUpdates]). Style defaults (tool colours, stroke,
 /// font) are edited live from the editor toolbar and persist through
 /// [PdfEditingPreferences], so they aren't duplicated here.
 Future<void> showAppSettings(
   BuildContext context, {
   required PdfEditingPreferences prefs,
   required RecentsStore recents,
-  UpdateService? updates,
-  UpdateInstaller? updateInstaller,
   VoidCallback? onOpenDevTools,
   AutoOcrSetting? autoOcr,
 }) {
@@ -113,8 +112,6 @@ Future<void> showAppSettings(
     builder: (context) => _SettingsDialog(
       prefs: prefs,
       recents: recents,
-      updates: updates,
-      updateInstaller: updateInstaller,
       onOpenDevTools: onOpenDevTools,
       autoOcr: autoOcr ?? AutoOcrSetting.instance,
     ),
@@ -177,16 +174,12 @@ class _SettingsDialog extends StatefulWidget {
   const _SettingsDialog({
     required this.prefs,
     required this.recents,
-    this.updates,
-    this.updateInstaller,
     this.onOpenDevTools,
     required this.autoOcr,
   });
 
   final PdfEditingPreferences prefs;
   final RecentsStore recents;
-  final UpdateService? updates;
-  final UpdateInstaller? updateInstaller;
   final AutoOcrSetting autoOcr;
 
   /// Non-null in debug/profile builds: closes the dialog and opens the
@@ -337,16 +330,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                       ),
                   ],
                 ),
-                if (widget.updates != null && widget.updates!.supported)
-                  _SettingsSection(
-                    title: 'Aggiornamenti app',
-                    children: [
-                      _UpdateSection(
-                        updates: widget.updates!,
-                        installer: widget.updateInstaller,
-                      ),
-                    ],
-                  ),
                 _SettingsSection(
                   title: 'Log e problemi',
                   children: [
@@ -521,59 +504,127 @@ class _ArrowStepsSection extends StatelessWidget {
   }
 }
 
-/// The updates block: a drop-down picks which project is checked - this app's
-/// own releases or the upstream (official) project's - each with its own
-/// status.
-class _UpdateSection extends StatefulWidget {
-  const _UpdateSection({required this.updates, this.installer});
+/// Opens the Updates screen (menu: next to Settings). Both projects are shown
+/// open one under the other - this app's own releases and the upstream
+/// (official) ones - each with its own three check options and its own manual
+/// check button, so there is no switch to flip: just scroll.
+Future<void> showAppUpdates(
+  BuildContext context, {
+  required UpdateService updates,
+  UpdateInstaller? updateInstaller,
+}) {
+  return showPdfDialog<void>(
+    context: context,
+    builder: (context) =>
+        _UpdatesDialog(updates: updates, installer: updateInstaller),
+  );
+}
+
+class _UpdatesDialog extends StatelessWidget {
+  const _UpdatesDialog({required this.updates, this.installer});
 
   final UpdateService updates;
   final UpdateInstaller? installer;
-
-  @override
-  State<_UpdateSection> createState() => _UpdateSectionState();
-}
-
-class _UpdateSectionState extends State<_UpdateSection> {
-  bool _official = false;
 
   static String _t(BuildContext context, String it, String en) =>
       Localizations.localeOf(context).languageCode == 'it' ? it : en;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
+    final Widget body = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(appL10n(context).settingsUpdates,
-            style: theme.textTheme.titleSmall),
-        const SizedBox(height: 6),
-        DropdownButton<bool>(
-          key: const ValueKey('settings-update-source'),
-          isExpanded: true,
-          value: _official,
-          items: [
-            DropdownMenuItem(
-              value: false,
-              child: Text(_t(context, 'Il mio repo (tesonepdf)',
-                  'My repository (tesonepdf)')),
-            ),
-            DropdownMenuItem(
-              value: true,
-              child: Text(_t(context, 'Repo ufficiale (ben-milanko)',
-                  'Official repository (ben-milanko)')),
-            ),
-          ],
-          onChanged: (value) => setState(() => _official = value ?? false),
+        _UpdateBlock(
+          key: const ValueKey('updates-block-own'),
+          title: _t(context, 'Il mio repo (tesonepdf)',
+              'My repository (tesonepdf)'),
+          child: _OwnUpdatePanel(updates: updates, installer: installer),
         ),
-        const SizedBox(height: 6),
-        if (_official)
-          const _OfficialUpdatePanel()
-        else
-          _OwnUpdatePanel(
-              updates: widget.updates, installer: widget.installer),
+        _UpdateBlock(
+          key: const ValueKey('updates-block-official'),
+          title: _t(context, 'Repo ufficiale (ben-milanko)',
+              'Official repository (ben-milanko)'),
+          child: const _OfficialUpdatePanel(),
+        ),
       ],
+    );
+    // sul telefono la schermata occupa tutto lo schermo
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(appL10n(context).settingsUpdates),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: appL10n(context).close,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: body,
+            ),
+          ),
+        ),
+      );
+    }
+    return AlertDialog(
+      title: Text(appL10n(context).settingsUpdates),
+      content: SizedBox(
+        width: 360,
+        child: SingleChildScrollView(child: body),
+      ),
+      actions: [
+        PdfDialogSubmit.action(
+            onSubmit: () => Navigator.of(context).pop(),
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(appL10n(context).close),
+            )),
+      ],
+    );
+  }
+}
+
+/// A titled card that is always open (unlike [_SettingsSection]).
+class _UpdateBlock extends StatelessWidget {
+  const _UpdateBlock({super.key, required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title.toUpperCase(),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 10),
+              child,
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
