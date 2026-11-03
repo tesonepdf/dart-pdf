@@ -94,6 +94,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Updates'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     expect(
         find.byKey(const ValueKey('settings-check-updates')), findsOneWidget);
@@ -127,6 +128,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Updates'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
     final check = find.byKey(const ValueKey('settings-check-updates'));
     await tester.ensureVisible(check);
     await tester.tap(check);
@@ -196,6 +198,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Updates'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     await tester
         .ensureVisible(find.byKey(const ValueKey('settings-check-updates')));
@@ -228,6 +231,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Updates'));
     await tester.pumpAndSettle();
+    await expandSettingsSections(tester);
 
     final toggle = find.byKey(const ValueKey('settings-nightly-updates'));
     expect(toggle, findsOneWidget);

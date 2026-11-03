@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
@@ -504,10 +507,11 @@ class _ArrowStepsSection extends StatelessWidget {
   }
 }
 
-/// Opens the Updates screen (menu: next to Settings). Both projects are shown
-/// open one under the other - this app's own releases and the upstream
-/// (official) ones - each with its own three check options and its own manual
-/// check button, so there is no switch to flip: just scroll.
+/// Opens the Updates screen (menu: next to Settings). Two drop-downs - this
+/// app's own releases and the upstream (official) ones - each with its own
+/// three check options and its own manual check button. Both can be open at
+/// once, and holding a title for half a second moves it up or down (the order
+/// is remembered).
 Future<void> showAppUpdates(
   BuildContext context, {
   required UpdateService updates,
@@ -520,33 +524,89 @@ Future<void> showAppUpdates(
   );
 }
 
-class _UpdatesDialog extends StatelessWidget {
+class _UpdatesDialog extends StatefulWidget {
   const _UpdatesDialog({required this.updates, this.installer});
 
   final UpdateService updates;
   final UpdateInstaller? installer;
+
+  @override
+  State<_UpdatesDialog> createState() => _UpdatesDialogState();
+}
+
+class _UpdatesDialogState extends State<_UpdatesDialog> {
+  static const _orderKey = 'dart_pdf_editor_app.updates_order';
+
+  /// L'ordine scelto dall'utente per i due blocchi (id), salvato.
+  List<String> _order = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_orderKey);
+      if (saved != null && mounted) setState(() => _order = saved);
+    } catch (_) {
+      // senza archivio resta l'ordine di fabbrica
+    }
+  }
+
+  Future<void> _saveOrder(List<String> ids) async {
+    setState(() => _order = ids);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_orderKey, ids);
+    } catch (_) {}
+  }
 
   static String _t(BuildContext context, String it, String en) =>
       Localizations.localeOf(context).languageCode == 'it' ? it : en;
 
   @override
   Widget build(BuildContext context) {
-    final Widget body = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final sections = <String, Widget>{
+      'own': _SettingsSection(
+        title: _t(context, 'Il mio repo (tesonepdf)',
+            'My repository (tesonepdf)'),
+        children: [
+          _OwnUpdatePanel(
+              updates: widget.updates, installer: widget.installer),
+        ],
+      ),
+      'official': _SettingsSection(
+        title: _t(context, 'Repo ufficiale (ben-milanko)',
+            'Official repository (ben-milanko)'),
+        children: const [_OfficialUpdatePanel()],
+      ),
+    };
+    final ids = _order.where(sections.containsKey).toList();
+    for (final id in sections.keys) {
+      if (!ids.contains(id)) ids.add(id);
+    }
+    // Tenendo premuto 500 ms sul titolo di un blocco lo si sposta su o giu'.
+    final Widget body = ReorderableListView(
+      key: const ValueKey('updates-sections'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      onReorder: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex -= 1;
+        final moved = List<String>.of(ids);
+        moved.insert(newIndex, moved.removeAt(oldIndex));
+        unawaited(_saveOrder(moved));
+      },
       children: [
-        _UpdateBlock(
-          key: const ValueKey('updates-block-own'),
-          title: _t(context, 'Il mio repo (tesonepdf)',
-              'My repository (tesonepdf)'),
-          child: _OwnUpdatePanel(updates: updates, installer: installer),
-        ),
-        _UpdateBlock(
-          key: const ValueKey('updates-block-official'),
-          title: _t(context, 'Repo ufficiale (ben-milanko)',
-              'Official repository (ben-milanko)'),
-          child: const _OfficialUpdatePanel(),
-        ),
+        for (var i = 0; i < ids.length; i++)
+          ReorderableDelayedDragStartListener(
+            key: ValueKey('updates-section-${ids[i]}'),
+            index: i,
+            child: sections[ids[i]]!,
+          ),
       ],
     );
     // sul telefono la schermata occupa tutto lo schermo
@@ -584,47 +644,6 @@ class _UpdatesDialog extends StatelessWidget {
               child: Text(appL10n(context).close),
             )),
       ],
-    );
-  }
-}
-
-/// A titled card that is always open (unlike [_SettingsSection]).
-class _UpdateBlock extends StatelessWidget {
-  const _UpdateBlock({super.key, required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title.toUpperCase(),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: 10),
-              child,
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
