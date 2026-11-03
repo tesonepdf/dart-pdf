@@ -477,6 +477,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// Whole-app read-only toggle: swaps [PdfEditorView] for [PdfReader].
   bool _readOnlyChoice = false;
 
+  /// Un file consegnato dal sistema (Apri con, Condividi da WhatsApp...) è
+  /// stato aperto in questa sessione: il ripristino delle schede dell'ultima
+  /// volta non deve più portare in primo piano un'altra scheda.
+  bool _openedFromOutside = false;
+
   /// Read-only when the user chose it, or while automatic OCR is still
   /// analysing the shown document: the tools unlock when the text layer lands.
   bool get _readOnly =>
@@ -1066,7 +1071,9 @@ class _EditorScreenState extends State<EditorScreen>
       if (unavailable.isNotEmpty) _warnFilesUnavailable(unavailable);
       // Torna al documento che si stava guardando.
       final wanted = _session.activeIndex;
-      if (wanted >= 0 && wanted < documents.length) {
+      // ...ma non se nel frattempo è stato aperto un file da un'altra app: è
+      // quello che l'utente vuole vedere.
+      if (!_openedFromOutside && wanted >= 0 && wanted < documents.length) {
         final key = documents[wanted].readPath;
         final at = key == null
             ? -1
@@ -2947,6 +2954,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (file.path == null || seen.add(file.path!)) file,
     ];
     if (!mounted || files.isEmpty) return;
+    _openedFromOutside = true;
     if (files.length == 1) {
       await _openIncoming(files.single);
       return;
