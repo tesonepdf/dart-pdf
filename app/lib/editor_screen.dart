@@ -2559,18 +2559,26 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       );
 
-  /// Più foto su un solo foglio A4 bianco, ognuna a 300 dpi (pixel / 300 =
-  /// pollici), affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
+  /// Più foto su un solo foglio A4 bianco, ognuna a 300 dpi e alla misura
+  /// vera scelta all'inizio (ingrandita se ha pochi pixel), affiancate e mai
+  /// sovrapposte. Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
   Future<void> _photosOnOneSheet() async {
     try {
       final picked = await _pickPhotoFiles();
       if (picked.isEmpty || !mounted) return;
+      var sizeId = await _askPhotoSize();
+      if (sizeId == 'other') {
+        if (!mounted) return;
+        sizeId = await _pickStandardSize();
+      }
+      if (sizeId == null || !mounted) return;
       final photos = <UprightPhoto>[];
       for (final file in picked) {
         final raw = await file.readAsBytes();
         if (looksLikePdf(raw)) continue;
-        photos.add(await uprightPhotoAsync(raw));
+        photos.add(await uprightPhotoForSizeAsync(
+            raw, sizeId.isEmpty ? null : sizeId));
       }
       if (!mounted) return;
       if (photos.isEmpty) {
