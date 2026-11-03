@@ -1,0 +1,536 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:dart_pdf_editor/dart_pdf_editor.dart' show PdfPageExport;
+import 'package:material_ui/material_ui.dart';
+import 'package:pdf_document/pdf_document.dart';
+
+import 'file_io.dart';
+import 'l10n/app_l10n.dart';
+
+/// Margine e spazio tra i ritagli sul foglio, in punti (1 pt = 1/72 pollice).
+const double kSheetMargin = 20;
+const double kSheetGap = 10;
+
+/// Una parte di una pagina di un PDF, scelta per essere messa su un foglio.
+class SheetCrop {
+  SheetCrop({
+    required this.name,
+    required this.source,
+    required this.page,
+    required this.region,
+    required this.rotation,
+  });
+
+  /// Nome del PDF di provenienza.
+  final String name;
+  final PdfDocument source;
+
+  /// Pagina di provenienza, da 0.
+  final int page;
+
+  /// La parte scelta, nello spazio della pagina prima della rotazione.
+  final PdfRect region;
+
+  /// Rotazione con cui la pagina si vede (0, 90, 180, 270).
+  final int rotation;
+
+  ({double width, double height}) get size =>
+      pdfRegionDisplaySize(region, rotation);
+
+  String get description {
+    String mm(double pt) => (pt * 25.4 / 72).round().toString();
+    return 'pag. ${page + 1} · ${mm(size.width)}×${mm(size.height)} mm';
+  }
+}
+
+/// Dove va un ritaglio: foglio (da 0), angolo in basso a sinistra, scala.
+class SheetPlacement {
+  const SheetPlacement(this.sheet, this.x, this.y, this.scale);
+  final int sheet;
+  final double x;
+  final double y;
+  final double scale;
+}
+
+/// Mette i ritagli sui fogli, nell'ordine dato: file dopo file, dall'alto a
+/// sinistra, affiancati finché ci stanno, poi una nuova riga, poi un nuovo
+/// foglio. Misura vera; solo un ritaglio più grande del foglio si rimpicciolisce.
+List<SheetPlacement> layoutSheetCrops(
+  List<({double width, double height})> sizes, {
+  double pageWidth = 595.28,
+  double pageHeight = 841.89,
+}) {
+  final availW = pageWidth - 2 * kSheetMargin;
+  final availH = pageHeight - 2 * kSheetMargin;
+  final out = <SheetPlacement>[];
+  var sheet = 0;
+  var x = kSheetMargin;
+  var rowTop = pageHeight - kSheetMargin;
+  var rowHeight = 0.0;
+  for (final size in sizes) {
+    final scale = math.min(
+        1.0, math.min(availW / size.width, availH / size.height));
+    final w = size.width * scale;
+    final h = size.height * scale;
+    if (x > kSheetMargin && x + w > pageWidth - kSheetMargin) {
+      // non ci sta più in questa riga
+      rowTop -= rowHeight + kSheetGap;
+      x = kSheetMargin;
+      rowHeight = 0;
+    }
+    if (rowTop - h < kSheetMargin) {
+      sheet++;
+      x = kSheetMargin;
+      rowTop = pageHeight - kSheetMargin;
+      rowHeight = 0;
+    }
+    out.add(SheetPlacement(sheet, x, rowTop - h, scale));
+    x += w + kSheetGap;
+    rowHeight = math.max(rowHeight, h);
+  }
+  return out;
+}
+
+/// Crea il PDF con tutti i ritagli sui fogli A4.
+Uint8List composeSheets(List<SheetCrop> crops) {
+  final placements = layoutSheetCrops([for (final c in crops) c.size]);
+  final sheets = placements.fold<int>(1, (m, p) => math.max(m, p.sheet + 1));
+  final doc = PdfDocument.open(
+      PdfBlankDocument.create(pageSize: PdfPageSize.a4, pageCount: sheets));
+  final editor = PdfEditor(doc);
+  final imports = PdfSheetImports();
+  for (var i = 0; i < crops.length; i++) {
+    final c = crops[i];
+    final p = placements[i];
+    editor.placePageRegion(
+      imports,
+      sheet: p.sheet,
+      source: c.source,
+      sourcePage: c.page,
+      region: c.region,
+      x: p.x,
+      y: p.y,
+      scale: p.scale,
+    );
+  }
+  return editor.save();
+}
+
+/// Dal rettangolo disegnato sull'immagine della pagina (frazioni 0..1, origine
+/// in alto a sinistra) alla parte di pagina, nello spazio della pagina prima
+/// della rotazione.
+PdfRect regionFromSelection(Rect sel, PdfRect box, int rotation) {
+  (double, double) toPage(double fx, double fy) => switch (rotation) {
+        90 => (fy, fx),
+        180 => (1 - fx, fy),
+        270 => (1 - fy, 1 - fx),
+        _ => (fx, 1 - fy),
+      };
+  final (u1, v1) = toPage(sel.left, sel.top);
+  final (u2, v2) = toPage(sel.right, sel.bottom);
+  return PdfRect.normalized(
+    box.left + u1 * box.width,
+    box.bottom + v1 * box.height,
+    box.left + u2 * box.width,
+    box.bottom + v2 * box.height,
+  );
+}
+
+/// Apre "Componi foglio". Restituisce il PDF creato, o null se si annulla.
+Future<Uint8List?> showComposeSheet(BuildContext context) =>
+    Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute<Uint8List>(
+        fullscreenDialog: true,
+        builder: (_) => const ComposeSheetScreen(),
+      ),
+    );
+
+class ComposeSheetScreen extends StatefulWidget {
+  const ComposeSheetScreen({super.key});
+
+  @override
+  State<ComposeSheetScreen> createState() => _ComposeSheetScreenState();
+}
+
+class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
+  final List<SheetCrop> _crops = [];
+  String? _message;
+  bool _busy = false;
+
+  Future<void> _pickPdf() async {
+    try {
+      final files = await pickPdfFiles(appL10n(context).fileTypePdf);
+      if (files.isEmpty || !mounted) return;
+      final file = files.first;
+      final document = PdfDocument.open(await file.readAsBytes());
+      if (document.pageCount == 0) {
+        setState(() => _message = 'Il PDF non ha pagine.');
+        return;
+      }
+      if (!mounted) return;
+      await _openPicker(file.name, document);
+    } catch (e) {
+      if (mounted) setState(() => _message = 'PDF non aperto: $e');
+    }
+  }
+
+  Future<void> _openPicker(String name, PdfDocument document) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => _CropPickerScreen(
+          name: name,
+          document: document,
+          onAdd: (crop) => setState(() {
+            _message = null;
+            _crops.add(crop);
+          }),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _create() async {
+    setState(() => _busy = true);
+    // lascia disegnare l'indicatore prima del lavoro
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    try {
+      final bytes = composeSheets(_crops);
+      if (mounted) Navigator.of(context).pop(bytes);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _message = 'PDF non creato: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Componi foglio')),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(_crops.isEmpty
+                ? 'Aggiungi i ritagli: scegli un PDF, la pagina e disegna il '
+                    'rettangolo sulla parte che ti serve. I ritagli vanno su '
+                    'fogli A4, uno dopo l\'altro.'
+                : 'Trascina per cambiare l\'ordine sul foglio.'),
+          ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(_message!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ),
+          Expanded(
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              itemCount: _crops.length,
+              onReorderItem: (from, to) =>
+                  setState(() => _crops.insert(to, _crops.removeAt(from))),
+              itemBuilder: (context, index) {
+                final crop = _crops[index];
+                return ListTile(
+                  key: ObjectKey(crop),
+                  leading: CircleAvatar(
+                    radius: 14,
+                    child: Text('${index + 1}'),
+                  ),
+                  title: Text(crop.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(crop.description),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Altro ritaglio da questo PDF',
+                        icon: const Icon(Icons.add_box_outlined),
+                        onPressed: () => _openPicker(crop.name, crop.source),
+                      ),
+                      IconButton(
+                        tooltip: 'Togli',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() => _crops.removeAt(index)),
+                      ),
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Icon(Icons.drag_handle),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _pickPdf,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Aggiungi da un PDF…'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _crops.isEmpty || _busy ? null : _create,
+                      child: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Crea PDF'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mostra una pagina del PDF e fa disegnare il rettangolo da ritagliare.
+class _CropPickerScreen extends StatefulWidget {
+  const _CropPickerScreen({
+    required this.name,
+    required this.document,
+    required this.onAdd,
+  });
+
+  final String name;
+  final PdfDocument document;
+  final void Function(SheetCrop crop) onAdd;
+
+  @override
+  State<_CropPickerScreen> createState() => _CropPickerScreenState();
+}
+
+class _CropPickerScreenState extends State<_CropPickerScreen> {
+  int _page = 0;
+  int _token = 0;
+  int _added = 0;
+  Uint8List? _png;
+  String? _error;
+  Rect? _sel;
+  Offset? _start;
+
+  @override
+  void initState() {
+    super.initState();
+    _load(0);
+  }
+
+  Future<void> _load(int index) async {
+    final token = ++_token;
+    setState(() {
+      _page = index;
+      _png = null;
+      _sel = null;
+      _error = null;
+    });
+    try {
+      final page = widget.document.page(index);
+      final size = pdfRegionDisplaySize(page.cropBox, page.rotation);
+      final scale = 1600 / math.max(size.width, size.height);
+      final png = await PdfPageExport.exportPage(page, scale: scale);
+      if (!mounted || token != _token) return;
+      setState(() => _png = png);
+    } catch (e) {
+      if (mounted && token == _token) setState(() => _error = '$e');
+    }
+  }
+
+  double get _aspect {
+    final page = widget.document.page(_page);
+    final size = pdfRegionDisplaySize(page.cropBox, page.rotation);
+    return size.width / size.height;
+  }
+
+  Offset _fraction(Offset local, Size size) => Offset(
+        (local.dx / size.width).clamp(0.0, 1.0),
+        (local.dy / size.height).clamp(0.0, 1.0),
+      );
+
+  bool get _selOk =>
+      _sel != null && _sel!.width > 0.01 && _sel!.height > 0.01;
+
+  void _add({required bool whole}) {
+    final page = widget.document.page(_page);
+    final box = page.cropBox;
+    final rotation = page.rotation;
+    final region = whole ? box : regionFromSelection(_sel!, box, rotation);
+    widget.onAdd(SheetCrop(
+      name: widget.name,
+      source: widget.document,
+      page: _page,
+      region: region,
+      rotation: rotation,
+    ));
+    setState(() {
+      _added++;
+      _sel = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.document.pageCount;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Center(
+                child: _error != null
+                    ? Text('Pagina non disegnata: $_error')
+                    : _png == null
+                        ? const CircularProgressIndicator()
+                        : LayoutBuilder(builder: (context, constraints) {
+                            var w = constraints.maxWidth;
+                            var h = w / _aspect;
+                            if (h > constraints.maxHeight) {
+                              h = constraints.maxHeight;
+                              w = h * _aspect;
+                            }
+                            final size = Size(w, h);
+                            return SizedBox(
+                              width: w,
+                              height: h,
+                              child: GestureDetector(
+                                onPanStart: (d) {
+                                  _start = _fraction(d.localPosition, size);
+                                  setState(() => _sel =
+                                      Rect.fromPoints(_start!, _start!));
+                                },
+                                onPanUpdate: (d) {
+                                  final s = _start;
+                                  if (s == null) return;
+                                  setState(() => _sel = Rect.fromPoints(
+                                      s, _fraction(d.localPosition, size)));
+                                },
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.memory(_png!,
+                                        fit: BoxFit.fill,
+                                        gaplessPlayback: true),
+                                    if (_sel != null)
+                                      CustomPaint(
+                                          painter: _SelectionPainter(_sel!)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _page > 0 ? () => _load(_page - 1) : null,
+              ),
+              Text('Pagina ${_page + 1} di $count'),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _page < count - 1 ? () => _load(_page + 1) : null,
+              ),
+            ],
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_added > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        _added == 1
+                            ? '1 ritaglio aggiunto. Puoi tornare indietro o '
+                                'aggiungerne altri.'
+                            : '$_added ritagli aggiunti. Puoi tornare indietro '
+                                'o aggiungerne altri.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _png == null
+                              ? null
+                              : () => _add(whole: true),
+                          child: const Text('Pagina intera'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _selOk ? () => _add(whole: false) : null,
+                          child: const Text('Aggiungi ritaglio'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionPainter extends CustomPainter {
+  _SelectionPainter(this.selection);
+
+  /// Rettangolo in frazioni della pagina (0..1).
+  final Rect selection;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTRB(
+      selection.left * size.width,
+      selection.top * size.height,
+      selection.right * size.width,
+      selection.bottom * size.height,
+    );
+    canvas.drawRect(rect, Paint()..color = const Color(0x332196F3));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = const Color(0xFF2196F3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SelectionPainter old) => old.selection != selection;
+}
