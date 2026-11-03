@@ -21,6 +21,7 @@ import 'app_info.dart';
 import 'app_log.dart';
 import 'app_menu_sheet.dart';
 import 'autosave.dart';
+import 'measure_scale_setting.dart';
 import 'combine_incoming.dart';
 import 'command_palette.dart';
 import 'devtools.dart';
@@ -519,6 +520,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (handoff != null) _openHandoff(handoff);
     // Re-open the documents that were open when the app last closed, unless the
     // app was launched to open a specific file (that explicit target wins).
+    unawaited(_applyMeasureScale());
     if (widget.ownsApplicationSession) {
       unawaited(_restoreSession().then((_) {
         if (mounted) _recoverOcr();
@@ -704,10 +706,8 @@ class _EditorScreenState extends State<EditorScreen>
     final release = _updates.latest!;
     if (_updateBannerFor == release.identity) return;
     _updateBannerFor = release.identity;
-    if (_updates.isDismissed) {
-      _showUpdateBanner(release);
-      return;
-    }
+    // Rimandato: niente striscia in alto. Si cerca in Impostazioni.
+    if (_updates.isDismissed) return;
     final l10n = appL10n(context);
     unawaited(showPdfDialog<void>(
       context: context,
@@ -722,7 +722,6 @@ class _EditorScreenState extends State<EditorScreen>
             onPressed: () {
               Navigator.of(dialogContext).pop();
               unawaited(_updates.dismiss());
-              _showUpdateBanner(release);
             },
             child: Text(l10n.editorUpdateLater),
           ),
@@ -830,30 +829,6 @@ class _EditorScreenState extends State<EditorScreen>
       _updateInstaller.modeFor(_updates.downloadAssetName) !=
           UpdateApplyMode.unsupported;
 
-  /// Persistent reminder: only goes away by downloading the update.
-  void _showUpdateBanner(ReleaseInfo release) {
-    if (!mounted) return;
-    final l10n = appL10n(context);
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentMaterialBanner();
-    messenger.showMaterialBanner(MaterialBanner(
-      key: const ValueKey('update-available-banner'),
-      content: Text(l10n.editorUpdateAvailable(release.displayVersion)),
-      leading: const Icon(Icons.system_update_alt),
-      actions: [
-        FilledButton(
-          key: const ValueKey('update-banner-download'),
-          onPressed: () {
-            messenger.hideCurrentMaterialBanner();
-            unawaited(_installUpdateAsking());
-          },
-          child: Text(
-              _canInstallUpdate ? l10n.updateInstallNow : l10n.editorDownload),
-        ),
-      ],
-    ));
-  }
-
   /// Automatic check of the upstream project: popup once per official
   /// release; "Later" leaves it highlighted in Settings (Updates > Official
   /// repo) until it is marked as merged or a newer one is published.
@@ -951,6 +926,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (widget.ocr == null) _ocr.dispose();
     // Detaches only - the mirrored records stay, so an editor torn down with
     // dirty tabs (a crash, a forced quit) can still hand the work back.
+    _prefs.removeListener(_onPrefsForMeasureScale);
     _autosave.dispose();
     for (final tab in _tabs) {
       tab.dispose();
@@ -1016,6 +992,30 @@ class _EditorScreenState extends State<EditorScreen>
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       unawaited(_autosave.flushPending());
+      unawaited(_refreshSnapshots());
+    }
+  }
+
+  /// Con la scala Automatica (1 cm sul foglio = 1 cm reale) la scala dello
+  /// strumento Misura viene impostata da qui; se poi se ne sceglie un'altra
+  /// nello strumento, l'impostazione passa a Personalizzata.
+  Future<void> _applyMeasureScale() async {
+    await _prefs.ready;
+    await MeasureScaleSetting.instance.load();
+    if (!mounted) return;
+    if (MeasureScaleSetting.instance.value) {
+      _prefs.measurementScale = MeasureScaleSetting.autoScale;
+    }
+    _prefs.addListener(_onPrefsForMeasureScale);
+  }
+
+  void _onPrefsForMeasureScale() {
+    final setting = MeasureScaleSetting.instance;
+    final scale = _prefs.measurementScale;
+    if (setting.value &&
+        scale != null &&
+        scale.encode() != MeasureScaleSetting.autoScale.encode()) {
+      unawaited(setting.save(false));
     }
   }
 
@@ -1232,6 +1232,43 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Le schede che l'app ha creato lei (foto su un foglio, nuovo documento,
+  /// scansione) non hanno un file: per riaprirle all'avvio se ne tiene una
+  /// copia interna, riscritta ogni volta che l'app va in secondo piano.
+  final Set<DocumentTab> _ownSnapshot = {};
+  final Set<DocumentTab> _snapshotting = {};
+
+  Future<void> _snapshotKeylessTabs({bool refresh = false}) async {
+    for (final tab in List.of(_tabs)) {
+      final session = tab.session;
+      if (session == null || _snapshotting.contains(tab)) continue;
+      if (tab.originPath != null && tab.originPath!.isNotEmpty) continue;
+      final mine = _ownSnapshot.contains(tab);
+      if (tab.cachePath != null && !mine) continue;
+      if (mine && !refresh) continue;
+      _snapshotting.add(tab);
+      try {
+        final key = await cacheOpenedPdf(session.bytes);
+        if (key != null && mounted && _tabs.contains(tab)) {
+          tab.cachePath = key;
+          _ownSnapshot.add(tab);
+          _autosave.noteMetadataChanged(tab);
+        }
+      } catch (e) {
+        AppDevTools.instance
+            .addLog('tab snapshot failed: $e', level: DevLogLevel.error);
+      } finally {
+        _snapshotting.remove(tab);
+      }
+    }
+  }
+
+  Future<void> _refreshSnapshots() async {
+    if (!widget.ownsApplicationSession) return;
+    await _snapshotKeylessTabs(refresh: true);
+    await _persistSession();
+  }
+
   /// Persists the current open set (file-backed tabs, in order) so the next
   /// launch can restore it. A no-op until the previous session has been read
   /// back, so early opens can't clobber the stored set before [_restoreSession].
@@ -1242,6 +1279,7 @@ class _EditorScreenState extends State<EditorScreen>
     // session has been read back still deserves its unsaved edits protected.
     _autosave.syncTracking(_tabs);
     if (!widget.ownsApplicationSession || !_sessionLoaded) return;
+    await _snapshotKeylessTabs();
     final documents = <SessionDocument>[];
     final seen = <String>{};
     var activeInSession = 0;
@@ -1278,6 +1316,8 @@ class _EditorScreenState extends State<EditorScreen>
     final keep = {
       for (final entry in _recents.items)
         if (entry.cachePath != null) entry.cachePath!,
+      for (final tab in _tabs)
+        if (tab.cachePath != null) tab.cachePath!,
     };
     final available = await pruneCachedPdfs(keep);
     if (!mounted) return;
@@ -2490,6 +2530,12 @@ class _EditorScreenState extends State<EditorScreen>
         final pdf = await imageBytesToPdfAsync(raw, sizeId: id);
         if (!mounted) return;
         _openBytes(pdf, imageTitleAsPdf(file.name));
+        if (id != null && id.isNotEmpty && !looksLikePdf(raw)) {
+          final photo = await uprightPhotoAsync(raw);
+          if (!mounted) return;
+          _toast(singlePhotoReport(photo.width, photo.height, id),
+              duration: const Duration(seconds: 10));
+        }
       }
     } catch (e) {
       AppDevTools.instance
@@ -2696,6 +2742,16 @@ class _EditorScreenState extends State<EditorScreen>
         final added =
             await session.addImageInRectAsync(0, rects[i], photos[i].bytes);
         if (!added && mounted) _toast('Foto ${i + 1} non aggiunta.');
+      }
+      // Controllo della misura, solo ora che le foto sono state inserite.
+      if (real != null && mounted) {
+        _toast(
+          photosOnSheetReport(
+              [for (final p in photos) (width: p.width, height: p.height)],
+              rects,
+              real),
+          duration: const Duration(seconds: 10),
+        );
       }
     } catch (e) {
       AppDevTools.instance
@@ -3864,13 +3920,52 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// The Save As backend: the host/test seam when one is injected, otherwise
   /// the platform's own save dialog, browser download, or share sheet.
+  /// Chiede il nome del file prima di salvare nella cartella scelta.
+  /// Null se si annulla.
+  Future<String?> _askFileName(String suggested) {
+    var base = suggested.split(RegExp(r'[/\\]')).last;
+    if (base.toLowerCase().endsWith('.pdf')) {
+      base = base.substring(0, base.length - 4);
+    }
+    final controller = TextEditingController(text: base);
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nome del file'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) Navigator.pop(context, name);
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<SaveResult> _saveAsDocument(
       BuildContext context, Uint8List bytes, String suggestedName) {
     final saveAs = widget.saveDocumentAs;
     if (saveAs != null) return saveAs(context, bytes, suggestedName);
     // Android: si salva nella cartella scelta dall'utente (la prima volta la
     // chiede), non piu' con il foglio di condivisione
-    if (SaveFolder.supported) return SaveFolder.save(context, bytes, suggestedName);
+    if (SaveFolder.supported) {
+      return _askFileName(suggestedName).then((name) {
+        if (name == null || !mounted) return SaveResult.cancelled;
+        return SaveFolder.save(context, bytes, name);
+      });
+    }
     return saveBytesAs(context, bytes, suggestedName,
         pdfLabel: appL10n(context).fileTypePdf);
   }
@@ -5839,6 +5934,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
           AppMenuSheetEntry(
             key: const ValueKey('menu-tools'),
+            group: 'top',
             icon: Icons.build_outlined,
             title: pdfL10n(context).tbTools,
             run: () => tab?.commands?.openToolSheet(),

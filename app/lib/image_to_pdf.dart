@@ -291,3 +291,63 @@ List<PdfRect> layoutPhotosOnSheet(
   }
   return rects;
 }
+
+String _mmText(double pt) =>
+    (pt * 25.4 / 72).toStringAsFixed(1).replaceAll('.', ',');
+
+/// Una riga del controllo misura: i mm veri della foto sul foglio e se sono
+/// quelli della misura scelta ([ratio] = grandezza sul foglio / grandezza
+/// vera; 1 = reale).
+String photoSizeCheckLine(
+    String label, double widthPt, double heightPt, double ratio) {
+  final state = (ratio - 1).abs() < 0.01
+      ? 'misura reale ✓'
+      : 'ridotta al ${(ratio * 100).round()}%';
+  return '$label: ${_mmText(widthPt)} × ${_mmText(heightPt)} mm, $state';
+}
+
+/// Il controllo misura di più foto messe sul foglio ([rects] dal layout).
+/// Si fa solo quando le foto vengono inserite.
+String photosOnSheetReport(
+  List<({int width, int height})> photos,
+  List<PdfRect> rects,
+  String sizeId,
+) {
+  final size = standardSizeById(sizeId);
+  final lines = <String>[
+    if (size != null)
+      'Misura scelta: ${size.name} (${_mmText(size.widthPt)} × ${_mmText(size.heightPt)} mm)',
+  ];
+  for (var i = 0; i < photos.length; i++) {
+    final dpi = photoDpi(photos[i].width, photos[i].height, sizeId);
+    final natural = photos[i].width * 72 / dpi;
+    lines.add(photoSizeCheckLine('Foto ${i + 1}', rects[i].width,
+        rects[i].height, natural == 0 ? 1 : rects[i].width / natural));
+  }
+  return lines.join('\n');
+}
+
+/// Il controllo misura di una foto aperta da sola alla misura [sizeId]
+/// (come la mette [imageBytesToPdf]: al centro di un A4, ridotta se non ci sta).
+String singlePhotoReport(int width, int height, String sizeId) {
+  final dpi = photoDpi(width, height, sizeId);
+  final w = width * 72 / dpi;
+  final h = height * 72 / dpi;
+  const margin = 28.35;
+  const portrait = PdfPageSize.a4;
+  const landscape = PdfPageSize(841.89, 595.28);
+  bool fits(PdfPageSize p) =>
+      w <= p.width - 2 * margin && h <= p.height - 2 * margin;
+  var ratio = 1.0;
+  if (!fits(portrait) && !fits(landscape)) {
+    final page = w > h ? landscape : portrait;
+    ratio = math.min((page.width - 2 * margin) / w,
+        (page.height - 2 * margin) / h);
+  }
+  final size = standardSizeById(sizeId);
+  return [
+    if (size != null)
+      'Misura scelta: ${size.name} (${_mmText(size.widthPt)} × ${_mmText(size.heightPt)} mm)',
+    photoSizeCheckLine('Foto', w * ratio, h * ratio, ratio),
+  ].join('\n');
+}
