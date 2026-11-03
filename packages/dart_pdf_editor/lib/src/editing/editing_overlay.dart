@@ -11207,8 +11207,10 @@ class _MeasureLens extends StatelessWidget {
         if (finger == null) return const SizedBox.shrink();
         final media = MediaQuery.of(context);
         final below = finger.dy < media.padding.top + _size + _gap;
-        final cx = finger.dx.clamp(
-            _size / 2 + 4, math.max(_size / 2 + 4, media.size.width - _size / 2 - 4));
+        final cx = finger.dx
+            .clamp(_size / 2 + 4,
+                math.max(_size / 2 + 4, media.size.width - _size / 2 - 4))
+            .toDouble();
         final center = Offset(cx, finger.dy + (below ? _gap : -_gap));
         return Positioned(
           left: center.dx - _size / 2,
