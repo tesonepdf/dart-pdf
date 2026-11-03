@@ -1,6 +1,9 @@
 // The phone menu uses the same File, This document, and App groups as the
 // desktop popup, with full-width touch targets and a recent-files subpage.
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_l10n.dart';
 import 'middle_ellipsis_text.dart';
@@ -137,6 +140,35 @@ typedef _SubPage = ({String id, String title, List<AppMenuSheetEntry> items});
 class _AppMenuSheetState extends State<AppMenuSheet> {
   _SubPage? _page;
 
+  static const _orderKey = 'dart_pdf_editor_app.menu_order';
+
+  /// L'ordine scelto dall'utente per le sezioni del menu (id), salvato.
+  List<String> _order = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_orderKey);
+      if (saved != null && mounted) setState(() => _order = saved);
+    } catch (_) {
+      // senza archivio resta l'ordine di fabbrica
+    }
+  }
+
+  Future<void> _saveOrder(List<String> ids) async {
+    setState(() => _order = ids);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_orderKey, ids);
+    } catch (_) {}
+  }
+
   void _pick(AppMenuSheetEntry entry) => Navigator.of(context).pop(entry.run);
 
   @override
@@ -195,6 +227,62 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
     final hasApp = widget.readOnly != null ||
         widget.app.isNotEmpty ||
         appExtra.isNotEmpty;
+    final sections = <String, Widget>{
+      'file': _group(
+        'file',
+        l.editorMenuSectionFile,
+        [
+          for (final entry in widget.file) _row(entry),
+          ListTile(
+            key: const ValueKey('menu-open-recent'),
+            leading: const Icon(Icons.history),
+            title: Text(l.editorOpenRecent),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(
+              () => _page = (
+                id: 'recent',
+                title: l.editorOpenRecent,
+                items: [
+                  widget.viewAllRecentFiles,
+                  if (widget.recentFiles.isEmpty)
+                    AppMenuSheetEntry(
+                      key: const ValueKey('menu-no-recent-files'),
+                      icon: Icons.history_toggle_off,
+                      title: l.editorNoRecentFiles,
+                      run: () {},
+                      enabled: false,
+                    )
+                  else
+                    ...widget.recentFiles,
+                  if (widget.clearRecentFiles case final clear?) clear,
+                ],
+              ),
+            ),
+          ),
+        ],
+        open: true,
+      ),
+      if (widget.importEntries.isNotEmpty)
+        'import': _group('import', 'Importa',
+            [for (final entry in widget.importEntries) _row(entry)]),
+      for (final g in kMenuGroups)
+        if (inGroup(g.id).isNotEmpty)
+          g.id: _group(g.id, g.title, [for (final e in inGroup(g.id)) _row(e)]),
+      if (hasApp)
+        'app': _group('app', l.editorMenuSectionApp, [
+          if (widget.readOnly case final readOnly?)
+            SwitchListTile(
+              key: const ValueKey('menu-read-only'),
+              secondary: const Icon(Icons.visibility_outlined),
+              title: Text(l.editorMenuReadOnly),
+              value: readOnly,
+              onChanged: (_) =>
+                  Navigator.of(context).pop(widget.onToggleReadOnly),
+            ),
+          for (final entry in widget.app) _row(entry),
+          for (final entry in appExtra) _row(entry),
+        ]),
+    };
     return Column(
       key: const ValueKey('app-menu-sheet'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -210,64 +298,42 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
           ),
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
         const Divider(height: 24),
-        _group(
-          'file',
-          l.editorMenuSectionFile,
-          [
-            for (final entry in widget.file) _row(entry),
-            ListTile(
-              key: const ValueKey('menu-open-recent'),
-              leading: const Icon(Icons.history),
-              title: Text(l.editorOpenRecent),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => setState(
-                () => _page = (
-                  id: 'recent',
-                  title: l.editorOpenRecent,
-                  items: [
-                    widget.viewAllRecentFiles,
-                    if (widget.recentFiles.isEmpty)
-                      AppMenuSheetEntry(
-                        key: const ValueKey('menu-no-recent-files'),
-                        icon: Icons.history_toggle_off,
-                        title: l.editorNoRecentFiles,
-                        run: () {},
-                        enabled: false,
-                      )
-                    else
-                      ...widget.recentFiles,
-                    if (widget.clearRecentFiles case final clear?) clear,
-                  ],
-                ),
-              ),
-            ),
-          ],
-          open: true,
-        ),
-        if (widget.importEntries.isNotEmpty)
-          _group('import', 'Importa',
-              [for (final entry in widget.importEntries) _row(entry)]),
-        for (final g in kMenuGroups)
-          if (inGroup(g.id).isNotEmpty)
-            _group(g.id, g.title, [for (final e in inGroup(g.id)) _row(e)]),
-        if (hasApp)
-          _group('app', l.editorMenuSectionApp, [
-            if (widget.readOnly case final readOnly?)
-              SwitchListTile(
-                key: const ValueKey('menu-read-only'),
-                secondary: const Icon(Icons.visibility_outlined),
-                title: Text(l.editorMenuReadOnly),
-                value: readOnly,
-                onChanged: (_) =>
-                    Navigator.of(context).pop(widget.onToggleReadOnly),
-              ),
-            for (final entry in widget.app) _row(entry),
-            for (final entry in appExtra) _row(entry),
-          ]),
+        for (final entry in inGroup('top')) _row(entry),
+        if (inGroup('top').isNotEmpty) const Divider(height: 8),
+        _reorderable(sections),
         if (widget.settings case final settings?) ...[
           const Divider(height: 8),
           _row(settings),
         ],
+      ],
+    );
+  }
+
+  /// Le sezioni nell'ordine scelto dall'utente. Tenendo premuto 500 ms sul
+  /// nome di una sezione la si sposta su o giù; l'ordine resta salvato.
+  Widget _reorderable(Map<String, Widget> sections) {
+    final ids = [
+      ..._order.where(sections.containsKey),
+      ...sections.keys.where((id) => !_order.contains(id)),
+    ];
+    return ReorderableListView(
+      key: const ValueKey('app-menu-sections'),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      onReorder: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex -= 1;
+        final moved = List<String>.of(ids);
+        moved.insert(newIndex, moved.removeAt(oldIndex));
+        unawaited(_saveOrder(moved));
+      },
+      children: [
+        for (var i = 0; i < ids.length; i++)
+          ReorderableDelayedDragStartListener(
+            key: ValueKey('app-menu-section-${ids[i]}'),
+            index: i,
+            child: sections[ids[i]]!,
+          ),
       ],
     );
   }

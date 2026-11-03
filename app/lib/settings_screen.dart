@@ -10,6 +10,7 @@ import 'cached_documents_settings.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
 import 'language_names.dart';
+import 'measure_scale_setting.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
 import 'official_update.dart';
@@ -273,7 +274,11 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ),
                 _SettingsSection(
                   title: 'Strumenti',
-                  children: [_ArrowStepsSection(prefs: widget.prefs)],
+                  children: [
+                    _ArrowStepsSection(prefs: widget.prefs),
+                    const Divider(height: 32),
+                    MeasureScaleSettingsSection(prefs: widget.prefs),
+                  ],
                 ),
                 if ((SignatureTrust.platformDefault?.aatl != null) ||
                     OnDeviceOcr.isSupported)
