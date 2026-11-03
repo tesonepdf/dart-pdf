@@ -2559,8 +2559,8 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       );
 
-  /// Più foto su un solo foglio A4 bianco, ognuna a grandezza reale (misura
-  /// scelta nelle Impostazioni). Le foto sono immagini normali del documento:
+  /// Più foto su un solo foglio A4 bianco, ognuna a 300 dpi (pixel / 300 =
+  /// pollici), affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
   Future<void> _photosOnOneSheet() async {
     try {
@@ -2579,7 +2579,8 @@ class _EditorScreenState extends State<EditorScreen>
       }
       final rects = layoutPhotosOnSheet(
         [for (final p in photos) (width: p.width, height: p.height)],
-        kAutoPhotoSize,
+        null,
+        dpi: kSheetPhotoDpi,
       );
       final tab = DocumentTab.document(
         title: _nextUntitledTitle(),
@@ -2592,7 +2593,9 @@ class _EditorScreenState extends State<EditorScreen>
       final session = tab.session;
       if (session == null) return;
       for (var i = 0; i < photos.length; i++) {
-        await session.addImageInRectAsync(0, rects[i], photos[i].bytes);
+        final added =
+            await session.addImageInRectAsync(0, rects[i], photos[i].bytes);
+        if (!added && mounted) _toast('Foto ${i + 1} non aggiunta.');
       }
     } catch (e) {
       AppDevTools.instance
