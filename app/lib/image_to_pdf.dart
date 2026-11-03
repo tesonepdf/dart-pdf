@@ -169,45 +169,95 @@ UprightPhoto uprightPhoto(Uint8List bytes) {
 Future<UprightPhoto> uprightPhotoAsync(Uint8List bytes) =>
     compute(uprightPhoto, bytes);
 
+/// Risoluzione con cui le foto sul foglio vengono stampate: pixel / 300 =
+/// pollici (una foto di 1011 pixel di larghezza è larga 85,6 mm).
+const double kSheetPhotoDpi = 300;
+
 /// Posizioni iniziali di più foto su un foglio (coordinate PDF, in punti,
-/// origine in basso a sinistra): una sotto l'altra, centrate, a grandezza
-/// reale per la misura [sizeId]. Se non ci stanno si rimpiccioliscono tutte
-/// nella stessa proporzione. La prima sta in alto.
+/// origine in basso a sinistra). Con [dpi] la misura di ogni foto è
+/// pixel / dpi; altrimenti è la misura reale per [sizeId]. Le foto stanno
+/// affiancate e vanno a capo quando la riga è piena, sempre staccate tra
+/// loro (mai sovrapposte); se non ci stanno si rimpiccioliscono tutte nella
+/// stessa proporzione. Il blocco è centrato nel foglio.
 List<PdfRect> layoutPhotosOnSheet(
   List<({int width, int height})> photos,
   String? sizeId, {
   PdfPageSize page = PdfPageSize.a4,
   double margin = 28.35,
   double gap = 28.35,
+  double? dpi,
 }) {
   if (photos.isEmpty) return const [];
   final widths = <double>[];
   final heights = <double>[];
   for (final p in photos) {
-    final id = sizeId == kAutoPhotoSize
-        ? detectPhotoSizeId(p.width, p.height)
-        : sizeId;
-    final dpi = photoDpi(p.width, p.height, id);
-    widths.add(p.width * 72 / dpi);
-    heights.add(p.height * 72 / dpi);
+    final d = dpi ??
+        photoDpi(
+          p.width,
+          p.height,
+          sizeId == kAutoPhotoSize
+              ? detectPhotoSizeId(p.width, p.height)
+              : sizeId,
+        );
+    widths.add(p.width * 72 / d);
+    heights.add(p.height * 72 / d);
   }
   final availW = page.width - 2 * margin;
-  final gaps = gap * (photos.length - 1);
-  final availH = page.height - 2 * margin - gaps;
-  final maxW = widths.reduce(math.max);
-  final sumH = heights.fold<double>(0, (a, b) => a + b);
+  final availH = page.height - 2 * margin;
   var scale = 1.0;
-  if (maxW > availW) scale = math.min(scale, availW / maxW);
-  if (sumH > availH && availH > 0) scale = math.min(scale, availH / sumH);
-  final contentH = sumH * scale + gaps;
-  var top = page.height / 2 + contentH / 2;
-  final rects = <PdfRect>[];
-  for (var i = 0; i < photos.length; i++) {
-    final w = widths[i] * scale;
-    final h = heights[i] * scale;
-    final left = (page.width - w) / 2;
-    rects.add(PdfRect(left, top - h, left + w, top));
-    top -= h + gap;
+  for (var i = 0; i < widths.length; i++) {
+    scale = math.min(
+        scale, math.min(availW / widths[i], availH / heights[i]));
+  }
+
+  List<List<int>> rowsFor(double s) {
+    final rows = <List<int>>[];
+    var row = <int>[];
+    var rowW = 0.0;
+    for (var i = 0; i < widths.length; i++) {
+      final w = widths[i] * s;
+      if (row.isNotEmpty && rowW + gap + w > availW + 0.01) {
+        rows.add(row);
+        row = <int>[];
+        rowW = 0;
+      }
+      rowW += (row.isEmpty ? 0 : gap) + w;
+      row.add(i);
+    }
+    if (row.isNotEmpty) rows.add(row);
+    return rows;
+  }
+
+  double rowHeight(List<int> row, double s) =>
+      row.map((i) => heights[i] * s).reduce(math.max);
+
+  double totalHeight(List<List<int>> rows, double s) =>
+      rows.fold<double>(0, (a, r) => a + rowHeight(r, s)) +
+      gap * (rows.length - 1);
+
+  var rows = rowsFor(scale);
+  for (var n = 0; n < 80 && totalHeight(rows, scale) > availH; n++) {
+    scale *= 0.95;
+    rows = rowsFor(scale);
+  }
+
+  final rects = List<PdfRect>.filled(photos.length, const PdfRect(0, 0, 0, 0));
+  var top = page.height / 2 + totalHeight(rows, scale) / 2;
+  for (final row in rows) {
+    final rowH = rowHeight(row, scale);
+    var rowW = gap * (row.length - 1);
+    for (final i in row) {
+      rowW += widths[i] * scale;
+    }
+    var left = (page.width - rowW) / 2;
+    for (final i in row) {
+      final w = widths[i] * scale;
+      final h = heights[i] * scale;
+      rects[i] = PdfRect(
+          left, top - (rowH + h) / 2, left + w, top - (rowH - h) / 2);
+      left += w + gap;
+    }
+    top -= rowH + gap;
   }
   return rects;
 }
