@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart' show RenderViewportBase;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show RawMagnifier, MagnifierDecoration;
 import 'package:pdf_cos/pdf_cos.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart' show PdfLineField;
@@ -3361,6 +3362,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _selectTapTimer?.cancel();
     _lineCursorEntry?.remove();
     _lineCursorEntry = null;
+    _hideLens();
     _lineCursorRepeatTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
     if (_textEditRect != null) _controller.setEditingText(false);
@@ -4176,6 +4178,57 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   OverlayEntry? _lineCursorEntry;
+
+  /// Ingrandimento della lente che compare mentre si trascina un estremo di
+  /// una misura (2 = 200%).
+  static const double _lensScale = 2.0;
+
+  OverlayEntry? _lensEntry;
+  final ValueNotifier<Offset?> _lensPoint = ValueNotifier<Offset?>(null);
+
+  /// Mostra la lente sopra l'app, vicino al dito, sul punto [global].
+  void _showLens(Offset global) {
+    _lensPoint.value = global;
+    if (_lensEntry != null) return;
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    final entry = OverlayEntry(
+      builder: (_) => _MeasureLens(point: _lensPoint, scale: _lensScale),
+    );
+    _lensEntry = entry;
+    overlay.insert(entry);
+  }
+
+  void _hideLens() {
+    final entry = _lensEntry;
+    if (entry == null) return;
+    _lensEntry = null;
+    _lensPoint.value = null;
+    entry.remove();
+  }
+
+  /// Con uno strumento di misura attivo, un trascinamento che parte su una
+  /// misura già disegnata non ne crea una nuova: sull'estremo la allunga o
+  /// l'accorcia (con la lente), sul resto la sposta intera. Restituisce
+  /// false se sotto il dito non c'è una misura.
+  bool _grabMeasurement(DragStartDetails details) {
+    final position = details.localPosition;
+    final selectedVertices = _selectedVertexPoints;
+    if (selectedVertices != null &&
+        _controller.selectedAnnotation?.measure != null &&
+        _vertexHandleAt(selectedVertices, position) != null) {
+      _selectPanStart(details);
+      return true;
+    }
+    final (x, y) = _geometry.toPagePoint(position);
+    final hit = _controller.selectableAnnotationAt(widget.pageIndex, x, y);
+    if (hit == null || hit.$2.measure == null) return false;
+    if (!_controller.isAnnotationSelected(widget.pageIndex, hit.$1)) {
+      _controller.selectAnnotationAt(widget.pageIndex, x, y);
+    }
+    _selectPanStart(details);
+    return true;
+  }
 
   /// Floats the arrow pad above the whole app (not inside the page, which a
   /// zoom would carry off screen): small, draggable, and it holds the text
@@ -5170,6 +5223,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _selectPanStart(details);
       return;
     }
+    if (_lineDragTool && _measureKind != null && _grabMeasurement(details)) {
+      return;
+    }
     if (_regionPolyInProgress) {
       // committing a region by clicks: a stray drag must not rubber-band a
       // rectangle over the vertices already placed
@@ -5335,6 +5391,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           _vertexHandle = vertex;
           _vertexPoints = List<Offset>.of(vertexPoints!);
         });
+        // l'estremo di una misura si porta con la lente (dito, penna)
+        if (_controller.selectedAnnotation?.measure != null &&
+            details.kind != PointerDeviceKind.mouse &&
+            details.kind != PointerDeviceKind.trackpad) {
+          _showLens(details.globalPosition);
+        }
         return;
       }
       // a rotated selection resizes in its local frame: hit-test the
@@ -5540,6 +5602,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _autoScrollGlobal = details.globalPosition;
     _autoScrollLastLocal = position;
     _applyDragPosition(position);
+    if (_lensEntry != null) _lensPoint.value = details.globalPosition;
     _maybeAutoScroll();
   }
 
@@ -5674,6 +5737,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   void _panEnd(DragEndDetails details) {
+    _hideLens();
     if (_controller.isCroppingImage) return;
     if (_pointers.rawPointer != null) return; // the raw pointer-up commits
     if (_textSelecting) {
@@ -6620,6 +6684,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
+    _hideLens();
     if (!mounted) return;
     _pickDownPosition = null;
     _pickDragged = false;
@@ -11119,4 +11184,85 @@ void paintMoveDragPreview(
     to: preview.to.shift(origin),
     scale: preview.scale,
   );
+}
+
+
+/// La lente che segue il dito mentre si trascina l'estremo di una misura:
+/// un cerchio sopra il dito (sotto, se il dito è in alto) che mostra ingrandito
+/// il punto toccato, con un mirino al centro.
+class _MeasureLens extends StatelessWidget {
+  const _MeasureLens({required this.point, required this.scale});
+
+  final ValueListenable<Offset?> point;
+  final double scale;
+
+  static const double _size = 120;
+  static const double _gap = 84;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Offset?>(
+      valueListenable: point,
+      builder: (context, finger, _) {
+        if (finger == null) return const SizedBox.shrink();
+        final media = MediaQuery.of(context);
+        final below = finger.dy < media.padding.top + _size + _gap;
+        final cx = finger.dx.clamp(
+            _size / 2 + 4, math.max(_size / 2 + 4, media.size.width - _size / 2 - 4));
+        final center = Offset(cx, finger.dy + (below ? _gap : -_gap));
+        return Positioned(
+          left: center.dx - _size / 2,
+          top: center.dy - _size / 2,
+          width: _size,
+          height: _size,
+          child: IgnorePointer(
+            child: Stack(
+              children: [
+                RawMagnifier(
+                  size: const Size(_size, _size),
+                  magnificationScale: scale,
+                  focalPointOffset: finger - center,
+                  decoration: const MagnifierDecoration(
+                    shape: CircleBorder(
+                      side: BorderSide(color: Color(0xFF3F51B5), width: 3),
+                    ),
+                    shadows: [
+                      BoxShadow(
+                        color: Color(0x55000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+                const Positioned.fill(
+                  child: CustomPaint(painter: _LensCrossPainter()),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LensCrossPainter extends CustomPainter {
+  const _LensCrossPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final paint = Paint()
+      ..color = const Color(0xFFE53935)
+      ..strokeWidth = 1.2;
+    const gap = 4.0, arm = 12.0;
+    canvas.drawLine(c + const Offset(-arm, 0), c + const Offset(-gap, 0), paint);
+    canvas.drawLine(c + const Offset(gap, 0), c + const Offset(arm, 0), paint);
+    canvas.drawLine(c + const Offset(0, -arm), c + const Offset(0, -gap), paint);
+    canvas.drawLine(c + const Offset(0, gap), c + const Offset(0, arm), paint);
+  }
+
+  @override
+  bool shouldRepaint(_LensCrossPainter oldDelegate) => false;
 }
