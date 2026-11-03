@@ -165,40 +165,35 @@ UprightPhoto uprightPhoto(Uint8List bytes) {
   return UprightPhoto(data, upright.width, upright.height);
 }
 
-/// Come [uprightPhoto], ma pensata per la misura reale [sizeId]. Non ingrandisce
-/// mai la foto (nessuna perdita di nitidezza): la misura vera si ottiene
-/// dopo, mettendola nel foglio alla grandezza giusta. Solo per carte e
-/// documenti (gruppo "Carte e documenti") i pixel in più oltre i
-/// [kSheetPhotoDpi] vengono tolti, per non mettere in risalto le texture
-/// antifrode.
-UprightPhoto uprightPhotoForSize(({Uint8List bytes, String? sizeId}) args) {
+/// Porta una foto già dritta ([args.bytes]) a [args.target] dpi alla misura
+/// vera [args.sizeId], solo se ha più dpi: toglie pixel, non ne aggiunge mai.
+UprightPhoto reducePhotoDpi(
+    ({Uint8List bytes, String sizeId, double target}) args) {
   final decoded = img.decodeImage(args.bytes);
   if (decoded == null) {
     throw const FormatException('formato immagine non riconosciuto');
   }
-  var upright = img.bakeOrientation(decoded);
-  final size = args.sizeId == null ? null : standardSizeById(args.sizeId!);
-  if (size != null && size.group == StandardSizeGroup.cards) {
-    final dpi = photoDpi(upright.width, upright.height, args.sizeId);
-    if (dpi > kSheetPhotoDpi) {
-      final f = kSheetPhotoDpi / dpi;
-      upright = img.copyResize(
-        upright,
-        width: (upright.width * f).round(),
-        height: (upright.height * f).round(),
-        interpolation: img.Interpolation.cubic,
-      );
-    }
+  var photo = decoded;
+  final dpi = photoDpi(photo.width, photo.height, args.sizeId);
+  if (dpi > args.target) {
+    final f = args.target / dpi;
+    photo = img.copyResize(
+      photo,
+      width: (photo.width * f).round(),
+      height: (photo.height * f).round(),
+      interpolation: img.Interpolation.average,
+    );
   }
-  final data = upright.hasAlpha
-      ? Uint8List.fromList(img.encodePng(upright))
-      : Uint8List.fromList(img.encodeJpg(upright, quality: 92));
-  return UprightPhoto(data, upright.width, upright.height);
+  final data = photo.hasAlpha
+      ? Uint8List.fromList(img.encodePng(photo))
+      : Uint8List.fromList(img.encodeJpg(photo, quality: 92));
+  return UprightPhoto(data, photo.width, photo.height);
 }
 
-/// [uprightPhotoForSize] fuori dal filo dell'interfaccia.
-Future<UprightPhoto> uprightPhotoForSizeAsync(Uint8List bytes, String? sizeId) =>
-    compute(uprightPhotoForSize, (bytes: bytes, sizeId: sizeId));
+/// [reducePhotoDpi] fuori dal filo dell'interfaccia.
+Future<UprightPhoto> reducePhotoDpiAsync(
+        Uint8List bytes, String sizeId, double target) =>
+    compute(reducePhotoDpi, (bytes: bytes, sizeId: sizeId, target: target));
 
 /// [uprightPhoto] fuori dal filo dell'interfaccia.
 Future<UprightPhoto> uprightPhotoAsync(Uint8List bytes) =>

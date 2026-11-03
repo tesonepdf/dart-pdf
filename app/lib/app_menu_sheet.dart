@@ -44,6 +44,7 @@ Future<VoidCallback?> showAppMenuSheet(
   required bool? readOnly,
   required VoidCallback onToggleReadOnly,
   required List<AppMenuSheetEntry> app,
+  AppMenuSheetEntry? settings,
   List<AppMenuSheetEntry> toOrganize = const [],
   List<AppMenuSheetEntry> importEntries = const [],
 }) =>
@@ -63,6 +64,7 @@ Future<VoidCallback?> showAppMenuSheet(
         readOnly: readOnly,
         onToggleReadOnly: onToggleReadOnly,
         app: app,
+        settings: settings,
         toOrganize: toOrganize,
         importEntries: importEntries,
       ),
@@ -81,6 +83,7 @@ class AppMenuSheet extends StatefulWidget {
     required this.readOnly,
     required this.onToggleReadOnly,
     required this.app,
+    this.settings,
     this.toOrganize = const [],
     this.importEntries = const [],
   });
@@ -105,6 +108,9 @@ class AppMenuSheet extends StatefulWidget {
   final VoidCallback onToggleReadOnly;
 
   final List<AppMenuSheetEntry> app;
+
+  /// "Impostazioni": l'ultima riga del menu, fuori dalla sezione APP.
+  final AppMenuSheetEntry? settings;
 
   /// New things from the upstream project that have no place in the groups
   /// above yet: shown in their own "To organize" section.
@@ -258,6 +264,10 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
             for (final entry in widget.app) _row(entry),
             for (final entry in appExtra) _row(entry),
           ]),
+        if (widget.settings case final settings?) ...[
+          const Divider(height: 8),
+          _row(settings),
+        ],
       ],
     );
   }
