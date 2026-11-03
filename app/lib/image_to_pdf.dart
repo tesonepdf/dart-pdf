@@ -165,18 +165,22 @@ UprightPhoto uprightPhoto(Uint8List bytes) {
   return UprightPhoto(data, upright.width, upright.height);
 }
 
-/// Come [uprightPhoto], ma con la misura reale [sizeId]: se la foto ha meno
-/// pixel di quelli che servono per stare a [kSheetPhotoDpi] alla grandezza
-/// vera, viene ingrandita fino a quei pixel (mai rimpicciolita).
+/// Come [uprightPhoto], ma pensata per la misura reale [sizeId]. Non ingrandisce
+/// mai la foto (nessuna perdita di nitidezza): la misura vera si ottiene
+/// dopo, mettendola nel foglio alla grandezza giusta. Solo per carte e
+/// documenti (gruppo "Carte e documenti") i pixel in più oltre i
+/// [kSheetPhotoDpi] vengono tolti, per non mettere in risalto le texture
+/// antifrode.
 UprightPhoto uprightPhotoForSize(({Uint8List bytes, String? sizeId}) args) {
   final decoded = img.decodeImage(args.bytes);
   if (decoded == null) {
     throw const FormatException('formato immagine non riconosciuto');
   }
   var upright = img.bakeOrientation(decoded);
-  if (args.sizeId != null && standardSizeById(args.sizeId!) != null) {
+  final size = args.sizeId == null ? null : standardSizeById(args.sizeId!);
+  if (size != null && size.group == StandardSizeGroup.cards) {
     final dpi = photoDpi(upright.width, upright.height, args.sizeId);
-    if (dpi < kSheetPhotoDpi) {
+    if (dpi > kSheetPhotoDpi) {
       final f = kSheetPhotoDpi / dpi;
       upright = img.copyResize(
         upright,
