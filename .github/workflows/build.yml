@@ -75,12 +75,12 @@ jobs:
           version="$((year - 2020)).${day}.${hour}${minute}"
           # Numero build = numero del commit, lo stesso scritto in testa al
           # messaggio (hook .githooks/commit-msg) e quindi su Vercel:
-          # ufficiale = commit di main + 24 (allineato alle run di Actions);
+          # ufficiale = commit di main + 25 (allineato alle run di Actions);
           # prova     = 10000 + commit del ramo prova non ancora in main.
           if [[ "$GITHUB_REF_NAME" == prova-sviluppatore ]]; then
             number="$((10000 + $(git rev-list --count origin/main..HEAD)))"
           else
-            number="$(( $(git rev-list --count HEAD) + 24 ))"
+            number="$(( $(git rev-list --count HEAD) + 25 ))"
           fi
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
