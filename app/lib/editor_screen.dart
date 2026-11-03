@@ -2559,9 +2559,9 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       );
 
-  /// Più foto su un solo foglio A4 bianco, ognuna a 300 dpi e alla misura
-  /// vera scelta all'inizio (ingrandita se ha pochi pixel), affiancate e mai
-  /// sovrapposte. Le foto sono immagini normali del documento:
+  /// Più foto su un solo foglio A4 bianco, ognuna alla misura vera scelta
+  /// all'inizio, senza ingrandire i pixel (le carte non oltre 300 dpi),
+  /// affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
   Future<void> _photosOnOneSheet() async {
     try {
@@ -2587,8 +2587,8 @@ class _EditorScreenState extends State<EditorScreen>
       }
       final rects = layoutPhotosOnSheet(
         [for (final p in photos) (width: p.width, height: p.height)],
-        null,
-        dpi: kSheetPhotoDpi,
+        sizeId.isEmpty ? null : sizeId,
+        dpi: sizeId.isEmpty ? kSheetPhotoDpi : null,
       );
       final tab = DocumentTab.document(
         title: _nextUntitledTitle(),
