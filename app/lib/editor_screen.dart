@@ -5015,12 +5015,23 @@ class _EditorScreenState extends State<EditorScreen>
             context,
             prefs: _prefs,
             recents: _recents,
-            updates: _updates,
-            updateInstaller: _updateInstaller,
             onOpenDevTools: kDevToolsEnabled ? _toggleDevTools : null,
             autoOcr: _autoOcr,
           ),
         ),
+        // Aggiornamenti: accanto a Impostazioni (il mio repo e quello
+        // ufficiale, tutti e due aperti nella stessa schermata).
+        if (_updates.supported)
+          _MenuAction(
+            id: 'updates',
+            icon: Icons.system_update_outlined,
+            title: appL10n(context).settingsUpdates,
+            run: () => showAppUpdates(
+              context,
+              updates: _updates,
+              updateInstaller: _updateInstaller,
+            ),
+          ),
       ];
 
   /// A section header inside the app menu - the same 11px uppercase label the
@@ -6042,8 +6053,15 @@ class _EditorScreenState extends State<EditorScreen>
       ],
       readOnly: hasDocument ? _readOnly : null,
       onToggleReadOnly: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
-      app: [for (final action in appActions.skip(1)) entry(action)],
+      app: [
+        for (final action in appActions.skip(1))
+          if (action.id != 'updates') entry(action),
+      ],
       settings: appActions.isEmpty ? null : entry(appActions.first),
+      updates: [
+        for (final action in appActions)
+          if (action.id == 'updates') entry(action),
+      ].firstOrNull,
     );
     if (!mounted) return;
     action?.call();
