@@ -3920,6 +3920,19 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// The Save As backend: the host/test seam when one is injected, otherwise
   /// the platform's own save dialog, browser download, or share sheet.
+  /// Condividi: apre il foglio di condivisione del telefono con il PDF come
+  /// è adesso. Non salva nella cartella e non cambia lo stato di salvataggio.
+  Future<void> _shareDocument(DocumentTab tab) async {
+    tab.session?.finishInk();
+    final session = tab.session;
+    if (session == null) return;
+    final bytes = _withBakedPageColor(session.bytes, source: session.document);
+    final result = await saveBytesAs(context, bytes, tab.title,
+        pdfLabel: appL10n(context).fileTypePdf);
+    if (!mounted) return;
+    if (result.message != null && !result.succeeded) _toast(result.message!);
+  }
+
   /// Chiede il nome del file prima di salvare nella cartella scelta.
   /// Null se si annulla.
   Future<String?> _askFileName(String suggested) {
@@ -5942,6 +5955,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (_tabs.isNotEmpty)
           AppMenuSheetEntry(
             key: const ValueKey('menu-tabs'),
+            group: 'top',
             icon: Icons.tab_outlined,
             title: '${l.editorOpenTabs} (${_tabs.length})',
             run: _showTabsSheet,
@@ -5953,7 +5967,7 @@ class _EditorScreenState extends State<EditorScreen>
             icon: Icons.share_outlined,
             title: WidgetsLocalizations.of(context).shareButtonLabel,
             run: () {
-              if (tab != null) unawaited(_save(tab));
+              if (tab != null) unawaited(_shareDocument(tab));
             },
           ),
         if (hasDocument && WhatsappSend.supported && tab != null)

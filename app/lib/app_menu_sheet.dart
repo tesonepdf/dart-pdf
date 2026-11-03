@@ -227,7 +227,11 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
     final hasApp = widget.readOnly != null ||
         widget.app.isNotEmpty ||
         appExtra.isNotEmpty;
+    String idOf(AppMenuSheetEntry e) => e.key is ValueKey
+        ? (e.key as ValueKey).value.toString()
+        : e.title;
     final sections = <String, Widget>{
+      for (final entry in inGroup('top')) 'row-${idOf(entry)}': _row(entry),
       'file': _group(
         'file',
         l.editorMenuSectionFile,
@@ -282,6 +286,8 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
           for (final entry in widget.app) _row(entry),
           for (final entry in appExtra) _row(entry),
         ]),
+      if (widget.settings case final settings?)
+        'row-${idOf(settings)}': _row(settings),
     };
     return Column(
       key: const ValueKey('app-menu-sheet'),
@@ -298,13 +304,7 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
           ),
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
         const Divider(height: 24),
-        for (final entry in inGroup('top')) _row(entry),
-        if (inGroup('top').isNotEmpty) const Divider(height: 8),
         _reorderable(sections),
-        if (widget.settings case final settings?) ...[
-          const Divider(height: 8),
-          _row(settings),
-        ],
       ],
     );
   }
@@ -312,10 +312,13 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
   /// Le sezioni nell'ordine scelto dall'utente. Tenendo premuto 500 ms sul
   /// nome di una sezione la si sposta su o giù; l'ordine resta salvato.
   Widget _reorderable(Map<String, Widget> sections) {
-    final ids = [
-      ..._order.where(sections.containsKey),
-      ...sections.keys.where((id) => !_order.contains(id)),
-    ];
+    final defaults = sections.keys.toList();
+    final ids = _order.where(sections.containsKey).toList();
+    for (var d = 0; d < defaults.length; d++) {
+      if (!ids.contains(defaults[d])) {
+        ids.insert(d < ids.length ? d : ids.length, defaults[d]);
+      }
+    }
     return ReorderableListView(
       key: const ValueKey('app-menu-sections'),
       shrinkWrap: true,
