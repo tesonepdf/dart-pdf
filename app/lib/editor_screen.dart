@@ -2559,9 +2559,83 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       );
 
+  /// Chiede a quanti dpi portare le foto sul foglio (solo verso il basso: la
+  /// grandezza vera non cambia). Dà infinito per lasciarle com'erano, null se
+  /// si annulla. [minDpi] e [maxDpi] sono i dpi di partenza alla misura scelta.
+  Future<double?> _askPhotoDpi(double minDpi, double maxDpi) {
+    final from = minDpi.round() == maxDpi.round()
+        ? '${minDpi.round()} dpi'
+        : 'da ${minDpi.round()} a ${maxDpi.round()} dpi';
+    var choice = 'original';
+    final controller = TextEditingController(text: '200');
+    return showDialog<double>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) {
+          Widget option(String id, String title, {String? subtitle}) =>
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(choice == id
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                title: Text(title),
+                subtitle: subtitle == null ? null : Text(subtitle),
+                onTap: () => setLocal(() => choice = id),
+              );
+          return AlertDialog(
+            title: const Text('Risoluzione delle foto'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Alla misura scelta le foto sono a $from.'),
+                  const SizedBox(height: 8),
+                  option('original', 'Originale',
+                      subtitle: 'Nessuna modifica ai pixel'),
+                  if (maxDpi > 300)
+                    option('300', 'Riduci a 300 dpi',
+                        subtitle: 'Toglie pixel, la grandezza non cambia'),
+                  option('other', 'Altro valore (solo in meno)'),
+                  if (choice == 'other')
+                    TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(suffixText: 'dpi'),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Annulla'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (choice == '300') {
+                    Navigator.pop(context, 300.0);
+                  } else if (choice == 'other') {
+                    final v = double.tryParse(
+                        controller.text.trim().replaceAll(',', '.'));
+                    if (v != null && v >= 72) Navigator.pop(context, v);
+                  } else {
+                    Navigator.pop(context, double.infinity);
+                  }
+                },
+                child: const Text('Continua'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   /// Più foto su un solo foglio A4 bianco, ognuna alla misura vera scelta
-  /// all'inizio, senza ingrandire i pixel (le carte non oltre 300 dpi),
-  /// affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
+  /// all'inizio, senza ingrandire i pixel; i dpi si possono solo abbassare, a
+  /// scelta. Affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
   Future<void> _photosOnOneSheet() async {
     try {
@@ -2573,18 +2647,36 @@ class _EditorScreenState extends State<EditorScreen>
         sizeId = await _pickStandardSize();
       }
       if (sizeId == null || !mounted) return;
-      final photos = <UprightPhoto>[];
+      final real = sizeId.isEmpty ? null : sizeId;
+      var photos = <UprightPhoto>[];
       for (final file in picked) {
         final raw = await file.readAsBytes();
         if (looksLikePdf(raw)) continue;
-        photos.add(await uprightPhotoForSizeAsync(
-            raw, sizeId.isEmpty ? null : sizeId));
+        photos.add(await uprightPhotoAsync(raw));
       }
       if (!mounted) return;
       if (photos.isEmpty) {
         _toast('Scegli almeno una foto.');
         return;
       }
+      if (real != null) {
+        final dpis = [
+          for (final p in photos) photoDpi(p.width, p.height, real),
+        ];
+        final target = await _askPhotoDpi(
+          dpis.reduce((a, b) => a < b ? a : b),
+          dpis.reduce((a, b) => a > b ? a : b),
+        );
+        if (target == null || !mounted) return;
+        if (target.isFinite) {
+          final reduced = <UprightPhoto>[];
+          for (final p in photos) {
+            reduced.add(await reducePhotoDpiAsync(p.bytes, real, target));
+          }
+          photos = reduced;
+        }
+      }
+      if (!mounted) return;
       final rects = layoutPhotosOnSheet(
         [for (final p in photos) (width: p.width, height: p.height)],
         sizeId.isEmpty ? null : sizeId,
@@ -5832,7 +5924,8 @@ class _EditorScreenState extends State<EditorScreen>
       ],
       readOnly: hasDocument ? _readOnly : null,
       onToggleReadOnly: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
-      app: [for (final action in appActions) entry(action)],
+      app: [for (final action in appActions.skip(1)) entry(action)],
+      settings: appActions.isEmpty ? null : entry(appActions.first),
     );
     if (!mounted) return;
     action?.call();
