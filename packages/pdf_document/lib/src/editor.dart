@@ -68,6 +68,7 @@ part 'table_editor.dart';
 part 'pades_editor.dart';
 part 'page_editor.dart';
 part 'page_insert.dart';
+part 'page_compose.dart';
 part 'document_merge.dart';
 part 'fdf_codec.dart';
 part 'form_data_exchange.dart';

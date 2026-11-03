@@ -23,6 +23,7 @@ import 'app_menu_sheet.dart';
 import 'autosave.dart';
 import 'measure_scale_setting.dart';
 import 'combine_incoming.dart';
+import 'compose_sheet.dart';
 import 'command_palette.dart';
 import 'devtools.dart';
 import 'devtools_panel.dart';
@@ -2767,6 +2768,26 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Parti di pagine di uno o più PDF, messe su fogli A4 in un PDF nuovo che
+  /// si apre in una scheda.
+  Future<void> _composeSheet() async {
+    try {
+      final bytes = await showComposeSheet(context);
+      if (bytes == null || !mounted) return;
+      _readOnly = false;
+      _addTab(DocumentTab.document(
+        title: _nextUntitledTitle(),
+        bytes: bytes,
+        preferences: _prefs,
+        initiallyDirty: true,
+      ));
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('compose sheet failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Foglio non creato: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Riceve una pagina da uno scanner di rete (eSCL) e la mette in un
   /// foglio A4: nel documento aperto, dopo la pagina in vista, oppure in un
   /// documento nuovo.
@@ -4859,6 +4880,12 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_photosOnOneSheet()),
       ),
       _MenuAction(
+        id: 'compose-sheet',
+        icon: Icons.dashboard_customize_outlined,
+        title: 'Componi foglio…',
+        run: () => unawaited(_composeSheet()),
+      ),
+      _MenuAction(
         id: 'scanner-import',
         icon: Icons.scanner_outlined,
         title: 'Importa da scanner…',
@@ -5937,7 +5964,9 @@ class _EditorScreenState extends State<EditorScreen>
       ),
       file: [
         for (final action in _fileActions())
-          if (action.id != 'photos-one-sheet' && action.id != 'scanner-import')
+          if (action.id != 'photos-one-sheet' &&
+              action.id != 'compose-sheet' &&
+              action.id != 'scanner-import')
             entry(action),
       ],
       importEntries: [
@@ -5959,6 +5988,8 @@ class _EditorScreenState extends State<EditorScreen>
             'Altra misura…', () => unawaited(_importPhotoOtherSize())),
         importEntry('photos-one-sheet', Icons.photo_library_outlined,
             'Foto su un solo foglio…', () => unawaited(_photosOnOneSheet())),
+        importEntry('compose-sheet', Icons.dashboard_customize_outlined,
+            'Componi foglio…', () => unawaited(_composeSheet())),
         importEntry('scanner-import', Icons.scanner_outlined,
             'Importa da scanner…', () => unawaited(_importFromScanner())),
       ],
