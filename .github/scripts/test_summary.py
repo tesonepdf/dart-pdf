@@ -8,6 +8,7 @@ piu' annotazioni (GitHub ne mostra poche per passaggio e ognuna e' corta), cosi'
 il motivo dei fallimenti si legge dall'API senza scaricare i log.
 """
 import json
+import re
 import sys
 
 LIMIT = 3400  # caratteri per annotazione
@@ -18,14 +19,27 @@ def escape(text):
     return text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 
 
+def locations(text):
+    """Le prime righe dello stack che cadono nei file dell'app o dei test."""
+    found = []
+    for match in re.finditer(r'([\w./-]*(?:app/)?(?:test|lib)/[\w./-]+\.dart):(\d+)', text):
+        loc = match.group(1).rsplit('/', 1)[-1] + ':' + match.group(2)
+        if loc not in found:
+            found.append(loc)
+    return found[:3]
+
+
 def from_prints(prints):
     """Le prime righe dell'eccezione che il framework ha stampato."""
-    lines = '\n'.join(prints).replace('\r', '').split('\n')
+    text = '\n'.join(prints).replace('\r', '')
+    lines = text.split('\n')
     for i, line in enumerate(lines):
         if 'EXCEPTION CAUGHT' in line:
             rest = [l.strip() for l in lines[i + 1:]
                     if l.strip() and not set(l.strip()) <= set('═╞╡ ')]
-            return ' / '.join(rest[:4])[:330]
+            where = locations(text)
+            suffix = ' @ ' + ', '.join(where) if where else ''
+            return (' / '.join(rest[:4])[:300]) + suffix
     return ''
 
 

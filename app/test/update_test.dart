@@ -8,11 +8,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/update.dart';
 
+/// The installers a release publishes for macOS and Windows. The update
+/// service only offers a release that carries a file for its own platform, so
+/// the fixtures need them (Linux is left out on purpose: tests on that
+/// platform exercise a release with no matching file).
+const _desktopAssets = {
+  'dartpdf-macos.dmg': 'https://example.test/dartpdf-macos.dmg',
+  'dartpdf-windows-installer.exe':
+      'https://example.test/dartpdf-windows-installer.exe',
+};
+
 ReleaseInfo _release(
   String tag, {
   String notes = '',
   String html = '',
-  Map<String, String> assets = const {},
+  Map<String, String>? assets,
 }) =>
     ReleaseInfo(
       version: AppVersion.tryParse(tag)!,
@@ -20,7 +30,7 @@ ReleaseInfo _release(
       name: tag,
       notes: notes,
       htmlUrl: html.isEmpty ? 'https://example.test/$tag' : html,
-      assets: assets,
+      assets: assets ?? _desktopAssets,
     );
 
 /// A release with an explicit version, for tags the parser would otherwise
@@ -325,14 +335,17 @@ Nightly build.
       expect(service.downloadUrl, 'https://example.test/appimage');
     });
 
-    test('a release with no matching artifact has no asset name', () async {
-      // macOS has no asset in this Linux-only release, so only the page URL.
+    test('a release with no matching artifact is not offered', () async {
+      // macOS has no asset in this Linux-only release: the service skips it
+      // rather than offering an update the platform cannot install.
       final service = _service('1.2.0',
           releases: [linuxRelease()], platform: TargetPlatform.macOS);
       await service.checkForUpdates(force: true);
+      expect(service.status, UpdateStatus.upToDate);
+      expect(service.latest, isNull);
       expect(service.downloadAssetName, isNull);
       expect(service.downloadAssetSize, isNull);
-      expect(service.downloadUrl, 'https://example.test/app-v1.3.0');
+      expect(service.downloadUrl, isNull);
     });
   });
 
@@ -523,7 +536,10 @@ Nightly build.
             name: 'DartPDF nightly',
             notes: '',
             htmlUrl: 'https://example.test/nightly',
-            assets: const {},
+            assets: const {
+              'dartpdf-nightly-windows-installer.exe':
+                  'https://example.test/nightly.exe',
+            },
             isNightly: true,
             commitSha: commit,
           );
@@ -552,7 +568,10 @@ Nightly build.
         name: 'DartPDF nightly',
         notes: '',
         htmlUrl: 'https://example.test/nightly',
-        assets: const {},
+        assets: const {
+              'dartpdf-nightly-windows-installer.exe':
+                  'https://example.test/nightly.exe',
+            },
         isNightly: true,
         commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       );
@@ -686,7 +705,7 @@ Nightly build.
       expect(service.downloadUrl, 'https://example.test/win-portable');
     });
 
-    test('falls back to the release page when no asset matches', () async {
+    test('has no download when no asset matches the platform', () async {
       final service = _service(
         '1.2.2',
         releases: [
@@ -695,7 +714,8 @@ Nightly build.
         platform: TargetPlatform.linux,
       );
       await service.checkForUpdates();
-      expect(service.downloadUrl, 'https://example.test/page');
+      expect(service.latest, isNull);
+      expect(service.downloadUrl, isNull);
     });
   });
 
@@ -933,7 +953,7 @@ Nightly build.
       expect(service.downloadUrl, 'https://example.test/arm64.apk');
     });
 
-    test('a non-list body is treated as no releases', () async {
+    test('a non-list body is a failed check, not "up to date"', () async {
       final service = UpdateService(
         currentVersion: '1.2.2',
         platform: TargetPlatform.macOS,
@@ -943,7 +963,7 @@ Nightly build.
 
       await service.checkForUpdates();
 
-      expect(service.status, UpdateStatus.upToDate);
+      expect(service.status, UpdateStatus.failed);
       expect(service.latest, isNull);
     });
   });
