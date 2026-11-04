@@ -6,6 +6,10 @@ part of 'editor.dart';
 class PdfSheetImports {
   final Map<PdfDocument, _PageImporter> _importers = Map.identity();
   final Map<PdfDocument, Map<int, CosReference>> _forms = Map.identity();
+
+  /// The printable annotations of a source page, as one form (null = none).
+  final Map<PdfDocument, Map<int, CosReference?>> _annotationForms =
+      Map.identity();
 }
 
 /// Size in points of [region] of a page as it looks on screen, for a page
@@ -90,14 +94,113 @@ extension PdfSheetComposition on PdfEditor {
     }
     final name = 'Pg$index';
     xo[name] = formRef;
+    // What was drawn on the page with annotations (signatures, highlights,
+    // filled form fields) travels with the crop, as it does when printing.
+    final annotationRef = _annotationsAsForm(imports, source, sourcePage);
+    String? annotationName;
+    if (annotationRef != null) {
+      var next = 1;
+      while (xo.containsKey('An$next')) {
+        next++;
+      }
+      annotationName = 'An$next';
+      xo[annotationName] = annotationRef;
+    }
     res['XObject'] = xo;
     dict['Resources'] = res;
 
     final text = 'q ${n(scale * a)} ${n(scale * bb)} ${n(scale * c)} '
         '${n(scale * d)} ${n(x + scale * e)} ${n(y + scale * f)} cm '
-        '${n(l)} ${n(b)} ${n(r - l)} ${n(t - b)} re W n /$name Do Q\n';
+        '${n(l)} ${n(b)} ${n(r - l)} ${n(t - b)} re W n /$name Do '
+        '${annotationName == null ? '' : '/$annotationName Do '}Q\n';
     this._appendContent(
         sheet, page, Uint8List.fromList(latin1.encode(text)));
+  }
+
+  /// One form holding the appearances of [source]'s page [index] annotations
+  /// that print (not hidden, not a popup, link or reply), each placed where
+  /// the annotation sits on the page; null when there is none. Made once per
+  /// page and shared by every crop of it.
+  CosReference? _annotationsAsForm(
+      PdfSheetImports imports, PdfDocument source, int index) {
+    final cache = imports._annotationForms.putIfAbsent(source, () => {});
+    if (cache.containsKey(index)) return cache[index];
+    final importer = imports._importers.putIfAbsent(
+        source, () => _PageImporter(source, _updater.addObject));
+    final srcCos = source.cos;
+    final page = source.page(index);
+    final objects = CosDictionary();
+    final writer = ContentWriter();
+    var count = 0;
+    for (final annotation in page.annotations) {
+      if (annotation.isHidden ||
+          !annotation.isPrint ||
+          annotation.subtype == 'Popup' ||
+          annotation.subtype == 'Link' ||
+          annotation.isReply ||
+          annotation.isStateAnnotation) {
+        continue;
+      }
+      final appearance = annotation.normalAppearance;
+      if (appearance == null) continue;
+      final bbox = pdfRectFrom(srcCos, appearance.dictionary['BBox']);
+      final rect = annotation.rect;
+      if (bbox == null ||
+          bbox.width <= 0 ||
+          bbox.height <= 0 ||
+          rect.width <= 0 ||
+          rect.height <= 0) {
+        continue;
+      }
+      final fit = fitFormToRect(bbox, _sourceFormMatrix(srcCos, appearance), rect);
+      final name = 'Ap$count';
+      count++;
+      final reference = srcCos.referenceTo(appearance);
+      objects[name] =
+          reference != null ? importer.copyValue(reference) : importer.copyValue(appearance);
+      writer
+        ..save()
+        ..concatMatrix(fit.a, fit.b, fit.c, fit.d, fit.e, fit.f)
+        ..drawXObject(name)
+        ..restore();
+    }
+    if (count == 0) {
+      cache[index] = null;
+      return null;
+    }
+    final bytes = writer.takeBytes();
+    final form = CosStream(
+      CosDictionary({
+        'Type': const CosName('XObject'),
+        'Subtype': const CosName('Form'),
+        'FormType': const CosInteger(1),
+        'BBox': _rectArray(page.cropBox),
+        'Resources': CosDictionary({'XObject': objects}),
+        'Length': CosInteger(bytes.length),
+      }),
+      bytes,
+    );
+    return cache[index] = _updater.addObject(form);
+  }
+
+  /// A form's /Matrix, read from the source document it belongs to.
+  PdfMatrix _sourceFormMatrix(CosDocument cos, CosStream form) {
+    final raw = cos.resolve(form.dictionary['Matrix']);
+    if (raw is CosArray && raw.length >= 6) {
+      final values = <double>[];
+      for (var i = 0; i < 6; i++) {
+        final n = cos.resolve(raw[i]);
+        values.add(
+          n is CosInteger
+              ? n.value.toDouble()
+              : n is CosReal
+                  ? n.value
+                  : (i == 0 || i == 3 ? 1.0 : 0.0),
+        );
+      }
+      return PdfMatrix.row(values);
+    }
+    return PdfMatrix.identity;
   }
 
   /// The form XObject for the whole of [source]'s page [index], made once
