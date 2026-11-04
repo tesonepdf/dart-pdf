@@ -47,7 +47,9 @@ def from_prints(prints):
 
 def short(error):
     lines = [l.strip() for l in error.replace('\r', '').split('\n') if l.strip()]
-    return ' / '.join(lines[:3])[:230]
+    text = ' / '.join(lines[:3])
+    # Le righe di diagnosi (test temporanei "DBG ...") non si accorciano.
+    return text[:900] if text.startswith('DBG') else text[:230]
 
 
 def main():
