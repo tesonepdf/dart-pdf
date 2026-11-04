@@ -97,13 +97,15 @@ List<SheetPlacement> layoutSheetCrops(
         1.0, math.min(availW / size.width, availH / size.height));
     final w = size.width * scale;
     final h = size.height * scale;
-    if (x > kSheetMargin && x + w > pageWidth - kSheetMargin) {
+    if (x > kSheetMargin && x + w > pageWidth - kSheetMargin + 0.01) {
       // non ci sta più in questa riga
       rowTop -= rowHeight + kSheetGap;
       x = kSheetMargin;
       rowHeight = 0;
     }
-    if (rowTop - h < kSheetMargin) {
+    // 0,01 punti di tolleranza: un ritaglio alto quanto l'area utile non deve
+    // far passare al foglio dopo per un errore di arrotondamento.
+    if (rowTop - h < kSheetMargin - 0.01) {
       sheet++;
       x = kSheetMargin;
       rowTop = pageHeight - kSheetMargin;
