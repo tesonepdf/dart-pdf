@@ -22,11 +22,13 @@ def escape(text):
 def locations(text):
     """Le prime righe dello stack che cadono nei file dell'app o dei test."""
     found = []
-    for match in re.finditer(r'([\w./-]*(?:app/)?(?:test|lib)/[\w./-]+\.dart):(\d+)', text):
+    # Solo i file dell'app (app/test, app/lib): i frame interni di flutter_test
+    # non dicono dove si rompe il test.
+    for match in re.finditer(r'app/(?:test|lib)/([\w./-]+\.dart):(\d+)', text):
         loc = match.group(1).rsplit('/', 1)[-1] + ':' + match.group(2)
         if loc not in found:
             found.append(loc)
-    return found[:3]
+    return found[:4]
 
 
 def from_prints(prints):
