@@ -26,6 +26,10 @@ extension PdfSheetComposition on PdfEditor {
   /// displayed. The bottom-left corner of the drawn part lands at ([x], [y])
   /// and it is scaled by [scale]. The part stays vector: the source page is
   /// copied in as a form XObject and clipped to [region].
+  ///
+  /// [turns] turns the part by that many extra quarter turns clockwise (0-3)
+  /// after it is upright; the corner that lands at ([x], [y]) is then the
+  /// bottom-left of the turned part.
   void placePageRegion(
     PdfSheetImports imports, {
     required int sheet,
@@ -35,6 +39,7 @@ extension PdfSheetComposition on PdfEditor {
     required double x,
     required double y,
     double scale = 1,
+    int turns = 0,
   }) {
     final cos = document.cos;
     final formRef = _pageAsForm(imports, source, sourcePage);
@@ -45,12 +50,28 @@ extension PdfSheetComposition on PdfEditor {
     final t = region.top;
     // The matrix maps the unrotated page onto the sheet: first the page's
     // own display rotation, then the move to (x, y).
-    final (a, bb, c, d, e, f) = switch (rotation) {
+    final (a0, b0, c0, d0, e0, f0) = switch (rotation) {
       90 => (0.0, -1.0, 1.0, 0.0, -b, r),
       180 => (-1.0, 0.0, 0.0, -1.0, r, t),
       270 => (0.0, 1.0, -1.0, 0.0, t, -l),
       _ => (1.0, 0.0, 0.0, 1.0, -l, -b),
     };
+    // The extra quarter turns act on the upright part, [width] x [height].
+    final size = pdfRegionDisplaySize(region, rotation);
+    final width = size.width;
+    final height = size.height;
+    final (ta, tb, tc, td, te, tf) = switch (turns % 4) {
+      1 => (0.0, -1.0, 1.0, 0.0, 0.0, width),
+      2 => (-1.0, 0.0, 0.0, -1.0, width, height),
+      3 => (0.0, 1.0, -1.0, 0.0, height, 0.0),
+      _ => (1.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+    };
+    final a = ta * a0 + tc * b0;
+    final bb = tb * a0 + td * b0;
+    final c = ta * c0 + tc * d0;
+    final d = tb * c0 + td * d0;
+    final e = ta * e0 + tc * f0 + te;
+    final f = tb * e0 + td * f0 + tf;
     String n(double v) => ContentWriter.fmt(v);
 
     final page = document.page(sheet);

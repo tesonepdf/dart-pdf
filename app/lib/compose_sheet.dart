@@ -66,11 +66,15 @@ class SheetCrop {
 
 /// Dove va un ritaglio: foglio (da 0), angolo in basso a sinistra, scala.
 class SheetPlacement {
-  const SheetPlacement(this.sheet, this.x, this.y, this.scale);
+  const SheetPlacement(this.sheet, this.x, this.y, this.scale,
+      [this.turns = 0]);
   final int sheet;
   final double x;
   final double y;
   final double scale;
+
+  /// Quarti di giro in senso orario dati al ritaglio (0-3).
+  final int turns;
 }
 
 /// Mette i ritagli sui fogli, nell'ordine dato: file dopo file, dall'alto a
@@ -133,6 +137,7 @@ Uint8List composeSheets(List<SheetCrop> crops,
       x: p.x,
       y: p.y,
       scale: p.scale,
+      turns: p.turns,
     );
   }
   return editor.save();
@@ -200,7 +205,7 @@ Uint8List encodeComposition(
     'crops': cropList,
     if (placements != null)
       'placements': [
-        for (final p in placements) [p.sheet, p.x, p.y, p.scale],
+        for (final p in placements) [p.sheet, p.x, p.y, p.scale, p.turns],
       ],
   };
   return Uint8List.fromList(utf8.encode(jsonEncode(map)));
@@ -259,12 +264,14 @@ Future<({List<SheetCrop> crops, List<SheetPlacement>? placements})>
   if (rawPlacements is List<dynamic>) {
     placements = [
       for (final item in rawPlacements)
-        SheetPlacement(
-          (item as List<dynamic>)[0] as int,
-          (item[1] as num).toDouble(),
-          (item[2] as num).toDouble(),
-          (item[3] as num).toDouble(),
-        ),
+        if (item is List<dynamic>)
+          SheetPlacement(
+            (item[0] as num).toInt(),
+            (item[1] as num).toDouble(),
+            (item[2] as num).toDouble(),
+            (item[3] as num).toDouble(),
+            item.length > 4 ? (item[4] as num).toInt() : 0,
+          ),
     ];
   }
   return (crops: crops, placements: placements);
@@ -374,13 +381,21 @@ class OpenSheetSource {
   final ({Uint8List bytes, PdfDocument document}) Function() load;
 }
 
+/// Il risultato di "Componi foglio": il PDF creato e se va stampato subito.
+class ComposeSheetResult {
+  const ComposeSheetResult(this.bytes, {this.print = false});
+
+  final Uint8List bytes;
+  final bool print;
+}
+
 /// Apre "Componi foglio". Restituisce il PDF creato, o null se si annulla.
-Future<Uint8List?> showComposeSheet(
+Future<ComposeSheetResult?> showComposeSheet(
   BuildContext context, {
   List<OpenSheetSource> openSources = const [],
 }) =>
-    Navigator.of(context).push<Uint8List>(
-      MaterialPageRoute<Uint8List>(
+    Navigator.of(context).push<ComposeSheetResult>(
+      MaterialPageRoute<ComposeSheetResult>(
         fullscreenDialog: true,
         builder: (_) => ComposeSheetScreen(openSources: openSources),
       ),
@@ -481,15 +496,15 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   }
 
   Future<void> _create() async {
-    final bytes = await Navigator.of(context).push<Uint8List>(
-      MaterialPageRoute<Uint8List>(
+    final result = await Navigator.of(context).push<ComposeSheetResult>(
+      MaterialPageRoute<ComposeSheetResult>(
         builder: (_) => _SheetPreviewScreen(
           crops: List.of(_crops),
           initialPlacements: _savedPlacements,
         ),
       ),
     );
-    if (bytes != null && mounted) Navigator.of(context).pop(bytes);
+    if (result != null && mounted) Navigator.of(context).pop(result);
   }
 
   @override
@@ -1140,7 +1155,9 @@ class _SelectionPainter extends CustomPainter {
   bool shouldRepaint(_SelectionPainter old) => old.rect != rect;
 }
 
-/// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole.
+/// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole. I ritagli
+/// si disegnano dalle immagini delle pagine, senza ricomporre il PDF a ogni
+/// spostamento: il PDF vero si compone solo alla fine.
 class _SheetPreviewScreen extends StatefulWidget {
   const _SheetPreviewScreen({required this.crops, this.initialPlacements});
 
@@ -1158,8 +1175,6 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
   late List<SheetPlacement> _placements;
   int _sheet = 0;
   int? _selected;
-  int _token = 0;
-  Uint8List? _png;
   String? _error;
   bool _busy = false;
 
@@ -1171,26 +1186,20 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
         ? List.of(saved)
         : layoutSheetCrops([for (final c in widget.crops) c.size]);
     _normalize();
-    _render();
   }
 
   int get _sheets =>
       _placements.fold<int>(1, (m, p) => math.max(m, p.sheet + 1));
 
-  Future<void> _render() async {
-    final token = ++_token;
-    try {
-      final bytes = composeSheets(widget.crops, placements: _placements);
-      final doc = PdfDocument.open(bytes);
-      final png = await PdfPageExport.exportPage(doc.page(_sheet), scale: 1.6);
-      if (!mounted || token != _token) return;
-      setState(() {
-        _png = png;
-        _error = null;
-      });
-    } catch (e) {
-      if (mounted && token == _token) setState(() => _error = '$e');
-    }
+  /// La misura del ritaglio com'è sul foglio (con rotazione e scala).
+  ({double width, double height}) _size(int i) {
+    final base = widget.crops[i].size;
+    final p = _placements[i];
+    final odd = p.turns.isOdd;
+    return (
+      width: (odd ? base.height : base.width) * p.scale,
+      height: (odd ? base.width : base.height) * p.scale,
+    );
   }
 
   /// Toglie i fogli rimasti vuoti e rinumera gli altri.
@@ -1199,7 +1208,7 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
     final map = {for (var i = 0; i < used.length; i++) used[i]: i};
     _placements = [
       for (final p in _placements)
-        SheetPlacement(map[p.sheet]!, p.x, p.y, p.scale),
+        SheetPlacement(map[p.sheet]!, p.x, p.y, p.scale, p.turns),
     ];
     final sel = _selected;
     if (sel != null) {
@@ -1210,32 +1219,56 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
   }
 
   void _moveTo(int index, double x, double y) {
-    final c = widget.crops[index];
     final p = _placements[index];
-    final w = c.size.width * p.scale;
-    final h = c.size.height * p.scale;
+    final size = _size(index);
     _placements[index] = SheetPlacement(
       p.sheet,
-      x.clamp(0.0, math.max(0.0, _pageW - w)),
-      y.clamp(0.0, math.max(0.0, _pageH - h)),
+      x.clamp(0.0, math.max(0.0, _pageW - size.width)),
+      y.clamp(0.0, math.max(0.0, _pageH - size.height)),
       p.scale,
+      p.turns,
     );
   }
 
   double _maxScale(int i) {
-    final c = widget.crops[i];
-    return math.max(
-        0.2, math.min(_pageW / c.size.width, _pageH / c.size.height));
+    final base = widget.crops[i].size;
+    final odd = _placements[i].turns.isOdd;
+    final w = odd ? base.height : base.width;
+    final h = odd ? base.width : base.height;
+    return math.max(0.2, math.min(_pageW / w, _pageH / h));
   }
 
   /// Cambia la misura tenendo fermo l'angolo in alto a sinistra.
   void _resize(int i, double scale) {
     final p = _placements[i];
-    final c = widget.crops[i];
-    final top = p.y + c.size.height * p.scale;
+    final base = widget.crops[i].size;
+    final odd = p.turns.isOdd;
+    final top = p.y + _size(i).height;
+    final newHeight = (odd ? base.width : base.height) * scale;
     _placements[i] =
-        SheetPlacement(p.sheet, p.x, top - c.size.height * scale, scale);
+        SheetPlacement(p.sheet, p.x, top - newHeight, scale, p.turns);
     _moveTo(i, _placements[i].x, _placements[i].y);
+  }
+
+  /// Gira il ritaglio scelto di un quarto di giro, tenendo fermo il centro.
+  void _rotate() {
+    final i = _selected;
+    if (i == null) return;
+    final p = _placements[i];
+    final current = _size(i);
+    final cx = p.x + current.width / 2;
+    final cy = p.y + current.height / 2;
+    final turns = (p.turns + 1) % 4;
+    final base = widget.crops[i].size;
+    final odd = turns.isOdd;
+    final w0 = odd ? base.height : base.width;
+    final h0 = odd ? base.width : base.height;
+    final scale = math.min(p.scale, math.min(_pageW / w0, _pageH / h0));
+    setState(() {
+      _placements[i] = SheetPlacement(
+          p.sheet, cx - w0 * scale / 2, cy - h0 * scale / 2, scale, turns);
+      _moveTo(i, _placements[i].x, _placements[i].y);
+    });
   }
 
   void _moveSheet(int delta) {
@@ -1244,18 +1277,19 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
     final target = _placements[i].sheet + delta;
     if (target < 0) return;
     final p = _placements[i];
-    _placements[i] = SheetPlacement(target, p.x, p.y, p.scale);
+    _placements[i] = SheetPlacement(target, p.x, p.y, p.scale, p.turns);
     _moveTo(i, p.x, p.y);
     setState(_normalize);
-    _render();
   }
 
-  Future<void> _create() async {
+  Future<void> _create({bool print = false}) async {
     setState(() => _busy = true);
     await Future<void>.delayed(const Duration(milliseconds: 50));
     try {
       final bytes = composeSheets(widget.crops, placements: _placements);
-      if (mounted) Navigator.of(context).pop(bytes);
+      if (mounted) {
+        Navigator.of(context).pop(ComposeSheetResult(bytes, print: print));
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1275,51 +1309,57 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
     }
     final k = w / _pageW;
     final children = <Widget>[
-      if (_png != null)
-        Image.memory(_png!, fit: BoxFit.fill, gaplessPlayback: true)
-      else
-        const ColoredBox(color: Color(0xFFFFFFFF)),
+      const ColoredBox(color: Color(0xFFFFFFFF)),
     ];
     for (var i = 0; i < widget.crops.length; i++) {
       final p = _placements[i];
       if (p.sheet != _sheet) continue;
-      final c = widget.crops[i];
-      final cw = c.size.width * p.scale;
-      final ch = c.size.height * p.scale;
+      final size = _size(i);
       final selected = _selected == i;
       children.add(Positioned(
         left: p.x * k,
-        top: (_pageH - p.y - ch) * k,
-        width: cw * k,
-        height: ch * k,
+        top: (_pageH - p.y - size.height) * k,
+        width: size.width * k,
+        height: size.height * k,
         child: GestureDetector(
           onTap: () => setState(() => _selected = i),
           onPanStart: (_) => setState(() => _selected = i),
           onPanUpdate: (d) {
             final q = _placements[i];
-            setState(() => _moveTo(i, q.x + d.delta.dx / k, q.y - d.delta.dy / k));
+            setState(
+                () => _moveTo(i, q.x + d.delta.dx / k, q.y - d.delta.dy / k));
           },
-          onPanEnd: (_) => _render(),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: selected ? const Color(0x222196F3) : null,
-              border: Border.all(
-                color: selected
-                    ? const Color(0xFF2196F3)
-                    : const Color(0x882196F3),
-                width: selected ? 2 : 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _CropView(
+                crop: widget.crops[i],
+                turns: p.turns,
+                width: size.width * k,
+                height: size.height * k,
               ),
-            ),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Container(
-                color: const Color(0xFF2196F3),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text('${i + 1}',
-                    style: const TextStyle(
-                        color: Color(0xFFFFFFFF), fontSize: 11)),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0x222196F3) : null,
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFF2196F3)
+                        : const Color(0x882196F3),
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Container(
+                    color: const Color(0xFF2196F3),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('${i + 1}',
+                        style: const TextStyle(
+                            color: Color(0xFFFFFFFF), fontSize: 11)),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ));
@@ -1327,7 +1367,12 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
     return SizedBox(
       width: w,
       height: h,
-      child: Stack(fit: StackFit.expand, children: children),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0x33000000)),
+        ),
+        child: Stack(fit: StackFit.expand, children: children),
+      ),
     );
   }
 
@@ -1353,7 +1398,7 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(_error ??
                 'Trascina i ritagli dove vuoi. Tocca un ritaglio per '
-                    'spostarlo in un altro foglio.',
+                    'ruotarlo, ridimensionarlo o spostarlo in un altro foglio.',
                 style: _error == null
                     ? null
                     : TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -1372,26 +1417,20 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
               IconButton(
                 icon: const Icon(Icons.chevron_left),
                 onPressed: _sheet > 0
-                    ? () {
-                        setState(() {
+                    ? () => setState(() {
                           _sheet--;
                           _selected = null;
-                        });
-                        _render();
-                      }
+                        })
                     : null,
               ),
               Text('Foglio ${_sheet + 1} di $sheets'),
               IconButton(
                 icon: const Icon(Icons.chevron_right),
                 onPressed: _sheet < sheets - 1
-                    ? () {
-                        setState(() {
+                    ? () => setState(() {
                           _sheet++;
                           _selected = null;
-                        });
-                        _render();
-                      }
+                        })
                     : null,
               ),
             ],
@@ -1411,7 +1450,6 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
                       max: _maxScale(_selected!),
                       onChanged: (v) =>
                           setState(() => _resize(_selected!, v)),
-                      onChangeEnd: (_) => _render(),
                     ),
                   ),
                 ],
@@ -1421,39 +1459,135 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _selected == null ? null : () => _moveSheet(-1),
-                      child: const Text('Foglio prima'),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('compose-rotate'),
+                          onPressed: _selected == null ? null : _rotate,
+                          icon: const Icon(Icons.rotate_right),
+                          label: const Text('Ruota'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed:
+                              _selected == null ? null : () => _moveSheet(-1),
+                          child: const Text('Foglio prima'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed:
+                              _selected == null ? null : () => _moveSheet(1),
+                          child: const Text('Foglio dopo'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _selected == null ? null : () => _moveSheet(1),
-                      child: const Text('Foglio dopo'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _busy ? null : _create,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Crea PDF'),
-                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          key: const ValueKey('compose-create'),
+                          onPressed: _busy ? null : () => _create(),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Crea PDF'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          key: const ValueKey('compose-create-print'),
+                          onPressed:
+                              _busy ? null : () => _create(print: true),
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('Crea e stampa'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Il ritaglio com'è sul foglio, disegnato dall'immagine della pagina e
+/// girato di [turns] quarti di giro.
+class _CropView extends StatelessWidget {
+  const _CropView({
+    required this.crop,
+    required this.turns,
+    required this.width,
+    required this.height,
+  });
+
+  final SheetCrop crop;
+  final int turns;
+
+  /// La misura sullo schermo del ritaglio già girato.
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final png = crop.preview;
+    if (png == null) {
+      return const ColoredBox(
+        color: Color(0xFFEEEEEE),
+        child: Center(child: Icon(Icons.crop)),
+      );
+    }
+    final odd = turns.isOdd;
+    final iw = odd ? height : width;
+    final ih = odd ? width : height;
+    final f = crop.fraction;
+    final pw = f.width <= 0 ? iw : iw / f.width;
+    final ph = f.height <= 0 ? ih : ih / f.height;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: RotatedBox(
+        quarterTurns: turns % 4,
+        child: SizedBox(
+          width: iw,
+          height: ih,
+          child: ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topLeft,
+              minWidth: pw,
+              maxWidth: pw,
+              minHeight: ph,
+              maxHeight: ph,
+              child: Transform.translate(
+                offset: Offset(-f.left * pw, -f.top * ph),
+                child: Image.memory(png,
+                    width: pw,
+                    height: ph,
+                    fit: BoxFit.fill,
+                    gaplessPlayback: true),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

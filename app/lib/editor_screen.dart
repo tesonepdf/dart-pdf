@@ -2790,15 +2790,18 @@ class _EditorScreenState extends State<EditorScreen>
               },
             ),
       ];
-      final bytes = await showComposeSheet(context, openSources: open);
-      if (bytes == null || !mounted) return;
+      final result = await showComposeSheet(context, openSources: open);
+      if (result == null || !mounted) return;
       _readOnly = false;
-      _addTab(DocumentTab.document(
+      final tab = DocumentTab.document(
         title: _nextUntitledTitle(),
-        bytes: bytes,
+        bytes: result.bytes,
         preferences: _prefs,
         initiallyDirty: true,
-      ));
+      );
+      _addTab(tab);
+      // "Crea e stampa": subito la stampa del foglio appena composto.
+      if (result.print) unawaited(_print(tab));
     } catch (e) {
       AppDevTools.instance
           .addLog('compose sheet failed: $e', level: DevLogLevel.error);
