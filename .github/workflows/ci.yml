@@ -53,10 +53,10 @@ jobs:
         working-directory: app
         run: |
           set +e
-          flutter test 2>&1 | tee /tmp/step.txt
-          code=${PIPESTATUS[0]}
+          flutter test --reporter json > /tmp/test.json 2> /tmp/test.err
+          code=$?
           if [ "$code" -ne 0 ]; then
-            echo "::error title=flutter test::$( (grep '❌' /tmp/step.txt | sed -E 's#.*/app/test/##' | head -c 30000; echo '--- dettagli ---'; grep -A10 -m2 '❌.*english_regional' /tmp/step.txt | head -c 6000; tail -n 2 /tmp/step.txt) | sed ':a;N;$!ba;s/\n/%0A/g')"
+            python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
           fi
           exit "$code"
 

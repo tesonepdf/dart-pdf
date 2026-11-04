@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Riassume i test falliti di `flutter test --reporter json` come annotazioni.
+
+Uso: test_summary.py <test.json> [<stderr.txt>]
+
+Per ogni test fallito scrive "file: nome -> prima riga dell'errore", diviso in
+piu' annotazioni (GitHub ne mostra poche per passaggio e ognuna e' corta), cosi'
+il motivo dei fallimenti si legge dall'API senza scaricare i log.
+"""
+import json
+import sys
+
+LIMIT = 3400  # caratteri per annotazione
+MAX_ANNOTATIONS = 8
+
+
+def escape(text):
+    return text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+
+
+def short(error):
+    lines = [l.strip() for l in error.replace('\r', '').split('\n') if l.strip()]
+    return ' / '.join(lines[:3])[:230]
+
+
+def main():
+    tests = {}
+    passed = 0
+    with open(sys.argv[1], encoding='utf-8', errors='replace') as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw.startswith('{'):
+                continue
+            try:
+                event = json.loads(raw)
+            except ValueError:
+                continue
+            kind = event.get('type')
+            if kind == 'testStart':
+                test = event['test']
+                tests[test['id']] = {
+                    'name': test['name'],
+                    'url': test.get('url') or '',
+                    'errors': [],
+                    'result': None,
+                    'hidden': False,
+                }
+            elif kind == 'error':
+                entry = tests.get(event['testID'])
+                if entry is not None:
+                    entry['errors'].append(event.get('error', ''))
+            elif kind == 'testDone':
+                entry = tests.get(event['testID'])
+                if entry is not None:
+                    entry['result'] = event.get('result')
+                    entry['hidden'] = bool(event.get('hidden'))
+                    if entry['result'] == 'success' and not entry['hidden']:
+                        passed += 1
+    failed = [t for t in tests.values()
+              if t['result'] in ('failure', 'error') and not t['hidden']]
+    lines = []
+    for t in failed:
+        file = t['url'].rsplit('/', 1)[-1] or '?'
+        error = short(t['errors'][0]) if t['errors'] else '(nessun messaggio)'
+        lines.append(f"{file}: {t['name']} -> {error}")
+    if not lines and len(sys.argv) > 2:
+        try:
+            with open(sys.argv[2], encoding='utf-8', errors='replace') as fh:
+                tail = fh.read()[-LIMIT:]
+        except OSError:
+            tail = ''
+        if tail.strip():
+            print('::error title=flutter test (stderr)::' + escape(tail))
+    chunks, current = [], ''
+    for line in lines:
+        if current and len(current) + len(line) + 1 > LIMIT:
+            chunks.append(current)
+            current = ''
+        current += line + '\n'
+    if current:
+        chunks.append(current)
+    shown = chunks[:MAX_ANNOTATIONS]
+    for i, chunk in enumerate(shown, 1):
+        title = f'test falliti {i}/{len(shown)}'
+        print(f'::error title={title}::' + escape(chunk))
+    if len(chunks) > MAX_ANNOTATIONS:
+        print('::error title=test falliti (altri)::'
+              + escape(f'{len(chunks) - MAX_ANNOTATIONS} blocchi non mostrati'))
+    print(f'::notice title=conteggio test::{passed} passati, {len(failed)} falliti')
+
+
+main()
