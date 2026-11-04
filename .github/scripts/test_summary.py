@@ -18,6 +18,17 @@ def escape(text):
     return text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
 
 
+def from_prints(prints):
+    """Le prime righe dell'eccezione che il framework ha stampato."""
+    lines = '\n'.join(prints).replace('\r', '').split('\n')
+    for i, line in enumerate(lines):
+        if 'EXCEPTION CAUGHT' in line:
+            rest = [l.strip() for l in lines[i + 1:]
+                    if l.strip() and not set(l.strip()) <= set('═╞╡ ')]
+            return ' / '.join(rest[:4])[:330]
+    return ''
+
+
 def short(error):
     lines = [l.strip() for l in error.replace('\r', '').split('\n') if l.strip()]
     return ' / '.join(lines[:3])[:230]
@@ -42,9 +53,14 @@ def main():
                     'name': test['name'],
                     'url': test.get('url') or '',
                     'errors': [],
+                    'prints': [],
                     'result': None,
                     'hidden': False,
                 }
+            elif kind == 'print':
+                entry = tests.get(event.get('testID'))
+                if entry is not None:
+                    entry['prints'].append(event.get('message', ''))
             elif kind == 'error':
                 entry = tests.get(event['testID'])
                 if entry is not None:
@@ -61,7 +77,9 @@ def main():
     lines = []
     for t in failed:
         file = t['url'].rsplit('/', 1)[-1] or '?'
-        error = short(t['errors'][0]) if t['errors'] else '(nessun messaggio)'
+        error = short(t['errors'][0]) if t['errors'] else ''
+        if not error or error.startswith('Test failed. See exception logs'):
+            error = from_prints(t['prints']) or error or '(nessun messaggio)'
         lines.append(f"{file}: {t['name']} -> {error}")
     if not lines and len(sys.argv) > 2:
         try:
