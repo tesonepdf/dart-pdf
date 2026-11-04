@@ -640,14 +640,42 @@ class _CropPickerScreen extends StatefulWidget {
   State<_CropPickerScreen> createState() => _CropPickerScreenState();
 }
 
+enum _CropDrag { none, draw, move, resize, zoom }
+
 class _CropPickerScreenState extends State<_CropPickerScreen> {
+  static const double _minSelection = 0.01;
+  static const double _maxZoom = 6;
+  static const double _grab = 26;
+
   int _page = 0;
   int _token = 0;
   int _added = 0;
   Uint8List? _png;
   String? _error;
+
+  /// La parte scelta, in frazioni della pagina (0..1, origine in alto a sinistra).
   Rect? _sel;
-  Offset? _start;
+  Rect? _selBefore;
+
+  /// Ingrandimento e spostamento dalla posizione centrata, in pixel.
+  double _zoom = 1;
+  Offset _pan = Offset.zero;
+
+  // Gesto in corso.
+  _CropDrag _drag = _CropDrag.none;
+  int _pointers = 0;
+  Offset _anchor = Offset.zero;
+  bool _gl = false;
+  bool _gt = false;
+  bool _gr = false;
+  bool _gb = false;
+  double _baseZoom = 1;
+  double _baseScale = 1;
+  Offset _baseFraction = Offset.zero;
+
+  // Misure dell'area di lavoro, messe da build.
+  Size _viewport = Size.zero;
+  Size _fit = Size.zero;
 
   @override
   void initState() {
@@ -661,6 +689,9 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       _page = index;
       _png = null;
       _sel = null;
+      _selBefore = null;
+      _zoom = 1;
+      _pan = Offset.zero;
       _error = null;
     });
     try {
@@ -678,13 +709,209 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
     return size.width / size.height;
   }
 
-  Offset _fraction(Offset local, Size size) => Offset(
-        (local.dx / size.width).clamp(0.0, 1.0),
-        (local.dy / size.height).clamp(0.0, 1.0),
+  bool get _selOk =>
+      _sel != null &&
+      _sel!.width >= _minSelection &&
+      _sel!.height >= _minSelection;
+
+  // ---- geometria ------------------------------------------------------
+
+  Offset _origin(double zoom, Offset pan) => Offset(
+        (_viewport.width - _fit.width * zoom) / 2 + pan.dx,
+        (_viewport.height - _fit.height * zoom) / 2 + pan.dy,
       );
 
-  bool get _selOk =>
-      _sel != null && _sel!.width > 0.01 && _sel!.height > 0.01;
+  Offset _clampPan(Offset pan, double zoom) {
+    final maxX = math.max(0.0, (_fit.width * zoom - _viewport.width) / 2);
+    final maxY = math.max(0.0, (_fit.height * zoom - _viewport.height) / 2);
+    return Offset(
+      pan.dx.clamp(-maxX, maxX).toDouble(),
+      pan.dy.clamp(-maxY, maxY).toDouble(),
+    );
+  }
+
+  /// Da un punto dell'area di lavoro alla frazione di pagina.
+  Offset _toFraction(Offset p) {
+    final o = _origin(_zoom, _pan);
+    return Offset(
+      (p.dx - o.dx) / (_fit.width * _zoom),
+      (p.dy - o.dy) / (_fit.height * _zoom),
+    );
+  }
+
+  Offset _clamp01(Offset f) => Offset(
+        f.dx.clamp(0.0, 1.0).toDouble(),
+        f.dy.clamp(0.0, 1.0).toDouble(),
+      );
+
+  /// Il rettangolo scelto nelle coordinate dell'area di lavoro.
+  Rect _toViewport(Rect sel) {
+    final o = _origin(_zoom, _pan);
+    final w = _fit.width * _zoom;
+    final h = _fit.height * _zoom;
+    return Rect.fromLTRB(
+      o.dx + sel.left * w,
+      o.dy + sel.top * h,
+      o.dx + sel.right * w,
+      o.dy + sel.bottom * h,
+    );
+  }
+
+  // ---- gesti ----------------------------------------------------------
+
+  void _rebase(Offset focal, double scale) {
+    _baseZoom = _zoom;
+    _baseScale = scale;
+    _baseFraction = _toFraction(focal);
+  }
+
+  void _onScaleStart(ScaleStartDetails d) {
+    _pointers = d.pointerCount;
+    _selBefore = _sel;
+    _rebase(d.localFocalPoint, 1);
+    if (d.pointerCount >= 2) {
+      _drag = _CropDrag.zoom;
+      return;
+    }
+    _beginSingle(d.localFocalPoint);
+  }
+
+  /// Un dito: sul bordo di un rettangolo lo corregge, dentro lo sposta,
+  /// altrove ne disegna uno nuovo.
+  void _beginSingle(Offset p) {
+    _drag = _CropDrag.draw;
+    _gl = _gt = _gr = _gb = false;
+    final sel = _sel;
+    if (sel != null) {
+      final r = _toViewport(sel);
+      final inX = p.dx >= r.left - _grab && p.dx <= r.right + _grab;
+      final inY = p.dy >= r.top - _grab && p.dy <= r.bottom + _grab;
+      var nearL = inY && (p.dx - r.left).abs() <= _grab;
+      var nearR = inY && (p.dx - r.right).abs() <= _grab;
+      var nearT = inX && (p.dy - r.top).abs() <= _grab;
+      var nearB = inX && (p.dy - r.bottom).abs() <= _grab;
+      if (nearL && nearR) {
+        if ((p.dx - r.left).abs() <= (p.dx - r.right).abs()) {
+          nearR = false;
+        } else {
+          nearL = false;
+        }
+      }
+      if (nearT && nearB) {
+        if ((p.dy - r.top).abs() <= (p.dy - r.bottom).abs()) {
+          nearB = false;
+        } else {
+          nearT = false;
+        }
+      }
+      if (nearL || nearR || nearT || nearB) {
+        _drag = _CropDrag.resize;
+        _gl = nearL;
+        _gr = nearR;
+        _gt = nearT;
+        _gb = nearB;
+        return;
+      }
+      if (r.contains(p)) {
+        _drag = _CropDrag.move;
+        return;
+      }
+    }
+    _anchor = _clamp01(_toFraction(p));
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d) {
+    if (d.pointerCount != _pointers) {
+      // Un dito in più o in meno: si riparte da qui.
+      final wasZoom = _drag == _CropDrag.zoom;
+      _pointers = d.pointerCount;
+      _rebase(d.localFocalPoint, d.scale);
+      if (_pointers >= 2) {
+        if (!wasZoom) setState(() => _sel = _selBefore);
+        _drag = _CropDrag.zoom;
+      } else {
+        _drag = _CropDrag.none;
+      }
+      return;
+    }
+    final w = _fit.width * _zoom;
+    final h = _fit.height * _zoom;
+    switch (_drag) {
+      case _CropDrag.zoom:
+        final ratio = _baseScale == 0 ? 1.0 : d.scale / _baseScale;
+        final zoom = (_baseZoom * ratio).clamp(1.0, _maxZoom).toDouble();
+        final nw = _fit.width * zoom;
+        final nh = _fit.height * zoom;
+        final left = d.localFocalPoint.dx - _baseFraction.dx * nw;
+        final top = d.localFocalPoint.dy - _baseFraction.dy * nh;
+        final pan = Offset(
+          left - (_viewport.width - nw) / 2,
+          top - (_viewport.height - nh) / 2,
+        );
+        setState(() {
+          _zoom = zoom;
+          _pan = _clampPan(pan, zoom);
+        });
+      case _CropDrag.draw:
+        final cur = _clamp01(_toFraction(d.localFocalPoint));
+        setState(() => _sel = Rect.fromPoints(_anchor, cur));
+      case _CropDrag.move:
+        final moving = _sel;
+        if (moving == null) return;
+        final nl = (moving.left + d.focalPointDelta.dx / w)
+            .clamp(0.0, 1.0 - moving.width)
+            .toDouble();
+        final nt = (moving.top + d.focalPointDelta.dy / h)
+            .clamp(0.0, 1.0 - moving.height)
+            .toDouble();
+        setState(
+            () => _sel = Rect.fromLTWH(nl, nt, moving.width, moving.height));
+      case _CropDrag.resize:
+        final sizing = _sel;
+        if (sizing == null) return;
+        final dx = d.focalPointDelta.dx / w;
+        final dy = d.focalPointDelta.dy / h;
+        var rl = sizing.left;
+        var rt = sizing.top;
+        var rr = sizing.right;
+        var rb = sizing.bottom;
+        if (_gl) rl = (rl + dx).clamp(0.0, rr - _minSelection).toDouble();
+        if (_gr) rr = (rr + dx).clamp(rl + _minSelection, 1.0).toDouble();
+        if (_gt) rt = (rt + dy).clamp(0.0, rb - _minSelection).toDouble();
+        if (_gb) rb = (rb + dy).clamp(rt + _minSelection, 1.0).toDouble();
+        setState(() => _sel = Rect.fromLTRB(rl, rt, rr, rb));
+      case _CropDrag.none:
+        break;
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails d) {
+    if (_drag == _CropDrag.draw) {
+      final sel = _sel;
+      if (sel == null ||
+          sel.width < _minSelection ||
+          sel.height < _minSelection) {
+        setState(() => _sel = _selBefore);
+      }
+    }
+    _drag = _CropDrag.none;
+    _pointers = 0;
+  }
+
+  void _zoomBy(double factor) {
+    final zoom = (_zoom * factor).clamp(1.0, _maxZoom).toDouble();
+    setState(() {
+      _pan = _clampPan(_pan * (zoom / _zoom), zoom);
+      _zoom = zoom;
+    });
+  }
+
+  void _resetZoom() => setState(() {
+        _zoom = 1;
+        _pan = Offset.zero;
+      });
+
+  // ---- aggiunta -------------------------------------------------------
 
   void _add({required bool whole}) {
     final page = widget.document.page(_page);
@@ -708,6 +935,58 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
     });
   }
 
+  Widget _workArea() {
+    if (_error != null) return Center(child: Text('Pagina non disegnata: $_error'));
+    if (_png == null) return const Center(child: CircularProgressIndicator());
+    return LayoutBuilder(builder: (context, constraints) {
+      final vw = constraints.maxWidth;
+      final vh = constraints.maxHeight;
+      var fw = vw;
+      var fh = fw / _aspect;
+      if (fh > vh) {
+        fh = vh;
+        fw = fh * _aspect;
+      }
+      _viewport = Size(vw, vh);
+      _fit = Size(fw, fh);
+      final pan = _clampPan(_pan, _zoom);
+      final o = _origin(_zoom, pan);
+      final sel = _sel;
+      return ClipRect(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onScaleStart: _onScaleStart,
+          onScaleUpdate: _onScaleUpdate,
+          onScaleEnd: _onScaleEnd,
+          child: SizedBox(
+            width: vw,
+            height: vh,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: o.dx,
+                  top: o.dy,
+                  width: fw * _zoom,
+                  height: fh * _zoom,
+                  child: Image.memory(_png!,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.medium,
+                      gaplessPlayback: true),
+                ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _SelectionPainter(
+                        sel == null ? null : _toViewport(sel)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final count = widget.document.pageCount;
@@ -718,65 +997,53 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              'Trascina per scegliere la parte. Con due dita ingrandisci; '
+              'trascina i bordi per correggerla.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8),
-              child: Center(
-                child: _error != null
-                    ? Text('Pagina non disegnata: $_error')
-                    : _png == null
-                        ? const CircularProgressIndicator()
-                        : LayoutBuilder(builder: (context, constraints) {
-                            var w = constraints.maxWidth;
-                            var h = w / _aspect;
-                            if (h > constraints.maxHeight) {
-                              h = constraints.maxHeight;
-                              w = h * _aspect;
-                            }
-                            final size = Size(w, h);
-                            return SizedBox(
-                              width: w,
-                              height: h,
-                              child: GestureDetector(
-                                onPanStart: (d) {
-                                  _start = _fraction(d.localPosition, size);
-                                  setState(() => _sel =
-                                      Rect.fromPoints(_start!, _start!));
-                                },
-                                onPanUpdate: (d) {
-                                  final s = _start;
-                                  if (s == null) return;
-                                  setState(() => _sel = Rect.fromPoints(
-                                      s, _fraction(d.localPosition, size)));
-                                },
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.memory(_png!,
-                                        fit: BoxFit.fill,
-                                        gaplessPlayback: true),
-                                    if (_sel != null)
-                                      CustomPaint(
-                                          painter: _SelectionPainter(_sel!)),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-              ),
+              child: _workArea(),
             ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
+                tooltip: 'Pagina precedente',
                 icon: const Icon(Icons.chevron_left),
                 onPressed: _page > 0 ? () => _load(_page - 1) : null,
               ),
               Text('Pagina ${_page + 1} di $count'),
               IconButton(
+                tooltip: 'Pagina successiva',
                 icon: const Icon(Icons.chevron_right),
                 onPressed: _page < count - 1 ? () => _load(_page + 1) : null,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                key: const ValueKey('crop-zoom-out'),
+                tooltip: 'Riduci',
+                icon: const Icon(Icons.zoom_out),
+                onPressed: _zoom > 1 ? () => _zoomBy(1 / 1.5) : null,
+              ),
+              IconButton(
+                key: const ValueKey('crop-zoom-in'),
+                tooltip: 'Ingrandisci',
+                icon: const Icon(Icons.zoom_in),
+                onPressed: _zoom < _maxZoom ? () => _zoomBy(1.5) : null,
+              ),
+              IconButton(
+                key: const ValueKey('crop-zoom-reset'),
+                tooltip: 'Tutta la pagina in vista',
+                icon: const Icon(Icons.fit_screen_outlined),
+                onPressed: _zoom > 1 ? _resetZoom : null,
               ),
             ],
           ),
@@ -828,32 +1095,49 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
   }
 }
 
+/// Il rettangolo scelto, con le maniglie, nelle coordinate dell'area di lavoro.
 class _SelectionPainter extends CustomPainter {
-  _SelectionPainter(this.selection);
+  const _SelectionPainter(this.rect);
 
-  /// Rettangolo in frazioni della pagina (0..1).
-  final Rect selection;
+  final Rect? rect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTRB(
-      selection.left * size.width,
-      selection.top * size.height,
-      selection.right * size.width,
-      selection.bottom * size.height,
-    );
-    canvas.drawRect(rect, Paint()..color = const Color(0x332196F3));
+    final r = rect;
+    if (r == null) return;
+    canvas.drawRect(r, Paint()..color = const Color(0x332196F3));
     canvas.drawRect(
-      rect,
+      r,
       Paint()
         ..color = const Color(0xFF2196F3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
+    final fill = Paint()..color = const Color(0xFFFFFFFF);
+    final edge = Paint()
+      ..color = const Color(0xFF2196F3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final cx = r.center.dx;
+    final cy = r.center.dy;
+    for (final point in [
+      r.topLeft,
+      Offset(cx, r.top),
+      r.topRight,
+      Offset(r.right, cy),
+      r.bottomRight,
+      Offset(cx, r.bottom),
+      r.bottomLeft,
+      Offset(r.left, cy),
+    ]) {
+      final handle = Rect.fromCenter(center: point, width: 14, height: 14);
+      canvas.drawRect(handle, fill);
+      canvas.drawRect(handle, edge);
+    }
   }
 
   @override
-  bool shouldRepaint(_SelectionPainter old) => old.selection != selection;
+  bool shouldRepaint(_SelectionPainter old) => old.rect != rect;
 }
 
 /// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole.
