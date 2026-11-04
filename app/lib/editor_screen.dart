@@ -2772,7 +2772,25 @@ class _EditorScreenState extends State<EditorScreen>
   /// si apre in una scheda.
   Future<void> _composeSheet() async {
     try {
-      final bytes = await showComposeSheet(context);
+      // I PDF già aperti nelle schede si offrono come sorgenti: l'ultima
+      // versione (anche non salvata), senza passare da un file.
+      final open = [
+        for (final tab in _tabs)
+          if (tab.session case final session?)
+            OpenSheetSource(
+              name: tab.title,
+              page: tab.viewer?.currentPage ?? 0,
+              load: () {
+                session.finishInk();
+                final bytes = Uint8List.fromList(session.bytes);
+                return (
+                  bytes: bytes,
+                  document: session.document.openAppended(bytes),
+                );
+              },
+            ),
+      ];
+      final bytes = await showComposeSheet(context, openSources: open);
       if (bytes == null || !mounted) return;
       _readOnly = false;
       _addTab(DocumentTab.document(

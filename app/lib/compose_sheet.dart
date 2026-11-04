@@ -356,17 +356,40 @@ class _CropThumbnail extends StatelessWidget {
   }
 }
 
+/// Un PDF già aperto in una scheda, offerto come sorgente dei ritagli senza
+/// doverlo salvare e richiamare. [load] dà i byte dell'ultima versione della
+/// scheda (anche con modifiche non salvate) e il documento aperto da quei byte.
+class OpenSheetSource {
+  const OpenSheetSource({
+    required this.name,
+    required this.load,
+    this.page = 0,
+  });
+
+  final String name;
+
+  /// La pagina in vista nella scheda, da 0: il selettore parte da lì.
+  final int page;
+
+  final ({Uint8List bytes, PdfDocument document}) Function() load;
+}
+
 /// Apre "Componi foglio". Restituisce il PDF creato, o null se si annulla.
-Future<Uint8List?> showComposeSheet(BuildContext context) =>
+Future<Uint8List?> showComposeSheet(
+  BuildContext context, {
+  List<OpenSheetSource> openSources = const [],
+}) =>
     Navigator.of(context).push<Uint8List>(
       MaterialPageRoute<Uint8List>(
         fullscreenDialog: true,
-        builder: (_) => const ComposeSheetScreen(),
+        builder: (_) => ComposeSheetScreen(openSources: openSources),
       ),
     );
 
 class ComposeSheetScreen extends StatefulWidget {
-  const ComposeSheetScreen({super.key});
+  const ComposeSheetScreen({super.key, this.openSources = const []});
+
+  final List<OpenSheetSource> openSources;
 
   @override
   State<ComposeSheetScreen> createState() => _ComposeSheetScreenState();
@@ -395,14 +418,40 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
     }
   }
 
+  /// Sceglie tra i PDF già aperti (anche più di uno) e, per ciascuno, apre il
+  /// selettore del ritaglio sulla pagina che si sta guardando.
+  Future<void> _pickOpen() async {
+    final chosen = await showDialog<List<OpenSheetSource>>(
+      context: context,
+      builder: (_) => _OpenSourcesDialog(sources: widget.openSources),
+    );
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    for (final source in chosen) {
+      if (!mounted) return;
+      try {
+        final loaded = source.load();
+        if (loaded.document.pageCount == 0) {
+          setState(() => _message = '${source.name} non ha pagine.');
+          continue;
+        }
+        await _openPicker(source.name, loaded.bytes, loaded.document,
+            initialPage: source.page);
+      } catch (e) {
+        if (mounted) setState(() => _message = '${source.name} non usato: $e');
+      }
+    }
+  }
+
   Future<void> _openPicker(
-      String name, Uint8List bytes, PdfDocument document) {
+      String name, Uint8List bytes, PdfDocument document,
+      {int initialPage = 0}) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => _CropPickerScreen(
           name: name,
           bytes: bytes,
           document: document,
+          initialPage: initialPage,
           onAdd: (crop) => setState(() {
             _message = null;
             _savedPlacements = null;
@@ -527,21 +576,37 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickPdf,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Aggiungi da un PDF…'),
-                    ),
+                  Row(
+                    children: [
+                      if (widget.openSources.isNotEmpty) ...[
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('compose-from-open'),
+                            onPressed: _pickOpen,
+                            icon: const Icon(Icons.picture_as_pdf_outlined),
+                            label: const Text('Da un PDF aperto'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('compose-from-file'),
+                          onPressed: _pickPdf,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Da un file…'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _crops.isEmpty ? null : _create,
-                      child: const Text('Disponi sui fogli'),
-                    ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: _crops.isEmpty ? null : _create,
+                    child: const Text('Disponi sui fogli'),
                   ),
                 ],
               ),
@@ -560,12 +625,16 @@ class _CropPickerScreen extends StatefulWidget {
     required this.bytes,
     required this.document,
     required this.onAdd,
+    this.initialPage = 0,
   });
 
   final String name;
   final Uint8List bytes;
   final PdfDocument document;
   final void Function(SheetCrop crop) onAdd;
+
+  /// La pagina da cui partire, da 0.
+  final int initialPage;
 
   @override
   State<_CropPickerScreen> createState() => _CropPickerScreenState();
@@ -583,7 +652,7 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _load(0);
+    _load(widget.initialPage.clamp(0, widget.document.pageCount - 1));
   }
 
   Future<void> _load(int index) async {
@@ -1102,6 +1171,67 @@ class _SheetPreviewScreenState extends State<_SheetPreviewScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Elenco dei PDF già aperti, a scelta multipla.
+class _OpenSourcesDialog extends StatefulWidget {
+  const _OpenSourcesDialog({required this.sources});
+
+  final List<OpenSheetSource> sources;
+
+  @override
+  State<_OpenSourcesDialog> createState() => _OpenSourcesDialogState();
+}
+
+class _OpenSourcesDialogState extends State<_OpenSourcesDialog> {
+  final Set<OpenSheetSource> _chosen = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('compose-open-dialog'),
+      title: const Text('PDF aperti'),
+      content: SizedBox(
+        width: 360,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final source in widget.sources)
+              CheckboxListTile(
+                controlAffinity: ListTileControlAffinity.leading,
+                value: _chosen.contains(source),
+                onChanged: (value) => setState(() {
+                  if (value ?? false) {
+                    _chosen.add(source);
+                  } else {
+                    _chosen.remove(source);
+                  }
+                }),
+                title: Text(source.name,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text('pagina ${source.page + 1} in vista'),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annulla'),
+        ),
+        FilledButton(
+          onPressed: _chosen.isEmpty
+              ? null
+              : () => Navigator.of(context).pop([
+                    for (final source in widget.sources)
+                      if (_chosen.contains(source)) source,
+                  ]),
+          child: Text(
+              _chosen.length > 1 ? 'Continua (${_chosen.length})' : 'Continua'),
+        ),
+      ],
     );
   }
 }
