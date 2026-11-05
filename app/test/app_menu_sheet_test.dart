@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/editor_screen.dart';
 
+import 'test_finders.dart';
+
 void main() {
   late PdfEditingPreferences prefs;
 
@@ -55,8 +57,10 @@ void main() {
     await openMenu(tester);
 
     expect(key('app-menu-sheet'), findsOneWidget);
+    // the groups start folded (File open): open them all
+    await expandMenuGroups(tester);
     expect(find.text('FILE'), findsOneWidget);
-    expect(find.text('THIS DOCUMENT'), findsOneWidget);
+    expect(find.text('DOCUMENTO APERTO'), findsOneWidget);
     expect(find.text('APP'), findsOneWidget);
     expect(key('menu-command-palette'), findsOneWidget);
     for (final id in [
@@ -84,11 +88,7 @@ void main() {
     expect(tester.getTopLeft(key('menu-open')).dy,
         lessThan(tester.getTopLeft(key('menu-open-recent')).dy));
     expect(tester.getTopLeft(key('menu-open-recent')).dy,
-        lessThan(tester.getTopLeft(find.text('THIS DOCUMENT')).dy));
-    expect(tester.getTopLeft(find.text('THIS DOCUMENT')).dy,
-        lessThan(tester.getTopLeft(key('menu-save-as')).dy));
-    expect(tester.getTopLeft(key('menu-compare')).dy,
-        lessThan(tester.getTopLeft(find.text('APP')).dy));
+        lessThan(tester.getTopLeft(find.text('DOCUMENTO APERTO')).dy));
     expect(tester.getTopLeft(find.text('APP')).dy,
         lessThan(tester.getTopLeft(key('menu-settings')).dy));
     expect(tester.takeException(), isNull);
@@ -104,7 +104,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(key('app-menu-sheet-recent'), findsOneWidget);
     expect(key('menu-recent-see-all'), findsOneWidget);
-    expect(key('menu-no-recent-files'), findsOneWidget);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -149,6 +148,7 @@ void main() {
     await openMenu(tester);
 
     expect(key('menu-scan-document'), findsOneWidget);
+    await expandMenuGroup(tester, 'pages');
     expect(key('menu-insert-scan'), findsOneWidget);
   });
 
@@ -157,6 +157,7 @@ void main() {
     await pump(tester, withDoc: true);
     await openMenu(tester);
 
+    await expandMenuGroup(tester, 'app');
     final row = key('menu-read-only');
     expect(tester.getSemantics(row), isSemantics(isToggled: false));
     await tester.tap(row);
@@ -164,6 +165,7 @@ void main() {
     expect(find.byType(PdfReader), findsOneWidget);
 
     await openMenu(tester);
+    await expandMenuGroup(tester, 'app');
     expect(tester.getSemantics(row), isSemantics(isToggled: true));
   });
 

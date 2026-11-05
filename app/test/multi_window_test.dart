@@ -68,17 +68,20 @@ void main() {
         matching: findMiddleEllipsisText(name),
       );
 
-  // The view modes are one SegmentedButton in the view-options popup, so the
-  // mode is addressed by its drawn label rather than a per-item key.
+  // Desktop: the view modes are one SegmentedButton in the view-options
+  // popup, addressed by its drawn label. Touch platforms (the test default is
+  // Android) list them as menu items with their own keys instead.
   Future<void> tapPageGrid(WidgetTester tester) async {
-    await tester.tap(
-        find.descendant(
-            of: find.byKey(const ValueKey('pdf-shell-view-mode')),
+    final segmented = find.byKey(const ValueKey('pdf-shell-view-mode'));
+    final target = segmented.evaluate().isNotEmpty
+        ? find.descendant(
+            of: segmented,
             matching: find.byWidgetPredicate((widget) =>
                 widget is Text &&
                 widget.data == 'Page grid' &&
-                widget.maxLines == 1)),
-        kind: PointerDeviceKind.mouse);
+                widget.maxLines == 1))
+        : find.byKey(const ValueKey('pdf-shell-view-mode-page-grid'));
+    await tester.tap(target, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
   }
 

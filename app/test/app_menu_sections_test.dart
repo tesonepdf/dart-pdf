@@ -47,16 +47,16 @@ void main() {
   });
 
   testWidgets(
-      'with nothing open the document section goes, and a lone App '
-      'row keeps a bare divider instead of a header', (tester) async {
+      'with nothing open the document section goes, and the App section '
+      'stays with its several rows', (tester) async {
     await pump(tester);
     await openMenu(tester);
 
     expect(find.text('FILE'), findsOneWidget);
     expect(find.text('THIS DOCUMENT'), findsNothing);
-    // Settings is the only App row without a document, and a label over one
-    // row says less than the divider above it.
-    expect(find.text('APP'), findsNothing);
+    // Settings, Updates and the other App rows need no document, so the
+    // App section keeps its header.
+    expect(find.text('APP'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
   });
 

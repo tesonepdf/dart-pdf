@@ -6,6 +6,8 @@ import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'test_finders.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,16 +85,11 @@ void main() {
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('app-menu-sheet')), findsOneWidget);
-    final group = find.byKey(const ValueKey('menu-group-form-data'));
+    final group = find.byKey(const ValueKey('app-menu-group-forms'));
     expect(group, findsOneWidget);
     expect(find.byKey(const ValueKey('menu-export-fdf')), findsNothing);
 
-    await tester.ensureVisible(group);
-    await tester.pumpAndSettle();
-    await tester.tap(group);
-    await tester.pumpAndSettle();
-    expect(
-        find.byKey(const ValueKey('app-menu-sheet-form-data')), findsOneWidget);
+    await expandMenuGroup(tester, 'forms');
     expectEntries();
   });
 
