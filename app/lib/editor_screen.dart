@@ -51,6 +51,7 @@ import 'open_error.dart';
 import 'pdf_cache.dart';
 import 'recent_thumbnails.dart';
 import 'recents.dart';
+import 'read_aloud.dart';
 import 'reduce_file_size.dart';
 import 'rename_document.dart';
 import 'session_store.dart';
@@ -936,6 +937,7 @@ class _EditorScreenState extends State<EditorScreen>
     // dirty tabs (a crash, a forced quit) can still hand the work back.
     _prefs.removeListener(_onPrefsForMeasureScale);
     _autosave.dispose();
+    unawaited(ReadAloud.instance.stop());
     for (final tab in _tabs) {
       tab.dispose();
     }
@@ -4967,6 +4969,20 @@ class _EditorScreenState extends State<EditorScreen>
         },
       ),
       _MenuAction(
+        id: 'read-aloud',
+        requiresDocument: true,
+        icon: ReadAloud.instance.speaking.value
+            ? Icons.volume_off_outlined
+            : Icons.volume_up_outlined,
+        title: ReadAloud.instance.speaking.value
+            ? _readAloudTexts().stop
+            : _readAloudTexts().page,
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_readPageAloud(tab));
+        },
+      ),
+      _MenuAction(
         id: 'export-image',
         requiresDocument: true,
         icon: Icons.image_outlined,
@@ -5850,6 +5866,8 @@ class _EditorScreenState extends State<EditorScreen>
       onExportPages: (bytes) => unawaited(_exportPages(tab, bytes)),
       onAction: _onAction,
       annotationMenuBuilder: _annotationMenuActions,
+      onReadAloud: (text) => unawaited(_readAloud(text)),
+      readAloudLabel: _readAloudTexts().read,
       formImagePicker: (context, field) => pickImageBytesFromSource(context),
       imagePicker: pickImageBytesFromSource,
       systemPdfPasteProvider: (context) =>
@@ -5935,6 +5953,37 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
+  ({String read, String stop, String page}) _readAloudTexts() =>
+      readAloudLabels(Localizations.localeOf(context).languageCode);
+
+  /// Legge ad alta voce [text] con la voce di sistema.
+  Future<void> _readAloud(String text) => ReadAloud.instance.speak(
+        text,
+        languageTag:
+            readAloudLanguageTag(Localizations.localeOf(context).languageCode),
+      );
+
+  /// Legge tutto il testo della pagina che si sta guardando; se sta già
+  /// leggendo, ferma la lettura. Il testo di una scansione c'è dopo l'OCR.
+  Future<void> _readPageAloud(DocumentTab tab) async {
+    if (ReadAloud.instance.speaking.value) {
+      await ReadAloud.instance.stop();
+      return;
+    }
+    final viewer = tab.viewer;
+    if (viewer == null) return;
+    viewer.selectAllTextOn(viewer.currentPage);
+    final text = viewer.selectedText;
+    viewer.clearSelection();
+    if (text.trim().isEmpty) {
+      _toast(Localizations.localeOf(context).languageCode == 'it'
+          ? 'Nessun testo da leggere in questa pagina. Se è una scansione, fai prima l\'OCR.'
+          : 'No text to read on this page. For a scan, run OCR first.');
+      return;
+    }
+    await _readAloud(text);
+  }
+
   Future<void> _showAppMenuSheet(DocumentTab? tab) async {
     final l = appL10n(context);
     final hasDocument = tab?.session != null;
@@ -5942,7 +5991,7 @@ class _EditorScreenState extends State<EditorScreen>
       if (action.sheet == _SheetPlacement.formData) return 'forms';
       return switch (action.id) {
         'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
-        'digital-signature' || 'ocr' => 'sign',
+        'digital-signature' || 'ocr' || 'read-aloud' => 'sign',
         'compare' || 'insert-document' || 'insert-scan' => 'pages',
         'import-form-data' => 'forms',
         _ => null,

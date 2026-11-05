@@ -152,6 +152,8 @@ class PdfReader extends StatefulWidget {
     this.onLaunchUrl,
     this.onShareReflowImage,
     this.pageOverlayBuilder,
+    this.onReadAloud,
+    this.readAloudLabel,
     this.textMenuBuilder,
     this.textMenuEntries,
     this.contextMenuEnabled = true,
@@ -213,6 +215,8 @@ class PdfReader extends StatefulWidget {
     this.onLaunchUrl,
     this.onShareReflowImage,
     this.pageOverlayBuilder,
+    this.onReadAloud,
+    this.readAloudLabel,
     this.textMenuBuilder,
     this.textMenuEntries,
     this.contextMenuEnabled = true,
@@ -358,6 +362,12 @@ class PdfReader extends StatefulWidget {
   /// See [PdfViewer.textMenuBuilder]. A reader has no editing session,
   /// so the request's controller is always null here.
   final PdfTextMenuBuilder? textMenuBuilder;
+
+  /// See [PdfViewer.onReadAloud].
+  final void Function(String text)? onReadAloud;
+
+  /// See [PdfViewer.readAloudLabel].
+  final String? readAloudLabel;
 
   /// See [PdfViewer.textMenuEntries]: rewrites the text menu's rows.
   final PdfTextMenuEntriesBuilder? textMenuEntries;
@@ -730,6 +740,8 @@ class _PdfReaderState extends State<PdfReader> {
                             onPlainTap: autoHide ? _chrome.toggle : null,
                             onLaunchUrl: widget.onLaunchUrl,
                             pageOverlayBuilder: widget.pageOverlayBuilder,
+                            onReadAloud: widget.onReadAloud,
+                            readAloudLabel: widget.readAloudLabel,
                             textMenuBuilder: widget.textMenuBuilder,
                             textMenuEntries: widget.textMenuEntries,
                             contextMenuEnabled: widget.contextMenuEnabled,

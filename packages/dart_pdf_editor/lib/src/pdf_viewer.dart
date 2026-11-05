@@ -1417,6 +1417,8 @@ class PdfViewer extends StatefulWidget {
     this.textSelectionMarkup = true,
     this.annotationMenuBuilder,
     this.onSaveAnnotationImage,
+    this.onReadAloud,
+    this.readAloudLabel,
     this.textMenuBuilder,
     this.annotationMenuEntries,
     this.textMenuEntries,
@@ -1746,6 +1748,14 @@ class PdfViewer extends StatefulWidget {
   /// request. Custom entries alone are enough to open the menu, so an
   /// action that doesn't need text still reaches a page that has none.
   final PdfTextMenuBuilder? textMenuBuilder;
+
+  /// "Read aloud": when set, the text selection menus (touch chip and mouse
+  /// right-click) offer a button that hands the selected text to this
+  /// callback. The host owns the speech engine.
+  final void Function(String text)? onReadAloud;
+
+  /// Label of the "Read aloud" button (defaults to English).
+  final String? readAloudLabel;
 
   /// Rewrites the annotation context menu's rows - the stock entries plus
   /// [annotationMenuBuilder]'s - before it opens: drop, reorder or add rows
@@ -7382,6 +7392,10 @@ class _PdfViewerState extends State<PdfViewer>
         stock('edit', l10n.viewerEditTextStyle, Icons.edit, _editTextSelection),
       stock('copy', l10n.copy, Icons.copy, _controller.copySelection,
           enabled: hasSelection),
+      if (widget.onReadAloud != null)
+        stock('read-aloud', widget.readAloudLabel ?? 'Read aloud',
+            Icons.volume_up, _readAloudSelection,
+            enabled: hasSelection),
       if (canMarkup) ...[
         _markupSubmenuEntry(globalPosition),
         stock(
@@ -9288,6 +9302,13 @@ class _PdfViewerState extends State<PdfViewer>
     });
   }
 
+  /// Hands the current text selection to [PdfViewer.onReadAloud].
+  void _readAloudSelection() {
+    final text = _controller.selectedText;
+    if (text.trim().isEmpty) return;
+    widget.onReadAloud?.call(text);
+  }
+
   Future<void> _copyAndDismiss() async {
     await _controller.copySelection();
     _clearSelection();
@@ -9324,6 +9345,8 @@ class _PdfViewerState extends State<PdfViewer>
       onDragUpdate: _onHandleDragUpdate,
       onDragEnd: _onHandleDragEnd,
       onCopy: _copyAndDismiss,
+      onReadAloud: widget.onReadAloud == null ? null : _readAloudSelection,
+      readAloudLabel: widget.readAloudLabel ?? 'Read aloud',
       onSelectAll: () => _selectAllTextOn(index),
       onEdit: widget.editing != null && widget.textSelectionEditing
           ? _editTextSelection
@@ -12552,6 +12575,8 @@ class _PageTextSelection {
     required this.onDragUpdate,
     required this.onDragEnd,
     required this.onCopy,
+    required this.onReadAloud,
+    required this.readAloudLabel,
     required this.onSelectAll,
     required this.onEdit,
     required this.onMarkup,
@@ -12581,6 +12606,10 @@ class _PageTextSelection {
   final void Function(Offset globalPosition) onDragUpdate;
   final VoidCallback onDragEnd;
   final VoidCallback onCopy;
+
+  /// Reads the selection aloud, or null when the host gave no reader.
+  final VoidCallback? onReadAloud;
+  final String readAloudLabel;
   final VoidCallback onSelectAll;
   final Future<void> Function()? onEdit;
   final void Function(PdfMarkupKind kind)? onMarkup;
@@ -12746,6 +12775,15 @@ class _TextSelectionChrome extends StatelessWidget {
                     onPressed: selection.onRedact,
                   ),
                 ],
+                if (selection.onReadAloud != null) ...[
+                  const SizedBox(height: 24, child: VerticalDivider(width: 1)),
+                  IconButton(
+                    key: const ValueKey('pdf-text-selection-chip-read-aloud'),
+                    tooltip: selection.readAloudLabel,
+                    icon: const Icon(Icons.volume_up, size: 20),
+                    onPressed: selection.onReadAloud,
+                  ),
+                ],
                 const SizedBox(height: 24, child: VerticalDivider(width: 1)),
                 TextButton(
                   key: const ValueKey('pdf-text-selection-chip-select-all'),
@@ -12780,6 +12818,12 @@ class _TextSelectionChrome extends StatelessWidget {
               id: 'pdf-text-selection-chip-copy',
               label: l10n.copy,
               onPressed: selection.onCopy),
+          if (selection.onReadAloud != null)
+            PdfActionBarAction(
+                id: 'pdf-text-selection-chip-read-aloud',
+                label: selection.readAloudLabel,
+                icon: Icons.volume_up,
+                onPressed: selection.onReadAloud),
           if (onMarkup != null)
             PdfActionBarAction(
               id: 'pdf-text-selection-chip-markup',

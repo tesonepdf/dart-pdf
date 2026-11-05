@@ -49,6 +49,8 @@ dependencies:
   file_selector_platform_interface: ^2.7.0
   share_plus: ^13.3.1
   url_launcher: ^6.3.3
+  # Legge ad alta voce il testo selezionato o la pagina (voce di sistema).
+  flutter_tts: ^4.2.3
   # Optional preview, sheet composition and native system printing.
   dart_pdf_printing: ^0.10.0
   shared_preferences: ^2.5.6
