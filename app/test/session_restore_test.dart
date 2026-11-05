@@ -314,6 +314,13 @@ void main() {
     expect(fake.openedMultiple, isTrue);
     expect(tabTitle('picker-a.pdf'), findsOneWidget);
     expect(tabTitle('picker-b.pdf'), findsOneWidget);
+    // let the Recent writes of the two opens finish before the app is torn
+    // down, so none lands on a disposed store
+    await tester.runAsync(() async {
+      await pumpFrames(tester);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
   });
 
   testWidgets(

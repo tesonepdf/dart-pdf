@@ -360,6 +360,8 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     coordinator.dispose();
     prefs.dispose();
+    // reset here: the foundation-variable check runs before tear-downs
+    debugDefaultTargetPlatformOverride = null;
   });
 
   test('drop in the source strip reorders without rebuilding the document',
