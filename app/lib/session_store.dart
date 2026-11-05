@@ -87,7 +87,8 @@ class SessionStore {
   Future<List<SessionDocument>> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _activeIndex = prefs.getInt(_activeKey) ?? 0;
+      // -1: nessuna scelta salvata (sessione vecchia), resta attiva l'ultima scheda
+      _activeIndex = prefs.getInt(_activeKey) ?? -1;
       final raw = prefs.getString(_key);
       if (raw == null) return _documents;
       final decoded = jsonDecode(raw);

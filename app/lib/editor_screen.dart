@@ -360,7 +360,9 @@ class _EditorScreenState extends State<EditorScreen>
   /// hands back whatever a previous run lost. See autosave.dart.
   // Salvataggio automatico disattivato: nessuna copia dei documenti modificati
   // viene scritta o riaperta da sola. Si salva solo quando lo chiede l'utente.
-  late final AutosaveController _autosave = AutosaveController(store: null);
+  // Resta acceso solo se chi crea la schermata passa un archivio (i test).
+  late final AutosaveController _autosave =
+      AutosaveController(store: widget.unsavedChangesStore);
 
   final _incoming = IncomingFileService();
   late final OnDeviceOcr _ocr = widget.ocr ?? OnDeviceOcr();
