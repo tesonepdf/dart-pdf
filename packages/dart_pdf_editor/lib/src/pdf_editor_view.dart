@@ -278,6 +278,7 @@ class PdfEditorView extends StatefulWidget {
     this.systemImagePasteProvider,
     this.systemImagePasteOverridesLocalClipboard = false,
     this.systemTextPasteProvider,
+    this.onPasteNothing,
     this.onExportSelectedContentImage,
     this.onExportCustomStamps,
     this.onImportCustomStamps,
@@ -390,6 +391,7 @@ class PdfEditorView extends StatefulWidget {
     this.systemImagePasteProvider,
     this.systemImagePasteOverridesLocalClipboard = false,
     this.systemTextPasteProvider,
+    this.onPasteNothing,
     this.onExportSelectedContentImage,
     this.onExportCustomStamps,
     this.onImportCustomStamps,
@@ -649,6 +651,9 @@ class PdfEditorView extends StatefulWidget {
 
   /// See [PdfViewer.systemTextPasteProvider].
   final PdfSystemTextPasteProvider? systemTextPasteProvider;
+
+  /// See [PdfViewer.onPasteNothing].
+  final VoidCallback? onPasteNothing;
 
   /// See [PdfEditingToolbar.onExportSelectedContentImage]. Also saves a
   /// pasted vector snapshot from its context menu's "Save as image…"
@@ -1070,6 +1075,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
         systemImagePasteOverridesLocalClipboard:
             widget.systemImagePasteOverridesLocalClipboard,
         systemTextPasteProvider: widget.systemTextPasteProvider,
+        onPasteNothing: widget.onPasteNothing,
         onExportSelectedContentImage: widget.onExportSelectedContentImage,
         onExportCustomStamps: widget.onExportCustomStamps,
         onImportCustomStamps: widget.onImportCustomStamps,
@@ -2040,6 +2046,7 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                               widget.systemImagePasteOverridesLocalClipboard,
                           systemTextPasteProvider:
                               widget.systemTextPasteProvider,
+                          onPasteNothing: widget.onPasteNothing,
                           onSnapshot: widget.onSnapshot,
                           onPlaceSignature: widget.onPlaceSignature,
                           editingTextPrompt: widget.textPrompt,
