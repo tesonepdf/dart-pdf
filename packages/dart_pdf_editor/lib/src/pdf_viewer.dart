@@ -1434,6 +1434,7 @@ class PdfViewer extends StatefulWidget {
     this.systemImagePasteProvider,
     this.systemImagePasteOverridesLocalClipboard = false,
     this.systemTextPasteProvider,
+    this.onPasteNothing,
     this.onSnapshot,
     this.onPlaceSignature,
     this.pageSpacing = 12,
@@ -1860,6 +1861,11 @@ class PdfViewer extends StatefulWidget {
   /// Flutter's [Clipboard], which is unreliable on the web. When null, paste
   /// reads text from [Clipboard] as before.
   final PdfSystemTextPasteProvider? systemTextPasteProvider;
+
+  /// Chiamata quando "Incolla" non trova niente da incollare (appunti vuoti,
+  /// o un'immagine che non si riesce a leggere). Serve a dare un avviso
+  /// all'utente invece di non fare nulla.
+  final VoidCallback? onPasteNothing;
 
   /// Receives a region captured by the snapshot tool
   /// ([PdfEditTool.snapshot]) - typically to copy it to the clipboard,
@@ -8283,7 +8289,11 @@ class _PdfViewerState extends State<PdfViewer>
             await _pasteSystemClipboardImage(editing, page, at, revision)) {
           return;
         }
-        await _pasteSystemClipboardText(editing, page, at, revision);
+        final pastedText =
+            await _pasteSystemClipboardText(editing, page, at, revision);
+        if (!pastedText && mounted && widget.editing == editing) {
+          widget.onPasteNothing?.call();
+        }
       }
     } finally {
       _readingPaste = false;
@@ -8316,7 +8326,7 @@ class _PdfViewerState extends State<PdfViewer>
     );
   }
 
-  Future<void> _pasteSystemClipboardText(PdfEditingController editing, int page,
+  Future<bool> _pasteSystemClipboardText(PdfEditingController editing, int page,
       (double, double)? at, int revision) async {
     // Prefer the host's reader (the web build wires one over the browser Async
     // Clipboard API, since Flutter's Clipboard.getData is unreliable there);
@@ -8334,19 +8344,20 @@ class _PdfViewerState extends State<PdfViewer>
         final data = await Clipboard.getData(Clipboard.kTextPlain);
         text = data?.text;
       } catch (_) {
-        return;
+        return false;
       }
     }
-    if (text == null || text.trim().isEmpty) return;
+    if (text == null || text.trim().isEmpty) return false;
     if (!mounted ||
         widget.editing != editing ||
         editing.revisionId != revision) {
-      return;
+      return false;
     }
-    if (page < 0 || page >= editing.document.pageCount) return;
+    if (page < 0 || page >= editing.document.pageCount) return false;
     final box = editing.pageAt(page).cropBox;
     editing.placeFreeText(page, at?.$1 ?? (box.left + box.right) / 2,
         at?.$2 ?? (box.bottom + box.top) / 2, text);
+    return true;
   }
 
   /// ⌘A/Ctrl+A: with an annotation selection in play, widens it to every

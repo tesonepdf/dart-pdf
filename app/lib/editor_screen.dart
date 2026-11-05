@@ -4663,6 +4663,19 @@ class _EditorScreenState extends State<EditorScreen>
 
   List<PdfAnnotationMenuItem> _annotationMenuActions(
       BuildContext context, PdfAnnotationMenuRequest request) {
+    // Pagina vuota (niente selezionato): oltre a "Incolla", si può inserire
+    // un'immagine dalla galleria/fotocamera/file.
+    if (request.annotations.isEmpty) {
+      return [
+        PdfAnnotationMenuItem(
+          key: const ValueKey('app-menu-insert-image'),
+          label: 'Immagine dalla galleria…',
+          icon: Icons.add_photo_alternate_outlined,
+          onSelected: (request) => _insertImageOnPage(
+              request.controller, request.pageIndex),
+        ),
+      ];
+    }
     final contents = request.primary?.contents;
     if (contents == null || contents.isEmpty) return const [];
     return [
@@ -4675,6 +4688,24 @@ class _EditorScreenState extends State<EditorScreen>
         },
       ),
     ];
+  }
+
+  /// Sceglie un'immagine (galleria, fotocamera o file) e la mette al centro
+  /// della pagina [page]; poi si sposta e si ridimensiona con Seleziona.
+  Future<void> _insertImageOnPage(
+      PdfEditingController editing, int page) async {
+    final bytes = await pickImageBytesFromSource(context);
+    if (bytes == null || bytes.isEmpty || !mounted) return;
+    if (page < 0 || page >= editing.document.pageCount) return;
+    final box = editing.pageAt(page).cropBox;
+    final ok = await editing.placeImageAsync(
+      page,
+      (box.left + box.right) / 2,
+      (box.bottom + box.top) / 2,
+      bytes,
+    );
+    if (!mounted) return;
+    if (!ok) _toast('Immagine non valida o formato non supportato');
   }
 
   /// Shows a transient message. [duration] overrides the default for the rare
@@ -5937,6 +5968,9 @@ class _EditorScreenState extends State<EditorScreen>
       systemImagePasteOverridesLocalClipboard: imageClipboardTracksOwnership,
       systemTextPasteProvider: (context) =>
           (widget.textClipboardReader ?? readTextFromClipboard)(),
+      onPasteNothing: () => _toast(
+          'Negli appunti non c\'è niente da incollare. Copia una foto o uno '
+          'screenshot, oppure usa «Immagine dalla galleria».'),
       onExportSelectedContentImage: (context, image) =>
           _exportSelectedContentImage(context, tab, image),
       onExportCustomStamps: _exportCustomStamps,

@@ -5629,11 +5629,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       });
     } else if (_resizeHandle != null) {
       setState(() {
-        // holding Shift locks the original aspect ratio
-        final aspectRatio =
-            HardwareKeyboard.instance.isShiftPressed && _resizeFrom!.height > 0
-                ? _resizeFrom!.width / _resizeFrom!.height
-                : null;
+        // holding Shift locks the original aspect ratio; with
+        // cornerResizeKeepsAspect a corner handle always does
+        final cornerLock = _controller.cornerResizeKeepsAspect &&
+            _resizeHandle!.dx != 0 &&
+            _resizeHandle!.dy != 0;
+        final aspectRatio = (HardwareKeyboard.instance.isShiftPressed ||
+                    cornerLock) &&
+                _resizeFrom!.height > 0
+            ? _resizeFrom!.width / _resizeFrom!.height
+            : null;
         final snapped = _snapResizePosition(position, aspectRatio: aspectRatio);
         _moveCurrent = snapped;
         // a rotated selection's handles move along its own axes, so the
