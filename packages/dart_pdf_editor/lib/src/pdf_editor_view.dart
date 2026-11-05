@@ -262,6 +262,8 @@ class PdfEditorView extends StatefulWidget {
     this.onAnnotationTap,
     this.pageOverlayBuilder,
     this.annotationMenuBuilder,
+    this.onReadAloud,
+    this.readAloudLabel,
     this.textMenuBuilder,
     this.annotationMenuEntries,
     this.textMenuEntries,
@@ -372,6 +374,8 @@ class PdfEditorView extends StatefulWidget {
     this.onAnnotationTap,
     this.pageOverlayBuilder,
     this.annotationMenuBuilder,
+    this.onReadAloud,
+    this.readAloudLabel,
     this.textMenuBuilder,
     this.annotationMenuEntries,
     this.textMenuEntries,
@@ -596,6 +600,12 @@ class PdfEditorView extends StatefulWidget {
 
   /// See [PdfViewer.textMenuBuilder].
   final PdfTextMenuBuilder? textMenuBuilder;
+
+  /// See [PdfViewer.onReadAloud].
+  final void Function(String text)? onReadAloud;
+
+  /// See [PdfViewer.readAloudLabel].
+  final String? readAloudLabel;
 
   /// See [PdfViewer.annotationMenuEntries].
   final PdfAnnotationMenuEntriesBuilder? annotationMenuEntries;
@@ -1043,6 +1053,8 @@ class _PdfEditorViewState extends State<PdfEditorView> {
         onAnnotationTap: widget.onAnnotationTap,
         pageOverlayBuilder: widget.pageOverlayBuilder,
         annotationMenuBuilder: widget.annotationMenuBuilder,
+        onReadAloud: widget.onReadAloud,
+        readAloudLabel: widget.readAloudLabel,
         textMenuBuilder: widget.textMenuBuilder,
         annotationMenuEntries: widget.annotationMenuEntries,
         textMenuEntries: widget.textMenuEntries,
@@ -2008,6 +2020,8 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           annotationMenuBuilder: widget.annotationMenuBuilder,
                           onSaveAnnotationImage:
                               widget.onExportSelectedContentImage,
+                          onReadAloud: widget.onReadAloud,
+                          readAloudLabel: widget.readAloudLabel,
                           textMenuBuilder: widget.textMenuBuilder,
                           annotationMenuEntries: widget.annotationMenuEntries,
                           textMenuEntries: widget.textMenuEntries,
