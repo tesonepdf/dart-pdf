@@ -5906,8 +5906,7 @@ class _EditorScreenState extends State<EditorScreen>
                   },
                 ),
         ),
-      if (compact && !_usesAppMenuSheet(context) && _tabs.isNotEmpty)
-        _buildMobileTabsButton(),
+      if (compact && _tabs.isNotEmpty) _buildMobileTabsButton(),
     ];
   }
 
@@ -5977,6 +5976,9 @@ class _EditorScreenState extends State<EditorScreen>
     final action = await showAppMenuSheet(
       context,
       title: tab == null || tab.title.isEmpty ? null : tab.title,
+      onRename: tab == null || tab.session == null || !_usesMobileShare
+          ? null
+          : () => unawaited(_renameDocument(tab)),
       search: AppMenuSheetEntry(
         key: const ValueKey('menu-command-palette'),
         icon: Icons.search,

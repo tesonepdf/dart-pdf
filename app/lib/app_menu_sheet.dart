@@ -38,6 +38,7 @@ class AppMenuSheetEntry {
 Future<VoidCallback?> showAppMenuSheet(
   BuildContext context, {
   String? title,
+  VoidCallback? onRename,
   required AppMenuSheetEntry search,
   required List<AppMenuSheetEntry> file,
   required List<AppMenuSheetEntry> document,
@@ -59,6 +60,7 @@ Future<VoidCallback?> showAppMenuSheet(
       showDragHandle: true,
       builder: (context) => AppMenuSheet(
         title: title,
+        onRename: onRename,
         search: search,
         file: file,
         document: document,
@@ -79,6 +81,7 @@ class AppMenuSheet extends StatefulWidget {
   const AppMenuSheet({
     super.key,
     this.title,
+    this.onRename,
     required this.search,
     required this.file,
     required this.document,
@@ -99,6 +102,9 @@ class AppMenuSheet extends StatefulWidget {
 
   /// The open document's name, shown at the top of the menu.
   final String? title;
+
+  /// Tapping the title renames the document.
+  final VoidCallback? onRename;
 
   /// The search field: opens the command palette.
   final AppMenuSheetEntry search;
@@ -302,12 +308,29 @@ class _AppMenuSheetState extends State<AppMenuSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.title case final title? when title.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: MiddleEllipsisText(
-              title,
-              hidePdfExtension: true,
-              style: Theme.of(context).textTheme.titleMedium,
+          InkWell(
+            key: const ValueKey('mobile-document-title'),
+            onTap: widget.onRename == null
+                ? null
+                : () => Navigator.of(context).pop(widget.onRename),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: MiddleEllipsisText(
+                      title,
+                      hidePdfExtension: true,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (widget.onRename != null)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: Icon(Icons.edit_outlined, size: 20),
+                    ),
+                ],
+              ),
             ),
           ),
         _SearchField(entry: widget.search, onTap: () => _pick(widget.search)),
