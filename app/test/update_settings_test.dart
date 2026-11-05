@@ -285,7 +285,7 @@ void main() {
     );
   });
 
-  testWidgets('startup auto-check shows the update banner', (tester) async {
+  testWidgets('startup auto-check offers the update dialog', (tester) async {
     final updates =
         _fakeService(current: '1.2.0', releases: [_release('app-v1.3.0')]);
     addTearDown(updates.dispose);
@@ -309,7 +309,8 @@ void main() {
     );
     expect(find.textContaining('1.3.0'), findsOneWidget);
 
-    // "Later" is remembered: no more popups, but a banner stays up.
+    // "Later" is remembered: no more popups. The update strip was removed
+    // (#193), so no banner is drawn either.
     await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(
@@ -318,7 +319,7 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey('update-available-banner')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(updates.isDismissed, isTrue);
   });
