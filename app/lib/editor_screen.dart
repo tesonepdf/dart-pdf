@@ -3977,8 +3977,11 @@ class _EditorScreenState extends State<EditorScreen>
     final session = tab.session;
     if (session == null) return;
     final bytes = _withBakedPageColor(session.bytes, source: session.document);
-    final result = await saveBytesAs(context, bytes, tab.title,
-        pdfLabel: appL10n(context).fileTypePdf);
+    final saveAs = widget.saveDocumentAs;
+    final result = saveAs != null
+        ? await saveAs(context, bytes, tab.title)
+        : await saveBytesAs(context, bytes, tab.title,
+            pdfLabel: appL10n(context).fileTypePdf);
     if (!mounted) return;
     if (result.message != null && !result.succeeded) _toast(result.message!);
   }

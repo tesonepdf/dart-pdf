@@ -44,3 +44,25 @@ Future<void> tapMenuText(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
   await tester.tap(item);
 }
+
+/// Opens one folded group ("doc", "send", "save", "sign", "pages", "forms",
+/// "import", "app") of the phone app menu, so the tests can find its rows.
+/// The File group starts open; tapping it would close it.
+Future<void> expandMenuGroup(WidgetTester tester, String id) async {
+  final group = find.byKey(ValueKey('app-menu-group-$id'));
+  if (group.evaluate().isEmpty) return;
+  final header =
+      find.descendant(of: group, matching: find.byType(ListTile)).first;
+  await tester.ensureVisible(header);
+  await tester.pumpAndSettle();
+  await tester.tap(header);
+  await tester.pumpAndSettle();
+}
+
+/// Opens every folded group of the phone app menu except File (open).
+Future<void> expandMenuGroups(WidgetTester tester) async {
+  for (final id in ['import', 'doc', 'send', 'save', 'sign', 'pages', 'forms']) {
+    await expandMenuGroup(tester, id);
+  }
+  await expandMenuGroup(tester, 'app');
+}

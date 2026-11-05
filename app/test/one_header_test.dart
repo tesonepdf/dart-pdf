@@ -17,6 +17,8 @@ import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/file_io.dart';
 import 'package:dart_pdf_editor_app/incoming_file.dart';
 
+import 'test_finders.dart';
+
 void main() {
   late PdfEditingPreferences prefs;
 
@@ -93,15 +95,18 @@ void main() {
       (tester) async {
     setSize(tester, const Size(390, 844));
     final saved = await pumpWithFile(tester);
-    expect(save, findsOneWidget);
-    // the app bar's save/share button stays live without edits...
-    expect(tester.getSemantics(save), isSemantics(isEnabled: true));
+    // phone: the save/share action lives in the app menu, always live
+    expect(save, findsNothing);
     await pressSave(tester);
     // ...but the shortcut has nothing to save
     expect(saved, isEmpty);
 
-    // pressing the button itself still saves (shares) the untouched file
-    await tester.tap(save);
+    // the menu's Share entry still saves (shares) the untouched file
+    await tester.tap(appBar);
+    await tester.pumpAndSettle();
+    final share = find.byKey(const ValueKey('menu-share'));
+    await tester.ensureVisible(share);
+    await tester.tap(share);
     await tester.pumpAndSettle();
     expect(saved, hasLength(1));
   });
@@ -142,6 +147,7 @@ void main() {
 
       await tester.tap(appBar);
       await tester.pumpAndSettle();
+      await expandMenuGroup(tester, 'app'); // phone sheet: folded group
       final readOnly = find.byKey(const ValueKey('menu-read-only'));
       await tester.ensureVisible(readOnly);
       await tester.pumpAndSettle();

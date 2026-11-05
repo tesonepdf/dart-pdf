@@ -79,9 +79,17 @@ void main() {
       expect(newItem.height, 36);
       expect(newTile.minTileHeight, 36);
       final openItemFinder = find.byKey(const ValueKey('menu-open'));
+      // other File rows (new window, photo import...) now sit between New and
+      // Open, so compare each row's own height instead of the distance
       expect(
-        tester.getCenter(openItemFinder).dy -
-            tester.getCenter(newItemFinder).dy,
+        tester.widget<PopupMenuItem<dynamic>>(openItemFinder).height,
+        36,
+      );
+      expect(
+        tester
+            .getSize(find.descendant(
+                of: openItemFinder, matching: find.byType(ListTile)))
+            .height,
         lessThan(kMinInteractiveDimension),
       );
 

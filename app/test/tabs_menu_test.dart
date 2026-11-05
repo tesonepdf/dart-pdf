@@ -167,22 +167,17 @@ void main() {
       ),
       findsOneWidget,
     );
-    // one header: the editor's own save/share button rides in the app bar
-    // (no app-side copy of it), live without edits
-    final save = find.byKey(const ValueKey('pdf-shell-save'));
-    expect(save, findsOneWidget);
+    // one header: the editor's own app bar carries the tabs button; the
+    // save/share action lives in the app menu on the phone
+    expect(find.byKey(const ValueKey('pdf-shell-save')), findsNothing);
     final appBar = find.byKey(const ValueKey('editor-app-bar'));
     expect(appBar, findsOneWidget);
-    expect(find.descendant(of: appBar, matching: save), findsOneWidget);
     expect(
-      find.descendant(of: save, matching: find.text('Share')),
+      find.descendant(
+          of: appBar,
+          matching: find.byKey(const ValueKey('mobile-tabs-button'))),
       findsOneWidget,
     );
-    expect(
-      find.descendant(of: save, matching: find.byIcon(Icons.share_outlined)),
-      findsOneWidget,
-    );
-    expect(tester.getSemantics(save), isSemantics(isEnabled: true));
 
     await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
     await tester.pumpAndSettle();

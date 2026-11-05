@@ -53,9 +53,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> rename(WidgetTester tester, String value) async {
+  // Phone: the title lives at the top of the app menu; tapping it renames.
+  Future<void> openTitle(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(title);
     await tester.pumpAndSettle();
+  }
+
+  // Opens the menu, checks the title shown at its top, closes the menu.
+  Future<void> expectMenuTitle(WidgetTester tester, String text) async {
+    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: title, matching: findMiddleEllipsisText(text)),
+        findsOneWidget);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> rename(WidgetTester tester, String value) async {
+    await openTitle(tester);
     await tester.enterText(name, value);
     await tester.tap(confirm);
     await tester.pumpAndSettle();
@@ -78,8 +95,7 @@ void main() {
     final editedBytes = before.bytes;
     await tester.pump();
 
-    await tester.tap(title);
-    await tester.pumpAndSettle();
+    await openTitle(tester);
     final field = tester.widget<TextField>(name);
     expect(field.controller!.text, 'Original.pdf');
     expect(field.controller!.selection,
@@ -94,10 +110,14 @@ void main() {
     expect(identical(before, after), isTrue);
     expect(after.bytes, editedBytes);
     expect(after.canUndo, isTrue);
-    expect(findMiddleEllipsisText('Project notes.pdf'), findsOneWidget);
+    await expectMenuTitle(tester, 'Project notes.pdf');
     expect((await recovery.list()).single.title, 'Project notes.pdf');
 
-    await tester.tap(find.byKey(const ValueKey('pdf-shell-save')));
+    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
+    await tester.pumpAndSettle();
+    final share = find.byKey(const ValueKey('menu-share'));
+    await tester.ensureVisible(share);
+    await tester.tap(share);
     await tester.pumpAndSettle();
     expect(sharedName, 'Project notes.pdf');
     expect(sharedBytes, editedBytes);
@@ -106,21 +126,19 @@ void main() {
   testWidgets('iOS keyboard Done accepts Unicode and normalizes the extension',
       (tester) async {
     await pump(tester);
-    await tester.tap(title);
-    await tester.pumpAndSettle();
+    await openTitle(tester);
     await tester.enterText(name, '測量 – Café.PDF');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 500));
     expect(name, findsNothing);
-    expect(findMiddleEllipsisText('測量 – Café.pdf'), findsOneWidget);
+    await expectMenuTitle(tester, '測量 – Café.pdf');
   }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('empty names cannot submit and Cancel preserves the title',
       (tester) async {
     await pump(tester);
-    await tester.tap(title);
-    await tester.pumpAndSettle();
+    await openTitle(tester);
     for (final invalid in ['', '  ', '.pdf', '..']) {
       await tester.enterText(name, invalid);
       await tester.pump();
@@ -132,14 +150,14 @@ void main() {
     await tester.enterText(name, 'Do not save this');
     await tester.tap(find.byKey(const ValueKey('rename-document-cancel')));
     await tester.pumpAndSettle();
-    expect(findMiddleEllipsisText('Original.pdf'), findsOneWidget);
+    await expectMenuTitle(tester, 'Original.pdf');
     expect(await recovery.list(), isEmpty);
   });
 
   testWidgets('pasted paths cannot escape the shared filename', (tester) async {
     await pump(tester);
     await rename(tester, 'Reports/September\\notes.pdf.pdf');
-    expect(findMiddleEllipsisText('ReportsSeptembernotes.pdf'), findsOneWidget);
+    await expectMenuTitle(tester, 'ReportsSeptembernotes.pdf');
   });
 
   testWidgets('renaming persists the cached source in Recent and session state',
