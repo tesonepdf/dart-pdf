@@ -182,13 +182,24 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(root(PdfEditorView(bytes: buildClassicPdf())));
     await tester.pumpAndSettle();
+    // Touch platforms list the view options in a menu built when it opens, so
+    // a keyboard change shows the next time the menu is opened.
+    Future<void> reopenOptions() async {
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pdf-shell-view-options')));
+      await tester.pumpAndSettle();
+    }
+
     await tester.tap(find.byKey(const ValueKey('pdf-shell-view-options')));
     await tester.pumpAndSettle();
     expect(find.text('Keyboard shortcuts…'), findsOneWidget);
     await notify(tester, false);
+    await reopenOptions();
     expect(find.text('Keyboard shortcuts…'), findsNothing);
     expect(find.text('Show annotations'), findsOneWidget);
     await notify(tester, true);
+    await reopenOptions();
     expect(find.text('Keyboard shortcuts…'), findsOneWidget);
     await tester.tap(find.text('Keyboard shortcuts…'));
     await tester.pumpAndSettle();

@@ -538,6 +538,8 @@ void main() {
     await tester.pumpAndSettle();
     await tapMenuText(tester, 'Settings');
     await tester.pumpAndSettle();
+    // the settings sections are folded: open them to reach the tile
+    await expandSettingsSections(tester);
 
     final tile = find.byKey(const ValueKey('settings-devtools'));
     await tester.ensureVisible(tile);
