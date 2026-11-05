@@ -22,7 +22,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tapMenuText(tester, 'Settings');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
   }
