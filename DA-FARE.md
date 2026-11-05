@@ -1,6 +1,29 @@
 # Da fare e codice: consegna alla prossima chat
 
-Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-10-30.
+Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-05.
+
+## Aggiornamento 2026-11-05 (da #224)
+
+**Fatto su `main`:**
+- #220: Leggi ad alta voce (voce nel menu di selezione del testo, "Leggi la pagina", voce di sistema).
+- #221: Impostazioni > Informazioni: esito dei test automatici (CI) della build installata.
+- #222: OCR memorizzato per impronta del file (riapertura senza rifare la scansione), OCR in background su Android (servizio con notifica), voce "Apri originale senza OCR", riquadro dello stato della build nelle Informazioni.
+- #223: test dell'OCR automatico corretti (la CI #222 era fallita per 3 test: la memoria OCR usava file veri nel finto servizio). Build e CI #223 riuscite.
+- Rendering in background: funziona con un'altra app davanti. Con lo schermo spento non è stato provato: l'utente avvisa se vede il problema.
+
+**Da fare (nuove richieste dell'utente):**
+1. **Riassunto del documento**: voce nel menu "Riassumi documento". Serve un modello AI online (offline non verrebbe un buon riassunto). Da progettare con l'utente; serve il suo ok per partire.
+2. **Foto incollate dalla galleria dentro il foglio PDF**: poter incollare/inserire una foto dalla galleria direttamente sulla pagina del PDF, come elemento sulla pagina.
+3. **Foto incollate ridimensionabili**: selezionare la foto con lo strumento Seleziona e cambiarne la dimensione a piacere (maniglie o misura), senza che occupi tutta la pagina. Si collega a "Foto a grandezza reale" qui sotto.
+
+**Limiti noti dell'OCR (da decidere se sistemarli):**
+- la memoria OCR non è attiva nel browser (web): il codice c'è, nessuno la riempie;
+- il testo OCR applicato conta come modifica non salvata;
+- "Apri originale senza OCR" esiste solo per le schede dove l'OCR è stato applicato in questa sessione;
+- il riquadro build usa l'API pubblica di GitHub (circa 60 richieste all'ora): con il limite raggiunto mostra "non disponibile";
+- Android 15 limita i servizi `dataSync` a circa 6 ore.
+
+Il resto della lista (conflitti con la versione di Ben, web app, foto a grandezza reale, apertura delle foto, casella di testo) è qui sotto e non è cambiato.
 
 ## Dove siamo
 
