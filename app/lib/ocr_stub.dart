@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:pdf_document/pdf_document.dart' show PdfOcrSpan;
 
+import 'ocr_cache.dart';
+import 'ocr_job_store.dart';
 import 'ocr_status.dart';
 
 export 'ocr_status.dart';
@@ -14,6 +16,9 @@ class OnDeviceOcr {
 
   /// Never active on the web; present so the app bar's listener compiles.
   final ValueNotifier<OcrJobStatus?> status = ValueNotifier(null);
+
+  /// La memoria dell'OCR già fatto. Sul web non viene mai riempita.
+  late final OcrCache cache = OcrCache(openOcrJobStorage());
 
   /// On-device OCR is unavailable on the web.
   static bool get isSupported => false;

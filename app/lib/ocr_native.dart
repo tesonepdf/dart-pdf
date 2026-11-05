@@ -9,6 +9,8 @@ import 'package:pdf_ocr_ondevice/pdf_ocr_ondevice.dart';
 
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
+import 'ocr_background.dart';
+import 'ocr_cache.dart';
 import 'ocr_jobs.dart';
 import 'ocr_job_store.dart';
 import 'ocr_job_runner.dart';
@@ -28,9 +30,10 @@ export 'ocr_status.dart';
 /// orchestration - model gating, the download prompt, progress reporting, and
 /// turning failures into a toast.
 class OnDeviceOcr {
-  OnDeviceOcr({OcrJobs? jobs, NativeOcrJobRunner? runJob})
+  OnDeviceOcr({OcrJobs? jobs, NativeOcrJobRunner? runJob, OcrCache? cache})
       : _jobs = jobs ?? OcrJobs(openOcrJobStorage()),
-        _runJob = runJob ?? executeNativeOcrJob;
+        _runJob = runJob ?? executeNativeOcrJob,
+        _cacheOverride = cache;
 
   final PdfOcrModelManager _manager = PdfOcrModelManager();
   final PdfOcrModel _model = PdfOcrModels.ppOcrV5Mobile;
@@ -45,6 +48,12 @@ class OnDeviceOcr {
   bool _recovering = false;
   final OcrJobs _jobs;
   final NativeOcrJobRunner _runJob;
+  final OcrCache? _cacheOverride;
+
+  /// La memoria dell'OCR già fatto (testo per pagina, per impronta del file):
+  /// riaprendo lo stesso documento il testo si rimette subito, senza rifare la
+  /// scansione.
+  late final OcrCache cache = _cacheOverride ?? OcrCache(_jobs.storage);
   late final OcrResultDelivery _delivery = OcrResultDelivery(_jobs);
 
   void _status(OcrJobStatus? value) {
@@ -98,12 +107,18 @@ class OnDeviceOcr {
     void Function(Map<int, List<PdfOcrSpan>>)? onRecognized,
   }) async {
     _jobId = job.id;
-    void progress(OcrSavedJob j) => _status(OcrJobStatus(
-          phase: j.workPhase,
-          title: j.title,
-          page: (j.nextPage + 1).clamp(1, j.pageCount),
-          pageCount: j.pageCount,
-        ));
+    void progress(OcrSavedJob j) {
+      final page = (j.nextPage + 1).clamp(1, j.pageCount);
+      _status(OcrJobStatus(
+        phase: j.workPhase,
+        title: j.title,
+        page: page,
+        pageCount: j.pageCount,
+      ));
+      // La notifica del servizio in background segue la pagina in corso.
+      unawaited(OcrBackgroundService.update(
+          title: j.title, page: page, pageCount: j.pageCount));
+    }
     _status(OcrJobStatus(phase: OcrPhase.preparing, title: job.title));
     if (job.state != OcrJobState.complete) {
       final lease = await _jobs.storage.claim(job.id);
@@ -116,27 +131,38 @@ class OnDeviceOcr {
         job = current;
         if (job.state != OcrJobState.complete &&
             job.state != OcrJobState.cancelled) {
+          // Servizio in primo piano (Android): l'OCR continua anche se
+          // apri un'altra app. Parte ora, con l'app ancora davanti.
+          await OcrBackgroundService.start(
+              title: job.title,
+              page: (job.nextPage + 1).clamp(1, job.pageCount),
+              pageCount: job.pageCount);
           await _runJob(_jobs, job,
               onProgress: progress,
               shouldPause: () => _disposed || ocrShouldPause);
         }
       } finally {
+        await OcrBackgroundService.stop();
         await lease.release();
       }
     }
     if (_disposed) return;
     if (job.state == OcrJobState.complete) {
       if (onRecognized != null) {
-        onRecognized(await _jobs.recognized(job));
+        final recognized = await _jobs.recognized(job);
+        // Il testo letto resta in memoria: alla prossima apertura dello
+        // stesso file non si rifà la scansione.
+        await cache.saveQuietly(job.sourceHash, job.pageCount, recognized);
+        onRecognized(recognized);
         // Keep the established live-session revision guard. A completed live
         // callback consumes this job; an interrupted job recovers as a copy.
         await _jobs.delete(job.id);
       } else {
         final result = await _delivery.take(job);
         if (result == null) return;
-        final spans = (await _jobs.recognized(job))
-            .values
-            .fold<int>(0, (n, s) => n + s.length);
+        final recognized = await _jobs.recognized(job);
+        await cache.saveQuietly(job.sourceHash, job.pageCount, recognized);
+        final spans = recognized.values.fold<int>(0, (n, s) => n + s.length);
         onComplete?.call(result);
         onToast(l10n.ocrResult(spans));
       }

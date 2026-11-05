@@ -10,6 +10,7 @@ import 'package:pdf_graphics/pdf_graphics.dart' show pdfPageLooksScanned;
 import 'package:pdf_ocr_ondevice/pp_ocr.dart';
 
 import 'l10n/app_l10n.dart';
+import 'ocr_cache.dart';
 import 'ocr_jobs.dart';
 import 'ocr_lifecycle.dart';
 import 'ocr_job_store.dart';
@@ -39,6 +40,9 @@ class OnDeviceOcr {
   String? _jobId;
   bool _recovering = false;
   final OcrJobs _jobs = OcrJobs(openOcrJobStorage());
+
+  /// La memoria dell'OCR già fatto. Nel browser non viene ancora riempita.
+  late final OcrCache cache = OcrCache(_jobs.storage);
   late final OcrResultDelivery _delivery = OcrResultDelivery(_jobs);
 
   void _status(OcrJobStatus? value) {
