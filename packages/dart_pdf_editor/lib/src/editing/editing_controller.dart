@@ -503,6 +503,12 @@ class PdfWorkerRevisionDelta {
 /// )
 /// ```
 class PdfEditingController extends ChangeNotifier {
+  /// Con `true`, trascinare una maniglia d'angolo della selezione la
+  /// ridimensiona mantenendo le proporzioni; le maniglie dei lati restano
+  /// libere. Con `false` (predefinito) le proporzioni si bloccano solo
+  /// tenendo premuto Maiusc.
+  bool cornerResizeKeepsAspect = false;
+
   /// Field names that the stamp editor offers by default for `{{field}}`
   /// placeholders. Apps can add more names with [stampTemplateValues].
   static const stampTemplateBuiltinFields = [

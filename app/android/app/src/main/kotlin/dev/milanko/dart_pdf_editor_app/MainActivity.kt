@@ -701,11 +701,19 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
         val description = clip.description
         for (i in 0 until clip.itemCount) {
             val uri = clip.getItemAt(i).uri ?: continue
-            val type = contentResolver.getType(uri)
-            val looksLikeImage =
-                type?.startsWith("image/") == true || description.hasMimeType("image/*")
-            if (!looksLikeImage) continue
-            return contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            // Un elemento con permessi mancanti o illeggibile non deve
+            // bloccare gli altri: si passa al successivo.
+            try {
+                val type = contentResolver.getType(uri)
+                val looksLikeImage =
+                    type?.startsWith("image/") == true ||
+                        description.hasMimeType("image/*")
+                if (!looksLikeImage) continue
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) return bytes
+            } catch (e: Exception) {
+                continue
+            }
         }
         return null
     }

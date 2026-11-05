@@ -78,6 +78,8 @@ class DocumentTab {
   ) {
     final controller = PdfEditingController(bytes,
         preferences: preferences, formSecretStore: appFormSecretStore);
+    // Angoli = proporzioni bloccate, lati = ridimensionamento libero.
+    controller.cornerResizeKeepsAspect = true;
     if (opensInHandMode) {
       controller.activateHandMode();
     } else {
