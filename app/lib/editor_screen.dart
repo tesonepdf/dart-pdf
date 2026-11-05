@@ -45,6 +45,7 @@ import 'middle_ellipsis_text.dart';
 import 'new_document.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
+import 'ocr_cache.dart';
 import 'ocr_status_chip.dart';
 import 'ocr_status_label.dart';
 import 'open_error.dart';
@@ -3594,7 +3595,11 @@ class _EditorScreenState extends State<EditorScreen>
         return;
       }
       if (!pdfDocumentLooksScanned(controller.document)) return;
-      await _runAutoOcr(tab, controller);
+      // Già letto in passato? Il testo si rimette subito dalla memoria, senza
+      // rifare la scansione e senza far aspettare.
+      if (!await _applyCachedOcr(tab, controller)) {
+        await _runAutoOcr(tab, controller);
+      }
       // Another tab may have been passed over while this job ran.
       if (!mounted) return;
       if (_active case final active?) _maybeAutoOcr(active);
@@ -3604,14 +3609,16 @@ class _EditorScreenState extends State<EditorScreen>
   Future<void> _runAutoOcr(
       DocumentTab tab, PdfEditingController controller) async {
     final snapshot = OcrSessionSnapshot.of(controller);
+    // A copy: after an undo, the next edit overwrites the session buffer
+    // past that revision, and the job reads its snapshot lazily. Il tab la
+    // tiene per poter riaprire il documento "senza OCR" dal menu.
+    final original = Uint8List.fromList(controller.bytes);
     AppDevTools.instance.addLog('auto OCR: "${tab.title}" looks scanned');
     setState(() => tab.autoOcrRunning = true);
     try {
       await _ocr.start(
         context,
-        // A copy: after an undo, the next edit overwrites the session buffer
-        // past that revision, and the job reads its snapshot lazily.
-        bytes: Uint8List.fromList(controller.bytes),
+        bytes: original,
         title: tab.title,
         automatic: true,
         onToast: (message) {
@@ -3627,6 +3634,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (written == null) {
             _toast(l10n.ocrAutoDocumentChanged);
           } else if (written > 0) {
+            tab.preOcrBytes = original;
             if (_autoOcr.offered) {
               _toast(l10n.ocrAutoResult);
             } else {
@@ -3638,6 +3646,47 @@ class _EditorScreenState extends State<EditorScreen>
     } finally {
       if (mounted) setState(() => tab.autoOcrRunning = false);
     }
+  }
+
+  /// Se questo stesso file è già stato letto con l'OCR, rimette subito il testo
+  /// riconosciuto (salvato in memoria) e dice che non serve rifare la
+  /// scansione. Falso se il file non è in memoria: allora l'OCR parte.
+  Future<bool> _applyCachedOcr(
+      DocumentTab tab, PdfEditingController controller) async {
+    // L'istantanea prima dell'attesa: se il documento cambia nel frattempo,
+    // il testo non finisce sulle pagine sbagliate (vedi OcrSessionSnapshot).
+    final snapshot = OcrSessionSnapshot.of(controller);
+    final spans = await _ocr.cache.loadQuietly(
+      OcrCache.keyFor(controller.bytes),
+      pageCount: controller.document.pageCount,
+    );
+    if (spans == null) return false;
+    if (!mounted || !_tabs.contains(tab) || tab.session != controller) {
+      return true;
+    }
+    final original = Uint8List.fromList(controller.bytes);
+    final written = applyOcrToSession(controller, snapshot, spans);
+    if (written != null && written > 0) tab.preOcrBytes = original;
+    AppDevTools.instance
+        .addLog('OCR dalla memoria: "${tab.title}" (${written ?? 0} testi)');
+    return true;
+  }
+
+  /// Riapre in un'altra scheda il documento com'era prima dell'OCR, senza
+  /// testo OCR e senza rifare la scansione. La scheda con l'OCR resta com'è.
+  void _openWithoutOcr(DocumentTab tab) {
+    final original = tab.preOcrBytes;
+    if (original == null) return;
+    final title = tab.title;
+    final isPdf = title.toLowerCase().endsWith('.pdf');
+    final base = isPdf ? title.substring(0, title.length - 4) : title;
+    final copy = DocumentTab.document(
+      title: '$base (senza OCR)${isPdf ? title.substring(base.length) : ''}',
+      bytes: Uint8List.fromList(original),
+      preferences: _prefs,
+    );
+    copy.autoOcrChecked = true;
+    _addTab(copy);
   }
 
   /// After the first automatic OCR, asks once whether to keep doing it for
@@ -5040,6 +5089,17 @@ class _EditorScreenState extends State<EditorScreen>
           title: l.editorMenuOcr,
           run: () => unawaited(_runOcr()),
         ),
+      if (_active?.preOcrBytes != null)
+        _MenuAction(
+          id: 'open-without-ocr',
+          requiresDocument: true,
+          icon: Icons.image_outlined,
+          title: 'Apri originale senza OCR',
+          run: () {
+            final tab = _active;
+            if (tab != null) _openWithoutOcr(tab);
+          },
+        ),
       _MenuAction(
         id: 'compare',
         requiresDocument: true,
@@ -5991,7 +6051,11 @@ class _EditorScreenState extends State<EditorScreen>
       if (action.sheet == _SheetPlacement.formData) return 'forms';
       return switch (action.id) {
         'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
-        'digital-signature' || 'ocr' || 'read-aloud' => 'sign',
+        'digital-signature' ||
+        'ocr' ||
+        'open-without-ocr' ||
+        'read-aloud' =>
+          'sign',
         'compare' || 'insert-document' || 'insert-scan' => 'pages',
         'import-form-data' => 'forms',
         _ => null,

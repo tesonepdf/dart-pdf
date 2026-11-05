@@ -276,6 +276,11 @@ class DocumentTab {
   /// read-only until the recognised text is applied.
   bool autoOcrRunning = false;
 
+  /// Il documento com'era prima che l'OCR aggiungesse il suo testo: serve a
+  /// riaprirlo "senza OCR" dal menu. Null finché l'OCR non è stato applicato
+  /// a questa scheda.
+  Uint8List? preOcrBytes;
+
   /// The writable on-disk origin (desktop), when the document was opened from
   /// a real path. Save writes back here; updated when a Save As lands on a new
   /// path. Null means save-as only.

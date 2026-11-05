@@ -1,11 +1,13 @@
 package dev.milanko.dart_pdf_editor_app
 
+import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.input.InputManager
 import android.net.Uri
 import android.os.Build
@@ -18,6 +20,7 @@ import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import android.view.InputDevice
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -58,6 +61,19 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
     /// Risposta in attesa del selettore di cartelle (cartella di salvataggio).
     private var pendingFolder: MethodChannel.Result? = null
     private val pickFolderRequestCode = 0x0F_0D
+
+    /// Su Android 13+ la notifica dell'OCR in background si vede solo con il
+    /// permesso: lo si chiede una volta sola per sessione. Senza il permesso
+    /// il servizio funziona lo stesso, solo che la notifica resta nascosta.
+    private var askedNotificationPermission = false
+
+    private fun askNotificationPermissionOnce() {
+        if (askedNotificationPermission || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        askedNotificationPermission = true
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0x0C01)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -133,6 +149,43 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                                 runOnUiThread { result.error("save_failed", e.toString(), null) }
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // OCR in background: servizio in primo piano con notifica di avanzamento.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/ocr_service")
+            .setMethodCallHandler { call, result ->
+                val title = call.argument<String>("title") ?: ""
+                val page = call.argument<Int>("page") ?: 0
+                val pageCount = call.argument<Int>("pageCount") ?: 0
+                when (call.method) {
+                    "start" -> {
+                        askNotificationPermissionOnce()
+                        try {
+                            ContextCompat.startForegroundService(
+                                this,
+                                OcrForegroundService.intent(this, title, page, pageCount)
+                            )
+                            result.success(true)
+                        } catch (e: Exception) {
+                            // Android rifiuta il servizio: l'OCR si mette in pausa
+                            // quando l'app va in secondo piano, come prima.
+                            result.success(false)
+                        }
+                    }
+                    "update" -> {
+                        OcrForegroundService.notifyProgress(this, title, page, pageCount)
+                        result.success(null)
+                    }
+                    "stop" -> {
+                        try {
+                            stopService(Intent(this, OcrForegroundService::class.java))
+                        } catch (e: Exception) {
+                            // già fermo
+                        }
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }

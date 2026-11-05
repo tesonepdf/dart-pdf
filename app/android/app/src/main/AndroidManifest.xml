@@ -4,6 +4,12 @@
          release builds need it declared here too. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- OCR in background: servizio in primo piano con notifica di avanzamento,
+         così il lavoro continua anche se si apre un'altra app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
@@ -143,6 +149,11 @@
                 <data android:mimeType="image/*"/>
             </intent-filter>
         </activity>
+        <!-- Tiene vivo il lavoro dell'OCR quando l'app non è più davanti. -->
+        <service
+            android:name=".OcrForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- Lets the Snapshot tool hand PNG data to other apps through the
              Android clipboard. Text-only clipboard writes work without it;
              images need a content URI. -->

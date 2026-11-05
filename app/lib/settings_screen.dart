@@ -359,6 +359,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
                     if (AppInfo.buildCommit != 'unknown')
                       const _BuildCheckTile(),
+                    const _BuildRunTile(),
                     const SizedBox(height: 4),
                     TextButton.icon(
                       style: TextButton.styleFrom(padding: EdgeInsets.zero),
@@ -1227,6 +1228,167 @@ class _BuildCheckTileState extends State<_BuildCheckTile> {
                   : _reload,
         );
       },
+    );
+  }
+}
+
+
+/// Stato dell'ultima build su GitHub: se ce n'è una in elaborazione mostra a
+/// che punto è (lavoro, passo e da quanto tempo), altrimenti com'è finita
+/// l'ultima. Mentre la schermata è aperta e la build è in corso si aggiorna da
+/// sola; toccando si ricontrolla subito.
+class _BuildRunTile extends StatefulWidget {
+  const _BuildRunTile();
+
+  @override
+  State<_BuildRunTile> createState() => _BuildRunTileState();
+}
+
+class _BuildRunTileState extends State<_BuildRunTile> {
+  /// Ogni controllo chiede 2 cose a GitHub, che senza chiave ne concede 60
+  /// all'ora: si ricontrolla da soli solo per un po', poi serve toccare.
+  static const _autoRefresh = Duration(seconds: 40);
+  static const _maxAutoRefreshes = 12;
+
+  BuildRun? _run;
+  bool _loading = false;
+  int _autoCount = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    if (_loading) return;
+    _timer?.cancel();
+    setState(() => _loading = true);
+    final run = await BuildRun.fetch();
+    if (!mounted) return;
+    setState(() {
+      _run = run;
+      _loading = false;
+    });
+    if (run.inProgress && _autoCount < _maxAutoRefreshes) {
+      _timer = Timer(_autoRefresh, () {
+        _autoCount++;
+        unawaited(_load());
+      });
+    }
+  }
+
+  static String? _elapsed(DateTime? start) {
+    if (start == null) return null;
+    final minutes = DateTime.now().toUtc().difference(start.toUtc()).inMinutes;
+    return minutes < 1 ? 'da meno di un minuto' : 'da $minutes min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final run = _run;
+    final n = run?.number == null ? '' : ' #${run!.number}';
+
+    final (Widget leading, String title) = switch (run?.state) {
+      null => (
+          Icon(Icons.hourglass_empty, color: scheme.onSurfaceVariant),
+          'Controllo la build su GitHub…'
+        ),
+      BuildRunState.queued => (
+          const Icon(Icons.schedule, color: Colors.orange),
+          'Build$n in coda su GitHub'
+        ),
+      BuildRunState.running => (
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: Padding(
+              padding: EdgeInsets.all(2),
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+          ),
+          'Build$n in elaborazione'
+        ),
+      BuildRunState.succeeded => (
+          const Icon(Icons.check_circle, color: Colors.green),
+          'Ultima build$n completata'
+        ),
+      BuildRunState.failed => (
+          Icon(Icons.cancel, color: scheme.error),
+          'Ultima build$n FALLITA. Tocca per i dettagli'
+        ),
+      BuildRunState.cancelled => (
+          Icon(Icons.block, color: scheme.onSurfaceVariant),
+          'Ultima build$n annullata'
+        ),
+      BuildRunState.none => (
+          Icon(Icons.help_outline, color: scheme.onSurfaceVariant),
+          'Nessuna build trovata'
+        ),
+      BuildRunState.unavailable => (
+          Icon(Icons.help_outline, color: scheme.onSurfaceVariant),
+          'Stato della build non disponibile. Tocca per riprovare'
+        ),
+    };
+
+    final details = <String>[];
+    if (run != null && run.state == BuildRunState.running) {
+      final count = run.stepCount ?? 0;
+      if (run.job != null) details.add(run.job!);
+      if (count > 0) {
+        final now = (run.stepsDone ?? 0) + 1;
+        details.add('passo ${now > count ? count : now} di $count');
+      }
+      if (run.step != null) details.add(run.step!);
+    }
+    if (run != null && run.inProgress) {
+      final elapsed = _elapsed(run.startedAt);
+      if (elapsed != null) details.add(elapsed);
+    }
+    if (run != null &&
+        run.number != null &&
+        AppInfo.buildNumber.isNotEmpty &&
+        '${run.number}' != AppInfo.buildNumber) {
+      details.add('Questa app è la build #${AppInfo.buildNumber}');
+    }
+    final progress = (run != null &&
+            run.state == BuildRunState.running &&
+            (run.stepCount ?? 0) > 0)
+        ? ((run.stepsDone ?? 0) / run.stepCount!).clamp(0.0, 1.0)
+        : null;
+
+    return ListTile(
+      key: const ValueKey('settings-build-run'),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: leading,
+      title: Text(title),
+      subtitle: (details.isEmpty && progress == null)
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (details.isNotEmpty) Text(details.join(' · ')),
+                if (progress != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: LinearProgressIndicator(value: progress),
+                  ),
+              ],
+            ),
+      onTap: _loading
+          ? null
+          : (run?.state == BuildRunState.failed && run?.url != null)
+              ? () => launchUrl(run!.url!, mode: LaunchMode.externalApplication)
+              : _load,
     );
   }
 }
