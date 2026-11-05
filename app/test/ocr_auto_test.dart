@@ -16,13 +16,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/ocr.dart';
 import 'package:dart_pdf_editor_app/ocr_auto.dart';
+import 'package:dart_pdf_editor_app/ocr_cache.dart';
+import 'package:dart_pdf_editor_app/ocr_jobs.dart';
 import 'test_finders.dart';
 
 final _word = PdfOcrSpan(text: 'Invoice', bounds: PdfRect(72, 700, 160, 716));
 
+/// Archivio in memoria: nei test la memoria OCR non tocca file veri.
+class _MemoryStorage implements OcrJobStorage {
+  final Map<String, Uint8List> data = {};
+
+  @override
+  Future<List<String>> keys() async => data.keys.toList();
+  @override
+  Future<Uint8List?> read(String key) async => data[key];
+  @override
+  Future<void> write(String key, Uint8List bytes) async => data[key] = bytes;
+  @override
+  Future<void> remove(String key) async => data.remove(key);
+  @override
+  Future<OcrJobLease?> claim(String id) async => null;
+}
+
 /// Records each start() and answers with [_word] on page 0.
 class _FakeOcr extends OnDeviceOcr {
   final calls = <({bool automatic, int length})>[];
+
+  @override
+  final OcrCache cache = OcrCache(_MemoryStorage());
 
   @override
   Future<void> start(
