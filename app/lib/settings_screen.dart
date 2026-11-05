@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log_dialog.dart';
+import 'build_check.dart';
 import 'save_folder.dart';
 import 'cached_documents_settings.dart';
 import 'l10n/app_l10n.dart';
@@ -356,6 +357,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                       style: theme.textTheme.bodyMedium,
                     ),
                     Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
+                    if (AppInfo.buildCommit != 'unknown')
+                      const _BuildCheckTile(),
                     const SizedBox(height: 4),
                     TextButton.icon(
                       style: TextButton.styleFrom(padding: EdgeInsets.zero),
@@ -1150,6 +1153,80 @@ class _SettingsSection extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// Esito dei test automatici (CI) della build installata: così non serve
+/// andare su GitHub per sapere se la build è passata.
+class _BuildCheckTile extends StatefulWidget {
+  const _BuildCheckTile();
+
+  @override
+  State<_BuildCheckTile> createState() => _BuildCheckTileState();
+}
+
+class _BuildCheckTileState extends State<_BuildCheckTile> {
+  late Future<BuildCheck> _check = BuildCheck.fetch();
+
+  void _reload() => setState(() => _check = BuildCheck.fetch());
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<BuildCheck>(
+      future: _check,
+      builder: (context, snapshot) {
+        final check = snapshot.data;
+        final (IconData icon, Color color, String text) = switch (check?.state) {
+          null => (
+              Icons.hourglass_empty,
+              scheme.onSurfaceVariant,
+              'Controllo i test della build #${AppInfo.buildNumber}…'
+            ),
+          BuildCheckState.passed => (
+              Icons.check_circle,
+              Colors.green,
+              'Test automatici superati (build #${AppInfo.buildNumber})'
+            ),
+          BuildCheckState.failed => (
+              Icons.cancel,
+              scheme.error,
+              'Test automatici FALLITI (build #${AppInfo.buildNumber}). '
+                  'Tocca per i dettagli'
+            ),
+          BuildCheckState.running => (
+              Icons.autorenew,
+              Colors.orange,
+              'Test automatici ancora in corso (build #${AppInfo.buildNumber}). '
+                  'Tocca per ricontrollare'
+            ),
+          BuildCheckState.notStarted => (
+              Icons.schedule,
+              Colors.orange,
+              'Test automatici non ancora partiti. Tocca per ricontrollare'
+            ),
+          BuildCheckState.unavailable => (
+              Icons.help_outline,
+              scheme.onSurfaceVariant,
+              'Esito dei test non disponibile. Tocca per riprovare'
+            ),
+        };
+        return ListTile(
+          key: const ValueKey('settings-build-check'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: Icon(icon, color: color),
+          title: Text(text),
+          onTap: check == null
+              ? null
+              : (check.state == BuildCheckState.failed && check.url != null)
+                  ? () => launchUrl(check.url!,
+                      mode: LaunchMode.externalApplication)
+                  : _reload,
+        );
+      },
     );
   }
 }
