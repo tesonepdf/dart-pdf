@@ -34,3 +34,13 @@ Future<void> expandSettingsSections(WidgetTester tester,
         : await tester.pump(const Duration(milliseconds: 500));
   }
 }
+
+/// Taps an item of the app menu. The menu grows with every feature and its
+/// popup scrolls, so in the 800x600 test window an item near the bottom
+/// ("Settings", "Updates") can sit below the fold, where a plain tap misses.
+Future<void> tapMenuText(WidgetTester tester, String text) async {
+  final item = find.text(text);
+  await tester.ensureVisible(item);
+  await tester.pumpAndSettle();
+  await tester.tap(item);
+}

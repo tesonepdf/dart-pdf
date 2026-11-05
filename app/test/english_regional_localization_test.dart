@@ -32,7 +32,7 @@ void main() {
         })),
       ));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Settings'));
+      await tapMenuText(tester, 'Settings');
       // Cache usage reads IndexedDB in browsers; its unrelated progress spinner
       // need not settle for the Settings route and licence link to be ready.
       await tester.pump();

@@ -13,6 +13,7 @@ import 'package:dart_pdf_editor_app/app_info.dart';
 import 'package:dart_pdf_editor_app/devtools.dart';
 import 'package:dart_pdf_editor_app/devtools_panel.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
+import 'test_finders.dart';
 
 void main() {
   late PdfEditingPreferences prefs;
@@ -535,7 +536,7 @@ void main() {
     // With a document open the menu is taller than the test surface.
     await tester.ensureVisible(find.text('Settings'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
+    await tapMenuText(tester, 'Settings');
     await tester.pumpAndSettle();
 
     final tile = find.byKey(const ValueKey('settings-devtools'));
