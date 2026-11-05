@@ -60,7 +60,6 @@ void main() {
     // the groups start folded (File open): open them all
     await expandMenuGroups(tester);
     expect(find.text('FILE'), findsOneWidget);
-    expect(find.text('DOCUMENTO APERTO'), findsOneWidget);
     expect(find.text('APP'), findsOneWidget);
     expect(key('menu-command-palette'), findsOneWidget);
     for (final id in [
@@ -87,8 +86,6 @@ void main() {
         lessThan(tester.getTopLeft(key('menu-open')).dy));
     expect(tester.getTopLeft(key('menu-open')).dy,
         lessThan(tester.getTopLeft(key('menu-open-recent')).dy));
-    expect(tester.getTopLeft(key('menu-open-recent')).dy,
-        lessThan(tester.getTopLeft(find.text('DOCUMENTO APERTO')).dy));
     expect(tester.getTopLeft(find.text('APP')).dy,
         lessThan(tester.getTopLeft(key('menu-settings')).dy));
     expect(tester.takeException(), isNull);

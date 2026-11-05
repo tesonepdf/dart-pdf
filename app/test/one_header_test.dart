@@ -104,6 +104,7 @@ void main() {
     // the menu's Share entry still saves (shares) the untouched file
     await tester.tap(appBar);
     await tester.pumpAndSettle();
+    await expandMenuGroup(tester, 'send');
     final share = find.byKey(const ValueKey('menu-share'));
     await tester.ensureVisible(share);
     await tester.tap(share);

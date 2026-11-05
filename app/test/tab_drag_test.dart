@@ -1,4 +1,6 @@
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -123,6 +125,9 @@ void main() {
 
   testWidgets('native window accepts drops in full and compact title chrome',
       (tester) async {
+    // native windows are a desktop feature: the phone has no title chrome
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     tester.view.devicePixelRatio = 1;

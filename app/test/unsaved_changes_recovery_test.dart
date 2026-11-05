@@ -88,6 +88,7 @@ void main() {
   testWidgets('a recovered document still knows where it saves',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     // Wide enough for the shell to show its header Save button.
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     final store = await storeWithLostWork();

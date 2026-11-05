@@ -115,6 +115,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
     await tester.pumpAndSettle();
+    await expandMenuGroup(tester, 'send');
     final share = find.byKey(const ValueKey('menu-share'));
     await tester.ensureVisible(share);
     await tester.tap(share);

@@ -285,7 +285,8 @@ void main() {
       expect(find.textContaining('PathNotFoundException'), findsNothing);
       expect(find.textContaining(missingPath), findsNothing);
       expect(find.text('Could not reopen gone'), findsOneWidget);
-      expect(find.byKey(ValueKey('recent-tile-$missingPath')), findsNothing);
+      // the Recent list is emptied only when the user asks for it
+      expect(find.byKey(ValueKey('recent-tile-$missingPath')), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
