@@ -11,8 +11,7 @@ Finder findMiddleEllipsisText(String value) => find.byWidgetPredicate(
       (widget) => widget is MiddleEllipsisText && widget.data == value,
     );
 
-/// Opens every collapsible section of the Settings dialog, so the tests can
-/// find the controls inside them.
+/// Opens every collapsible section card, so tests can find the controls inside.
 Future<void> expandSettingsSections(WidgetTester tester,
     {bool settle = true}) async {
   final sections = find.byWidgetPredicate((w) =>

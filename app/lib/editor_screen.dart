@@ -3583,7 +3583,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// job ends. Read-only mode makes no edits, so it is skipped too.
   void _maybeAutoOcr(DocumentTab tab) {
     final controller = tab.session;
-    if (tab.autoOcrChecked || controller == null || _readOnlyChoice) return;
+    if (tab.autoOcrChecked || controller == null || _readOnly) return;
     if (!OnDeviceOcr.isSupported) return;
     tab.autoOcrChecked = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -5185,7 +5185,7 @@ class _EditorScreenState extends State<EditorScreen>
           _MenuAction(
             id: 'updates',
             icon: Icons.system_update_outlined,
-            title: appL10n(context).settingsUpdates,
+            title: appUpdatesPlusTitle(context),
             run: () => showAppUpdates(
               context,
               updates: _updates,

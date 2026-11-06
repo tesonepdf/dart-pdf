@@ -100,8 +100,8 @@ Future<void> _showDefaultAppSetup(BuildContext context) {
 }
 
 /// Opens the app settings sheet: theme mode, recent-files management and
-/// the About section (the update checks have their own screen, see
-/// [showAppUpdates]). Style defaults (tool colours, stroke,
+/// editor preferences. App information is available from the Updates+ screen
+/// ([showAppUpdates]). Style defaults (tool colours, stroke,
 /// font) are edited live from the editor toolbar and persist through
 /// [PdfEditingPreferences], so they aren't duplicated here.
 Future<void> showAppSettings(
@@ -349,58 +349,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     ),
                   ],
                 ),
-                _SettingsSection(
-                  title: 'Informazioni',
-                  children: [
-                    Text(
-                      '${AppInfo.displayName} ${AppInfo.displayVersion}',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
-                    if (AppInfo.buildCommit != 'unknown')
-                      const _BuildCheckTile(),
-                    const _BuildRunTile(),
-                    const SizedBox(height: 4),
-                    TextButton.icon(
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                      icon: const Icon(Icons.code, size: 18),
-                      label: Text(appL10n(context).settingsViewSource),
-                      onPressed: () => launchUrl(Uri.parse(AppInfo.sourceUrl),
-                          mode: LaunchMode.externalApplication),
-                    ),
-                    ListTile(
-                      key: const ValueKey('settings-report-issue'),
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.bug_report_outlined),
-                      title: Text(appL10n(context).settingsReportIssue),
-                      trailing: const Icon(Icons.open_in_new, size: 18),
-                      onTap: () => launchUrl(
-                          Uri.parse(AppInfo.feedbackIssueUrl),
-                          mode: LaunchMode.externalApplication),
-                    ),
-                    ListTile(
-                      key: const ValueKey('settings-whats-new'),
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.new_releases_outlined),
-                      title: Text(appL10n(context).whatsNew),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => showWhatsNew(context),
-                    ),
-                    ListTile(
-                      key: const ValueKey('settings-licenses'),
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.article_outlined),
-                      title: Text(MaterialLocalizations.of(context)
-                          .viewLicensesButtonLabel),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => showLicensePage(
-                        context: context,
-                        applicationName: AppInfo.displayName,
-                        applicationVersion: AppInfo.displayVersion,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           );
@@ -511,6 +459,62 @@ class _ArrowStepsSection extends StatelessWidget {
   }
 }
 
+String appUpdatesPlusTitle(BuildContext context) =>
+    '${appL10n(context).settingsUpdates}+';
+
+Widget _appInformationSection(BuildContext context) {
+  final theme = Theme.of(context);
+  return _SettingsSection(
+    title: 'Informazioni',
+    children: [
+      Text(
+        '${AppInfo.displayName} ${AppInfo.displayVersion}',
+        style: theme.textTheme.bodyMedium,
+      ),
+      Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
+      if (AppInfo.buildCommit != 'unknown') const _BuildCheckTile(),
+      const _BuildRunTile(),
+      const SizedBox(height: 4),
+      TextButton.icon(
+        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        icon: const Icon(Icons.code, size: 18),
+        label: Text(appL10n(context).settingsViewSource),
+        onPressed: () => launchUrl(Uri.parse(AppInfo.sourceUrl),
+            mode: LaunchMode.externalApplication),
+      ),
+      ListTile(
+        key: const ValueKey('updates-info-report-issue'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.bug_report_outlined),
+        title: Text(appL10n(context).settingsReportIssue),
+        trailing: const Icon(Icons.open_in_new, size: 18),
+        onTap: () => launchUrl(Uri.parse(AppInfo.feedbackIssueUrl),
+            mode: LaunchMode.externalApplication),
+      ),
+      ListTile(
+        key: const ValueKey('updates-info-whats-new'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.new_releases_outlined),
+        title: Text(appL10n(context).whatsNew),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showWhatsNew(context),
+      ),
+      ListTile(
+        key: const ValueKey('updates-info-licenses'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.article_outlined),
+        title: Text(MaterialLocalizations.of(context).viewLicensesButtonLabel),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showLicensePage(
+          context: context,
+          applicationName: AppInfo.displayName,
+          applicationVersion: AppInfo.displayVersion,
+        ),
+      ),
+    ],
+  );
+}
+
 /// Opens the Updates screen (menu: next to Settings). Two drop-downs - this
 /// app's own releases and the upstream (official) ones - each with its own
 /// three check options and its own manual check button. Both can be open at
@@ -541,7 +545,7 @@ class _UpdatesDialog extends StatefulWidget {
 class _UpdatesDialogState extends State<_UpdatesDialog> {
   static const _orderKey = 'dart_pdf_editor_app.updates_order';
 
-  /// L'ordine scelto dall'utente per i due blocchi (id), salvato.
+  /// L'ordine scelto dall'utente per i blocchi (id), salvato.
   List<String> _order = const [];
 
   @override
@@ -587,6 +591,7 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
             'Official repository (ben-milanko)'),
         children: const [_OfficialUpdatePanel()],
       ),
+      'information': _appInformationSection(context),
     };
     final ids = _order.where(sections.containsKey).toList();
     for (final id in sections.keys) {
@@ -618,7 +623,7 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
       return Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
-            title: Text(appL10n(context).settingsUpdates),
+            title: Text(appUpdatesPlusTitle(context)),
             leading: IconButton(
               icon: const Icon(Icons.close),
               tooltip: appL10n(context).close,
@@ -635,7 +640,7 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
       );
     }
     return AlertDialog(
-      title: Text(appL10n(context).settingsUpdates),
+      title: Text(appUpdatesPlusTitle(context)),
       content: SizedBox(
         width: 360,
         child: SingleChildScrollView(child: body),
