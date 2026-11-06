@@ -2,7 +2,7 @@
 # Mette davanti al messaggio il numero del commit (#N): lo stesso numero della
 # build su GitHub Actions e di Vercel.
 #  - main: N = commit del ramo + 25 (allinea il numero alla run di Actions)
-#  - prova-sviluppatore: N = 10000 + commit non ancora presenti in main
+#  - prova-sviluppatore: N = 10013 + commit non ancora presenti in main
 f="$1"
 first=$(head -n1 "$f")
 case "$first" in
@@ -11,7 +11,7 @@ esac
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 if [ "$branch" = "prova-sviluppatore" ]; then
   base=$(git rev-parse --verify -q origin/main || git rev-parse --verify -q main)
-  n=$(( 10000 + $(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0) + 1 ))
+  n=$(( 10013 + $(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0) + 1 ))
 else
   n=$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 + 25 ))
 fi

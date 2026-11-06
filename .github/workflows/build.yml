@@ -45,10 +45,8 @@ env:
   APP_LABEL: ${{ github.ref_name == 'prova-sviluppatore' && 'DartPDF Prova' || 'DartPDF' }}
   RELEASE_PREFIX: ${{ github.ref_name == 'prova-sviluppatore' && 'prova' || 'build' }}
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
-  # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10001.
+  # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10014.
   NUM_SUFFIX: ''
-  # Prova: 10012 + numero della run (la run #3 era la 10015, la #4 e' la 10016).
-  NUM_BASE: ${{ github.ref_name == 'prova-sviluppatore' && '10012' || '0' }}
 
 jobs:
   version:
@@ -76,9 +74,9 @@ jobs:
           # Numero build = numero del commit, lo stesso scritto in testa al
           # messaggio (hook .githooks/commit-msg) e quindi su Vercel:
           # ufficiale = commit di main + 25 (allineato alle run di Actions);
-          # prova     = 10000 + commit del ramo prova non ancora in main.
+          # prova     = 10013 + commit del ramo prova non ancora in main.
           if [[ "$GITHUB_REF_NAME" == prova-sviluppatore ]]; then
-            number="$((10000 + $(git rev-list --count origin/main..HEAD)))"
+            number="$((10013 + $(git rev-list --count origin/main..HEAD)))"
           else
             number="$(( $(git rev-list --count HEAD) + 25 ))"
           fi
