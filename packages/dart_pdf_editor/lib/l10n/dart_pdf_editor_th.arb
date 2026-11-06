@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "ใช้การปิดบังข้อมูลหรือไม่",
   "tbApplyRedactionsTooltip": "ใช้การปิดบังข้อมูล (ไม่สามารถย้อนกลับได้)",
   "tbFindToRedact": "ค้นหาข้อความที่จะปกปิด",
-  "tbAutosizeTextBox": "ปรับขนาดกล่องข้อความอัตโนมัติ (Alt+Z)",
+  "tbAutosizeTextBox": "ปรับขนาดกล่องข้อความอัตโนมัติ",
   "tbAutosizeTextFont": "ปรับแบบอักษรให้พอดีกับกล่องข้อความ",
   "tbCalibrateScaleHint": "วาดเส้นที่ทราบความยาวเพื่อปรับเทียบมาตราส่วน",
   "tbCharSpacing": "ระยะห่างอักขระ",

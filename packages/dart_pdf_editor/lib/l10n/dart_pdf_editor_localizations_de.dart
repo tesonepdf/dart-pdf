@@ -1524,7 +1524,7 @@ class DartPdfEditorLocalizationsDe extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Text zum Schwärzen suchen';
 
   @override
-  String get tbAutosizeTextBox => 'Textfeld automatisch anpassen (Alt+Z)';
+  String get tbAutosizeTextBox => 'Textfeld automatisch anpassen';
 
   @override
   String get tbAutosizeTextFont => 'Schrift an Textfeld anpassen';

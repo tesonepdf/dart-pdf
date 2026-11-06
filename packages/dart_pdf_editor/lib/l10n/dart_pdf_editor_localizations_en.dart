@@ -1520,7 +1520,7 @@ class DartPdfEditorLocalizationsEn extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Find text to redact';
 
   @override
-  String get tbAutosizeTextBox => 'Autosize text box (Alt+Z)';
+  String get tbAutosizeTextBox => 'Autosize text box';
 
   @override
   String get tbAutosizeTextFont => 'Fit font to text box';
@@ -4132,7 +4132,7 @@ class DartPdfEditorLocalizationsEnAu extends DartPdfEditorLocalizationsEn {
   String get tbFindToRedact => 'Find text to redact';
 
   @override
-  String get tbAutosizeTextBox => 'Autosize text box (Alt+Z)';
+  String get tbAutosizeTextBox => 'Autosize text box';
 
   @override
   String get tbAutosizeTextFont => 'Fit font to text box';
@@ -6744,7 +6744,7 @@ class DartPdfEditorLocalizationsEnGb extends DartPdfEditorLocalizationsEn {
   String get tbFindToRedact => 'Find text to redact';
 
   @override
-  String get tbAutosizeTextBox => 'Autosize text box (Alt+Z)';
+  String get tbAutosizeTextBox => 'Autosize text box';
 
   @override
   String get tbAutosizeTextFont => 'Fit font to text box';

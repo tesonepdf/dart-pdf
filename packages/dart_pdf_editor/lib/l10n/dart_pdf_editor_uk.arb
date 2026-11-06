@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Застосувати редагування?",
   "tbApplyRedactionsTooltip": "Застосувати редагування (незворотно)",
   "tbFindToRedact": "Знайти текст для приховування",
-  "tbAutosizeTextBox": "Автопідбір розміру текстового поля (Alt+Z)",
+  "tbAutosizeTextBox": "Автопідбір розміру текстового поля",
   "tbAutosizeTextFont": "Підігнати шрифт до текстового поля",
   "tbCalibrateScaleHint": "Намалюйте лінію відомої довжини, щоб відкалібрувати масштаб.",
   "tbCharSpacing": "Міжсимвольний інтервал",

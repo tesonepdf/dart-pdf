@@ -1512,7 +1512,7 @@ class DartPdfEditorLocalizationsJa extends DartPdfEditorLocalizations {
   String get tbFindToRedact => '墨消しするテキストを検索';
 
   @override
-  String get tbAutosizeTextBox => 'テキストボックスを自動サイズ (Alt+Z)';
+  String get tbAutosizeTextBox => 'テキストボックスを自動サイズ';
 
   @override
   String get tbAutosizeTextFont => 'フォントをテキストボックスに合わせる';

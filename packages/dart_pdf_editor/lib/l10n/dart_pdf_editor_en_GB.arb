@@ -448,7 +448,7 @@
   "tbApplyRedactionsTitle": "Apply redactions?",
   "tbApplyRedactionsTooltip": "Apply redactions (irreversible)",
   "tbFindToRedact": "Find text to redact",
-  "tbAutosizeTextBox": "Autosize text box (Alt+Z)",
+  "tbAutosizeTextBox": "Autosize text box",
   "tbAutosizeTextFont": "Fit font to text box",
   "tbCalibrateScaleHint": "Draw a line of known length to calibrate the scale.",
   "tbCharSpacing": "Char spacing",

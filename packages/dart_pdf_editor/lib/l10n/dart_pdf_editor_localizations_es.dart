@@ -1523,7 +1523,7 @@ class DartPdfEditorLocalizationsEs extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Buscar texto para censurar';
 
   @override
-  String get tbAutosizeTextBox => 'Autoajustar cuadro de texto (Alt+Z)';
+  String get tbAutosizeTextBox => 'Autoajustar cuadro de texto';
 
   @override
   String get tbAutosizeTextFont => 'Ajustar fuente al cuadro de texto';

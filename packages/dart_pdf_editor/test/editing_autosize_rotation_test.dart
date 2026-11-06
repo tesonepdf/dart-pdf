@@ -111,41 +111,6 @@ void main() {
             Rect.fromLTWH(original.left, original.top, lineWidth, lineHeight));
         expect(annotation.calloutLine!.first, tip);
       });
-
-      testWidgets('Alt+Z uses the rotated visible box dimensions',
-          (tester) async {
-        final editing = create(rotation);
-        final g = geometry(editing);
-        editing
-          ..addFreeText(0, g.toPageRect(original), 'Wide line')
-          ..selectAnnotation(0, 0);
-        await tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: ListenableBuilder(
-              listenable: editing,
-              builder: (context, _) => PdfViewer(
-                initialFit: PdfViewerFit.width,
-                document: editing.document,
-                editing: editing,
-              ),
-            ),
-          ),
-        ));
-        await tester.pump();
-        await tester.tapAt(const Offset(400, 400),
-            kind: PointerDeviceKind.mouse);
-        editing.selectAnnotation(0, 0);
-        await tester.pump();
-
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-        await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
-        await tester.pump();
-
-        expectBox(g.toViewRect(editing.selectedAnnotation!.rect),
-            Rect.fromLTWH(original.left, original.top, lineWidth, lineHeight));
-        await tester.pumpAndSettle(const Duration(milliseconds: 100));
-      });
     });
   }
 }

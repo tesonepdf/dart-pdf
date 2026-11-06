@@ -2826,10 +2826,10 @@ abstract class DartPdfEditorLocalizations {
   /// **'Find text to redact'**
   String get tbFindToRedact;
 
-  /// Tooltip for auto-sizing a free-text box to its content, with keyboard shortcut.
+  /// Tooltip for fitting a free-text box to its content.
   ///
   /// In en, this message translates to:
-  /// **'Autosize text box (Alt+Z)'**
+  /// **'Autosize text box'**
   String get tbAutosizeTextBox;
 
   /// Tooltip for choosing the largest font size that fits the selected free-text box.

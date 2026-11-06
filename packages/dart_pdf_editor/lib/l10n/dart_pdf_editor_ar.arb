@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "تطبيق التنقيحات؟",
   "tbApplyRedactionsTooltip": "تطبيق التنقيحات (لا يمكن التراجع)",
   "tbFindToRedact": "البحث عن نص لتنقيحه",
-  "tbAutosizeTextBox": "تحجيم مربع النص تلقائيًا (Alt+Z)",
+  "tbAutosizeTextBox": "تحجيم مربع النص تلقائيًا",
   "tbAutosizeTextFont": "ملاءمة الخط لمربع النص",
   "tbCalibrateScaleHint": "ارسم خطًا بطول معلوم لمعايرة المقياس.",
   "tbCharSpacing": "تباعد الأحرف",

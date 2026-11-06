@@ -1975,9 +1975,9 @@
   "@tbFindToRedact": {
     "description": "Tooltip on the redact tool's toolbar button that opens the search panel to find text to mark for redaction."
   },
-  "tbAutosizeTextBox": "Autosize text box (Alt+Z)",
+  "tbAutosizeTextBox": "Autosize text box",
   "@tbAutosizeTextBox": {
-    "description": "Tooltip for auto-sizing a free-text box to its content, with keyboard shortcut."
+    "description": "Tooltip for fitting a free-text box to its content."
   },
   "tbAutosizeTextFont": "Fit font to text box",
   "@tbAutosizeTextFont": {

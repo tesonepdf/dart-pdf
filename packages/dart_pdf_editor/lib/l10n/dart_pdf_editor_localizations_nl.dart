@@ -1523,7 +1523,7 @@ class DartPdfEditorLocalizationsNl extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Tekst zoeken om te redigeren';
 
   @override
-  String get tbAutosizeTextBox => 'Tekstvak automatisch aanpassen (Alt+Z)';
+  String get tbAutosizeTextBox => 'Tekstvak automatisch aanpassen';
 
   @override
   String get tbAutosizeTextFont => 'Lettertype passend maken in tekstvak';

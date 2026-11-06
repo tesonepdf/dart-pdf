@@ -1524,7 +1524,7 @@ class DartPdfEditorLocalizationsId extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Cari teks untuk disensor';
 
   @override
-  String get tbAutosizeTextBox => 'Ukuran otomatis kotak teks (Alt+Z)';
+  String get tbAutosizeTextBox => 'Ukuran otomatis kotak teks';
 
   @override
   String get tbAutosizeTextFont => 'Sesuaikan font ke kotak teks';

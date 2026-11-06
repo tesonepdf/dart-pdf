@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "¿Aplicar censuras?",
   "tbApplyRedactionsTooltip": "Aplicar censuras (irreversible)",
   "tbFindToRedact": "Buscar texto para censurar",
-  "tbAutosizeTextBox": "Autoajustar cuadro de texto (Alt+Z)",
+  "tbAutosizeTextBox": "Autoajustar cuadro de texto",
   "tbAutosizeTextFont": "Ajustar fuente al cuadro de texto",
   "tbCalibrateScaleHint": "Dibuja una línea de longitud conocida para calibrar la escala.",
   "tbCharSpacing": "Espaciado entre caracteres",

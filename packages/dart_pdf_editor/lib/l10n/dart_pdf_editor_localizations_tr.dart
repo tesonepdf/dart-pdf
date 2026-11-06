@@ -1520,7 +1520,7 @@ class DartPdfEditorLocalizationsTr extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Karartılacak metni bul';
 
   @override
-  String get tbAutosizeTextBox => 'Metin kutusunu otomatik boyutlandır (Alt+Z)';
+  String get tbAutosizeTextBox => 'Metin kutusunu otomatik boyutlandır';
 
   @override
   String get tbAutosizeTextFont => 'Yazı tipini metin kutusuna sığdır';

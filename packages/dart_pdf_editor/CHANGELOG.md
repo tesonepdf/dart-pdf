@@ -365,7 +365,7 @@
 - The viewer's keyboard commands are intents: `PdfCopyIntent`,
   `PdfCutIntent`, `PdfPasteIntent`, `PdfSelectAllIntent`, `PdfDismissIntent`,
   `PdfUndoIntent`, `PdfRedoIntent`, `PdfDeleteSelectionIntent`,
-  `PdfAutosizeTextBoxIntent`, `PdfNudgeSelectionIntent` and
+  `PdfNudgeSelectionIntent` and
   `PdfArmToolIntent`. `pdfViewerDefaultShortcuts` holds the stock bindings
   (unchanged); `PdfViewer.shortcuts` (and `viewerShortcuts` on
   `PdfEditorView` and `PdfReader`) replaces them. A `Shortcuts` above the

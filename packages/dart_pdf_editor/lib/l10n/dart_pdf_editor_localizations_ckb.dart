@@ -1524,7 +1524,7 @@ class DartPdfEditorLocalizationsCkb extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'دۆزینەوەی دەق بۆ شاردنەوە';
 
   @override
-  String get tbAutosizeTextBox => 'قەبارەی خۆکاری چوارگۆشەی دەق (Alt+Z)';
+  String get tbAutosizeTextBox => 'قەبارەی خۆکاری چوارگۆشەی دەق';
 
   @override
   String get tbAutosizeTextFont => 'گونجاندنی قەبارەی فۆنت لەگەڵ چوارگۆشەی دەق';

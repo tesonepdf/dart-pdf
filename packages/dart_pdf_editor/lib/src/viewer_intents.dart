@@ -53,12 +53,6 @@ class PdfDeleteSelectionIntent extends Intent {
   const PdfDeleteSelectionIntent();
 }
 
-/// Shrinks or grows the selected text box to fit its text (⌥Z / Alt+Z).
-/// Editing only.
-class PdfAutosizeTextBoxIntent extends Intent {
-  const PdfAutosizeTextBoxIntent();
-}
-
 /// Rotates selected annotations by [degrees] counterclockwise in page space.
 /// R turns clockwise by 90°; Shift+R turns counterclockwise. Editing only,
 /// and enabled only when the selection can rotate.
@@ -142,8 +136,6 @@ final Map<ShortcutActivator, Intent> pdfViewerDefaultShortcuts =
       const PdfUndoIntent(),
   const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
       const PdfUndoIntent(),
-  const SingleActivator(LogicalKeyboardKey.keyZ, alt: true):
-      const PdfAutosizeTextBoxIntent(),
   const SingleActivator(LogicalKeyboardKey.keyR):
       const PdfRotateSelectionIntent(-90),
   const SingleActivator(LogicalKeyboardKey.keyR, shift: true):

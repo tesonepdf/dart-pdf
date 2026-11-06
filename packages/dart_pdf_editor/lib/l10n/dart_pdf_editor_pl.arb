@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Zastosować wymazania?",
   "tbApplyRedactionsTooltip": "Zastosuj wymazania (nieodwracalne)",
   "tbFindToRedact": "Znajdź tekst do utajnienia",
-  "tbAutosizeTextBox": "Automatyczny rozmiar pola tekstowego (Alt+Z)",
+  "tbAutosizeTextBox": "Automatyczny rozmiar pola tekstowego",
   "tbAutosizeTextFont": "Dopasuj czcionkę do pola tekstowego",
   "tbCalibrateScaleHint": "Narysuj linię o znanej długości, aby skalibrować skalę.",
   "tbCharSpacing": "Odstęp znaków",
