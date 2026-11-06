@@ -1130,6 +1130,12 @@ class DartPdfEditorLocalizationsEn extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => 'Show chapters on scrollbar';
 
   @override
+  String get shellTwoPageView => 'Two-page view';
+
+  @override
+  String get shellTwoPageCover => 'Show cover page separately';
+
+  @override
   String get shellTabHere => 'Tab here';
 
   @override
@@ -1851,6 +1857,13 @@ class DartPdfEditorLocalizationsEn extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Pick a color from the page';
+
+  @override
+  String get tbRedactAsImages => 'Replace redacted pages with images';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Most secure: only a picture of each redacted page is kept. Text on those pages can no longer be selected or searched, and the file gets larger.';
 
   @override
   String get tbRedactionsApplied => 'Redactions applied';
@@ -3729,6 +3742,12 @@ class DartPdfEditorLocalizationsEnAu extends DartPdfEditorLocalizationsEn {
   String get shellShowScrollbarChapters => 'Show chapters on scrollbar';
 
   @override
+  String get shellTwoPageView => 'Two-page view';
+
+  @override
+  String get shellTwoPageCover => 'Show cover page separately';
+
+  @override
   String get shellTabHere => 'Tab here';
 
   @override
@@ -4450,6 +4469,13 @@ class DartPdfEditorLocalizationsEnAu extends DartPdfEditorLocalizationsEn {
 
   @override
   String get tbPickColorFromPage => 'Pick a colour from the page';
+
+  @override
+  String get tbRedactAsImages => 'Replace redacted pages with images';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Most secure: only a picture of each redacted page is kept. Text on those pages can no longer be selected or searched, and the file gets larger.';
 
   @override
   String get tbRedactionsApplied => 'Redactions applied';
@@ -6328,6 +6354,12 @@ class DartPdfEditorLocalizationsEnGb extends DartPdfEditorLocalizationsEn {
   String get shellShowScrollbarChapters => 'Show chapters on scrollbar';
 
   @override
+  String get shellTwoPageView => 'Two-page view';
+
+  @override
+  String get shellTwoPageCover => 'Show cover page separately';
+
+  @override
   String get shellTabHere => 'Tab here';
 
   @override
@@ -7049,6 +7081,13 @@ class DartPdfEditorLocalizationsEnGb extends DartPdfEditorLocalizationsEn {
 
   @override
   String get tbPickColorFromPage => 'Pick a colour from the page';
+
+  @override
+  String get tbRedactAsImages => 'Replace redacted pages with images';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Most secure: only a picture of each redacted page is kept. Text on those pages can no longer be selected or searched, and the file gets larger.';
 
   @override
   String get tbRedactionsApplied => 'Redactions applied';

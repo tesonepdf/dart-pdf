@@ -1134,6 +1134,12 @@ class DartPdfEditorLocalizationsCkb extends DartPdfEditorLocalizations {
       'پیشاندانی بەشەکان لەسەر شریتی جووڵە';
 
   @override
+  String get shellTwoPageView => 'پیشاندانی دوو لاپەڕە';
+
+  @override
+  String get shellTwoPageCover => 'لاپەڕەی بەرگ بە جیا پیشان بدە';
+
+  @override
   String get shellTabHere => 'تابی نوێ لێرە';
 
   @override
@@ -1858,6 +1864,13 @@ class DartPdfEditorLocalizationsCkb extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'هەڵبژاردنی ڕەنگ لە پەڕەکەوە';
+
+  @override
+  String get tbRedactAsImages => 'لاپەڕە سانسۆرکراوەکان بە وێنە بگۆڕە';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'پارێزراوترین: تەنها وێنەیەکی هەر لاپەڕەیەکی سانسۆرکراو دەمێنێتەوە. دەقی ئەو لاپەڕانە چیتر هەڵنابژێردرێت و ناگەڕێنرێت، و قەبارەی فایلەکە گەورەتر دەبێت.';
 
   @override
   String get tbRedactionsApplied => 'سانسۆرکردنەکان جێبەجێ کران';

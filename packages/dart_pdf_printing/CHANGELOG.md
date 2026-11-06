@@ -1,3 +1,12 @@
+## 0.12.0
+
+See the [migration guide](https://github.com/ben-milanko/dart-pdf/blob/main/doc/MIGRATING-15.0.0.md) for SDK compatibility details.
+
+## 0.11.0
+
+- Return `PrintDialogResult` from the print entrypoints so callers can distinguish cancellation from hand-off to the system. Web browsers cannot report cancellation.
+- Report native print-dialog cancellation and correct Windows vector output for rotated images and dashed strokes.
+
 ## 0.10.0
 
 - Open print preview on the page-strip selection, including the current page for an untouched strip.

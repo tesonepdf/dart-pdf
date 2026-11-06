@@ -1,3 +1,3 @@
-DartPDF 13.0.0
+DartPDF 15.0.0
 
-Importeer en exporteer formuliergegevens en opmerkingen met FDF, XFDF en XDP. Bewerk bestaande links. Lees notitiereacties naast de pagina en houd meerdere notities open. Deel geselecteerde documenttabs samen. Verbeter het startscherm, PDF-openen en updatecontroles. Het afdrukvoorbeeld volgt de geselecteerde pagina’s.
+Redactie van bedekte afbeeldingen, formuliervelden en verborgen tekst hersteld. Toepassen verwijdert standaard metadata en bijlagen; gedeelde inhoud kan ook elders worden verwijderd. Niet-opgeslagen wijzigingen blijven behouden als opslaan wordt geannuleerd of er tijdens het opslaan nieuwe wijzigingen komen. Plakken, zoomen en meten verbeterd.

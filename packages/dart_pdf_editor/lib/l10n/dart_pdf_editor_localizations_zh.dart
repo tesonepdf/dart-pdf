@@ -1124,6 +1124,12 @@ class DartPdfEditorLocalizationsZh extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => '在滚动条上显示章节';
 
   @override
+  String get shellTwoPageView => '双页视图';
+
+  @override
+  String get shellTwoPageCover => '单独显示封面';
+
+  @override
   String get shellTabHere => '停靠为标签页';
 
   @override
@@ -1835,6 +1841,13 @@ class DartPdfEditorLocalizationsZh extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => '从页面选取颜色';
+
+  @override
+  String get tbRedactAsImages => '将已遮盖的页面替换为图像';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      '最安全：每个已遮盖的页面只保留一张图像。这些页面上的文字将无法再选择或搜索，文件也会变大。';
 
   @override
   String get tbRedactionsApplied => '已应用密文遮盖';
@@ -3677,6 +3690,12 @@ class DartPdfEditorLocalizationsZhHant extends DartPdfEditorLocalizationsZh {
   String get shellShowScrollbarChapters => '在捲動軸上顯示章節';
 
   @override
+  String get shellTwoPageView => '雙頁檢視';
+
+  @override
+  String get shellTwoPageCover => '單獨顯示封面';
+
+  @override
   String get shellTabHere => '在此建立分頁';
 
   @override
@@ -4388,6 +4407,13 @@ class DartPdfEditorLocalizationsZhHant extends DartPdfEditorLocalizationsZh {
 
   @override
   String get tbPickColorFromPage => '從頁面挑選顏色';
+
+  @override
+  String get tbRedactAsImages => '將已塗黑的頁面替換為影像';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      '最安全：每個已塗黑的頁面只保留一張影像。這些頁面上的文字將無法再選取或搜尋，檔案也會變大。';
 
   @override
   String get tbRedactionsApplied => '已套用塗黑';

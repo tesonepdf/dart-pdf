@@ -1151,6 +1151,12 @@ class DartPdfEditorLocalizationsPl extends DartPdfEditorLocalizations {
       'Pokaż rozdziały na pasku przewijania';
 
   @override
+  String get shellTwoPageView => 'Widok dwóch stron';
+
+  @override
+  String get shellTwoPageCover => 'Pokaż okładkę osobno';
+
+  @override
   String get shellTabHere => 'Dodaj jako kartę';
 
   @override
@@ -1882,6 +1888,13 @@ class DartPdfEditorLocalizationsPl extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Pobierz kolor ze strony';
+
+  @override
+  String get tbRedactAsImages => 'Zastąp zaczernione strony obrazami';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Najbezpieczniej: z każdej zaczernionej strony zostaje tylko obraz. Tekstu na tych stronach nie będzie można zaznaczać ani wyszukiwać, a plik będzie większy.';
 
   @override
   String get tbRedactionsApplied => 'Zastosowano wymazania';
