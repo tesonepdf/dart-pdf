@@ -328,9 +328,11 @@ class DocumentTab {
   /// baseline and clears this.
   bool get isUnsaved => session != null && savedLength < 0;
 
-  /// Marks the current revision as the saved baseline (call after a save).
-  void markSaved() {
-    if (session != null) savedLength = session!.bytes.length;
+  /// Marks the written revision as the saved baseline (call after a save).
+  void markSaved({int? revisionLength}) {
+    if (session != null) {
+      savedLength = revisionLength ?? session!.bytes.length;
+    }
   }
 
   /// Null for an error or comparison tab. Preferences are owned by the app,
