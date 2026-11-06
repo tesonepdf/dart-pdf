@@ -2,8 +2,8 @@ import 'package:dart_pdf_printing/l10n/dart_pdf_printing_localizations.dart';
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:dart_pdf_editor_app/l10n/app_delegates.dart';
 import 'package:dart_pdf_editor_app/l10n/app_localizations.dart';
-import 'package:dart_pdf_editor_app/recents.dart';
 import 'package:dart_pdf_editor_app/settings_screen.dart';
+import 'package:dart_pdf_editor_app/update.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,34 +11,31 @@ import 'test_finders.dart';
 
 void main() {
   for (final region in ['AU', 'GB', 'US']) {
-    testWidgets('settings license label follows English $region',
+    testWidgets('Updates+ license label follows English $region',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = PdfEditingPreferences();
-      final recents = RecentsStore();
-      addTearDown(prefs.dispose);
-      addTearDown(recents.dispose);
-      await prefs.ready;
+      final updates = UpdateService(
+        currentVersion: '13.0.0',
+        fetcher: () async => [],
+      );
+      addTearDown(updates.dispose);
       await tester.pumpWidget(MaterialApp(
         locale: Locale('en', region),
         localizationsDelegates: appLocalizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(body: Builder(builder: (context) {
           return TextButton(
-            onPressed: () =>
-                showAppSettings(context, prefs: prefs, recents: recents),
-            child: const Text('Settings'),
+            onPressed: () => showAppUpdates(context, updates: updates),
+            child: const Text('Updates+'),
           );
         })),
       ));
       await tester.pumpAndSettle();
-      await tapMenuText(tester, 'Settings');
-      // Cache usage reads IndexedDB in browsers; its unrelated progress spinner
-      // need not settle for the Settings route and licence link to be ready.
+      await tapMenuText(tester, 'Updates+');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await expandSettingsSections(tester, settle: false);
-      final tile = find.byKey(const ValueKey('settings-licenses'));
+      final tile = find.byKey(const ValueKey('updates-info-licenses'));
       await tester.ensureVisible(tile);
       expect(
           find.descendant(

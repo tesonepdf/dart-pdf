@@ -405,16 +405,16 @@ void main() {
       }
     });
 
-    testWidgets('settings opens it from the About block', (tester) async {
+    testWidgets('Updates+ opens it from the Information block', (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
       await tester.tap(find.byTooltip('DartPDF menu'));
       await tester.pumpAndSettle();
-      await tapMenuText(tester, 'Settings');
+      await tapMenuText(tester, 'Updates+');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
 
-      final tile = find.byKey(const ValueKey('settings-whats-new'));
+      final tile = find.byKey(const ValueKey('updates-info-whats-new'));
       await tester.ensureVisible(tile);
       await tester.pumpAndSettle();
       await tester.tap(tile);
@@ -428,7 +428,7 @@ void main() {
       expect(find.byKey(const ValueKey('whats-new-unavailable')), findsNothing);
     });
 
-    testWidgets('the About block offers GitHub feedback',
+    testWidgets('Settings no longer contains the Information block',
         (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
@@ -438,8 +438,22 @@ void main() {
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
 
+      expect(find.byKey(const ValueKey('updates-info-whats-new')), findsNothing);
+    });
+
+    testWidgets('the Information block offers GitHub feedback',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
+      await tester.pump();
+      await tester.tap(find.byTooltip('DartPDF menu'));
+      await tester.pumpAndSettle();
+      await tapMenuText(tester, 'Updates+');
+      await tester.pumpAndSettle();
+      await expandSettingsSections(tester);
+
       expect(
-          find.byKey(const ValueKey('settings-report-issue')), findsOneWidget);
+          find.byKey(const ValueKey('updates-info-report-issue')),
+          findsOneWidget);
       expect(find.byKey(const ValueKey('settings-email-feedback')), findsNothing);
     });
 
@@ -470,7 +484,7 @@ void main() {
         await tester.pump();
         await tester.tap(find.byTooltip('DartPDF menu'));
         await tester.pumpAndSettle();
-        await tapMenuText(tester, 'Settings');
+        await tapMenuText(tester, 'Updates+');
         await tester.pumpAndSettle();
         await expandSettingsSections(tester);
         final tile = find.byKey(ValueKey(key));
@@ -482,7 +496,7 @@ void main() {
 
       testWidgets('report an issue opens the GitHub feedback form',
           (tester) async {
-        await tapTile(tester, 'settings-report-issue');
+        await tapTile(tester, 'updates-info-report-issue');
         expect(launched, [AppInfo.feedbackIssueUrl]);
       });
     });
