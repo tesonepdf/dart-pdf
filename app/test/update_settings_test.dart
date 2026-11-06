@@ -171,7 +171,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuKey(tester, 'menu-settings');
+    await tapMenuKey(tester, 'menu-updates');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
 

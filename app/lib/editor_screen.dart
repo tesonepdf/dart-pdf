@@ -3943,6 +3943,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (session == null) return;
     // the file on disk may carry the page colour; the session never does,
     // so the next save bakes over the same base again
+    final revisionLength = session.bytes.length;
     final bytes = _withBakedPageColor(session.bytes, source: session.document);
     final saveToPath = widget.saveDocumentToPath ?? saveBytesToPath;
     final inPlace = !saveAs && tab.originPath != null && supportsInPlaceSave;
@@ -3980,7 +3981,7 @@ class _EditorScreenState extends State<EditorScreen>
           : (await securityBookmarkForPath(path)) ?? existingBookmark;
       if (!mounted) return;
       setState(() {
-        tab.markSaved();
+        tab.markSaved(revisionLength: revisionLength);
         if (path != null) {
           tab.title = path.split(RegExp(r'[/\\]')).last;
           tab.originPath = path;

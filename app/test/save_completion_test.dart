@@ -110,8 +110,6 @@ void main() {
         WidgetTester tester,
         Future<SaveResult> Function(BuildContext, Uint8List, String)
             save) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       await tester.binding.setSurfaceSize(const Size(1400, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(MaterialApp(
@@ -152,7 +150,7 @@ void main() {
       expect(records, hasLength(1));
       expect(records.single.length, controller.bytes.length);
       expect(records.single.savedLength, written!.length);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('a second Save cannot open another destination while pending',
         (tester) async {
@@ -171,7 +169,7 @@ void main() {
       completion.complete(SaveResult.cancelled);
       await tester.pump();
       expect(_dirtyDot(), findsOneWidget);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('dismissed destination leaves a recoverable edited document',
         (tester) async {
@@ -184,6 +182,6 @@ void main() {
       expect(_dirtyDot(), findsOneWidget);
       expect(await store.list(), hasLength(1));
       expect(find.text('Shared'), findsNothing);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 }
