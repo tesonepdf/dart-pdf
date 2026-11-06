@@ -435,6 +435,11 @@ class SaveResult {
       SaveResult._('Save failed: $error');
 }
 
+SaveResult _saveResultFromShare(ShareResult result) =>
+    result.status == ShareResultStatus.success
+        ? SaveResult.shared()
+        : SaveResult.cancelled;
+
 /// Reads a PDF straight from a known on-disk [path] - used to reopen a recent
 /// file. Throws if it can't be read (caller drops the stale recent entry).
 ///
@@ -659,7 +664,7 @@ Future<SaveResult> saveBytesAs(
       final box = context.findRenderObject() as RenderBox?;
       final origin =
           box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final result = await SharePlus.instance.share(ShareParams(
         files: [file],
         fileNameOverrides: [name],
         // iOS builds the share sheet header from this; without it the
@@ -668,7 +673,7 @@ Future<SaveResult> saveBytesAs(
         // required on iPad: the share popover anchors to this rect
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       ));
-      return SaveResult.shared();
+      return _saveResultFromShare(result);
     default:
       final location = await getSaveLocation(
         suggestedName: name,
@@ -720,13 +725,13 @@ Future<SaveResult> shareDocumentsAs(
       final box = context.findRenderObject() as RenderBox?;
       final origin =
           box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final result = await SharePlus.instance.share(ShareParams(
         files: files,
         fileNameOverrides: names,
         // required on iPad: the share popover anchors to this rect
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       ));
-      return SaveResult.shared();
+      return _saveResultFromShare(result);
     default:
       final directory = await getDirectoryPath();
       if (directory == null) return SaveResult.cancelled;
@@ -818,13 +823,13 @@ Future<SaveResult> saveJsonAs(
       final box = context.findRenderObject() as RenderBox?;
       final origin =
           box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final result = await SharePlus.instance.share(ShareParams(
         files: [file],
         fileNameOverrides: [name],
         title: name,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       ));
-      return SaveResult.shared();
+      return _saveResultFromShare(result);
     default:
       final location = await getSaveLocation(
         suggestedName: name,
@@ -866,13 +871,13 @@ Future<SaveResult> saveFormDataAs(
       final box = context.findRenderObject() as RenderBox?;
       final origin =
           box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final result = await SharePlus.instance.share(ShareParams(
         files: [file],
         fileNameOverrides: [name],
         title: name,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       ));
-      return SaveResult.shared();
+      return _saveResultFromShare(result);
     default:
       final location = await getSaveLocation(
         suggestedName: name,
@@ -914,13 +919,13 @@ Future<SaveResult> saveImageBytesAs(
       final box = context.findRenderObject() as RenderBox?;
       final origin =
           box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final result = await SharePlus.instance.share(ShareParams(
         files: [file],
         fileNameOverrides: [name],
         title: name,
         sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
       ));
-      return SaveResult.shared();
+      return _saveResultFromShare(result);
     default:
       final location = await getSaveLocation(
         suggestedName: name,

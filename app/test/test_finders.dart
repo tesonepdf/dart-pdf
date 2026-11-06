@@ -20,14 +20,12 @@ Future<void> expandSettingsSections(WidgetTester tester,
       (w.key! as ValueKey<String>).value.startsWith('settings-section-'));
   final count = sections.evaluate().length;
   for (var i = 0; i < count; i++) {
-    final header = find
-        .descendant(of: sections.at(i), matching: find.byType(ListTile))
-        .first;
-    await tester.ensureVisible(header);
+    final section = sections.at(i);
+    await tester.ensureVisible(section);
     settle
         ? await tester.pumpAndSettle()
         : await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(header);
+    await tester.tap(section);
     settle
         ? await tester.pumpAndSettle()
         : await tester.pump(const Duration(milliseconds: 500));
@@ -39,6 +37,14 @@ Future<void> expandSettingsSections(WidgetTester tester,
 /// ("Settings", "Updates") can sit below the fold, where a plain tap misses.
 Future<void> tapMenuText(WidgetTester tester, String text) async {
   final item = find.text(text);
+  await tester.ensureVisible(item);
+  await tester.pumpAndSettle();
+  await tester.tap(item);
+}
+
+/// Taps a keyed app-menu item after scrolling it into view.
+Future<void> tapMenuKey(WidgetTester tester, String key) async {
+  final item = find.byKey(ValueKey(key));
   await tester.ensureVisible(item);
   await tester.pumpAndSettle();
   await tester.tap(item);
