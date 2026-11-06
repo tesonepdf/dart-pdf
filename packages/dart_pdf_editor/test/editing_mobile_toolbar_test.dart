@@ -238,7 +238,40 @@ void main() {
     expect(editing.tool, isNull);
   });
 
-  testWidgets('Select group directly arms Select and closes the tool sheet',
+  testWidgets('Select group offers Hand and Select modes', (tester) async {
+    final editing = await pumpToolbar(tester);
+
+    await tester.tap(find.byKey(const ValueKey('pdf-tools-handle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pdf-group-tab-select')));
+    await tester.pumpAndSettle();
+
+    final hand = find.byKey(const ValueKey('pdf-sheet-mode-hand'));
+    final select = find.byKey(const ValueKey('pdf-sheet-mode-select'));
+    expect(hand, findsOneWidget);
+    expect(select, findsOneWidget);
+    expect(editing.tool, isNull);
+
+    await tester.tap(hand);
+    await tester.pumpAndSettle();
+    expect(editing.tool, isNull);
+    expect(editing.isHandMode, isTrue);
+    expect(hand, findsNothing, reason: 'choosing a mode closes the sheet');
+
+    await tester.tap(find.byKey(const ValueKey('pdf-tools-handle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pdf-group-tab-select')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pdf-sheet-mode-hand')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('pdf-sheet-mode-select')));
+    await tester.pumpAndSettle();
+    expect(editing.tool, PdfEditTool.select);
+    expect(editing.isHandMode, isFalse);
+    expect(find.byKey(const ValueKey('pdf-sheet-mode-select')), findsNothing);
+  });
+
+  testWidgets('Select group remains available from another armed tool',
       (tester) async {
     final editing = await pumpToolbar(tester);
 
@@ -249,6 +282,10 @@ void main() {
       expect(selectGroup, findsOneWidget);
 
       await tester.tap(selectGroup);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pdf-sheet-mode-select')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('pdf-sheet-mode-select')));
       await tester.pumpAndSettle();
       expect(editing.tool, PdfEditTool.select);
       final switcher = find.byKey(const ValueKey('pdf-mobile-current-tool'));
@@ -262,7 +299,7 @@ void main() {
               of: switcher, matching: find.byIcon(Icons.pan_tool_alt)),
           findsNothing);
       expect(selectGroup, findsNothing,
-          reason: 'choosing the one-option group closes the sheet');
+          reason: 'choosing a mode closes the sheet');
     }
 
     expect(editing.tool, isNull);

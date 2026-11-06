@@ -3142,8 +3142,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
   }
 
   /// Opens the mobile tools sheet: group tabs, a tool grid, and the active
-  /// tool's settings. Multi-tool tabs only navigate; Select's one-option tab
-  /// arms it directly and closes the sheet.
+  /// tool's settings. The Select tab offers both navigation modes.
   Future<void> _openToolSheet(BuildContext context) async {
     final groups = _visibleGroups;
     final panelGroups = _panelGroupOrder(groups);
@@ -3184,8 +3183,7 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
                                       active: g.id == tabId,
                                       onTap: () {
                                         if (g.kind == PdfEditToolGroup.select) {
-                                          Navigator.of(sheetContext).pop();
-                                          _toggleTool(PdfEditTool.select);
+                                          setSheetState(() => tabId = g.id);
                                           return;
                                         }
                                         if (g.id == tabId) return;
@@ -3332,6 +3330,40 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
       };
 
   Widget _sheetToolGrid(BuildContext context, _ToolGroup group) {
+    if (group.kind == PdfEditToolGroup.select) {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 1.15,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+        children: [
+          _SheetToolTile(
+            key: const ValueKey('pdf-sheet-mode-hand'),
+            icon: Icons.pan_tool_alt,
+            label: pdfL10n(context).tbNameHand,
+            active: controller.isHandMode,
+            enabled: true,
+            onTap: () {
+              _activateHandMode();
+              Navigator.of(context).pop();
+            },
+          ),
+          _SheetToolTile(
+            key: const ValueKey('pdf-sheet-mode-select'),
+            icon: Icons.near_me,
+            label: pdfL10n(context).tbNameSelect,
+            active: controller.tool == PdfEditTool.select,
+            enabled: true,
+            onTap: () {
+              _activateSelectMode();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      );
+    }
     final entries = group.tools.where(_entryVisible).toList();
     return GridView.count(
       crossAxisCount: 4,

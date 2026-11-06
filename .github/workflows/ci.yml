@@ -89,6 +89,7 @@ jobs:
         run: |
           flutter test --reporter expanded \
             test/editing_autosize_rotation_test.dart \
+            test/editing_mobile_toolbar_test.dart \
             test/viewer_intents_test.dart \
             test/paste_routing_test.dart
 
