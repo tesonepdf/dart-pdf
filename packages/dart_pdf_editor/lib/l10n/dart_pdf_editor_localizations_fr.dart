@@ -1136,6 +1136,12 @@ class DartPdfEditorLocalizationsFr extends DartPdfEditorLocalizations {
       'Afficher les chapitres dans la barre de défilement';
 
   @override
+  String get shellTwoPageView => 'Affichage deux pages';
+
+  @override
+  String get shellTwoPageCover => 'Afficher la couverture séparément';
+
+  @override
   String get shellTabHere => 'Onglet ici';
 
   @override
@@ -1861,6 +1867,14 @@ class DartPdfEditorLocalizationsFr extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Prélever une couleur sur la page';
+
+  @override
+  String get tbRedactAsImages =>
+      'Remplacer les pages caviardées par des images';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Le plus sûr : seule une image de chaque page caviardée est conservée. Le texte de ces pages ne peut plus être sélectionné ni recherché, et le fichier devient plus volumineux.';
 
   @override
   String get tbRedactionsApplied => 'Caviardages appliqués';

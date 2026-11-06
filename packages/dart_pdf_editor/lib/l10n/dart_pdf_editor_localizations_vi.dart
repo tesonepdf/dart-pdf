@@ -1133,6 +1133,12 @@ class DartPdfEditorLocalizationsVi extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => 'Hiện các chương trên thanh cuộn';
 
   @override
+  String get shellTwoPageView => 'Xem hai trang';
+
+  @override
+  String get shellTwoPageCover => 'Hiển thị trang bìa riêng';
+
+  @override
   String get shellTabHere => 'Ghép thẻ tại đây';
 
   @override
@@ -1853,6 +1859,13 @@ class DartPdfEditorLocalizationsVi extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Chọn màu từ trang';
+
+  @override
+  String get tbRedactAsImages => 'Thay các trang đã che bằng hình ảnh';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'An toàn nhất: mỗi trang đã che chỉ giữ lại một hình ảnh. Văn bản trên các trang đó sẽ không thể chọn hay tìm kiếm được nữa và tệp sẽ lớn hơn.';
 
   @override
   String get tbRedactionsApplied => 'Đã áp dụng che thông tin';

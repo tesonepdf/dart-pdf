@@ -1126,6 +1126,12 @@ class DartPdfEditorLocalizationsKo extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => '스크롤바에 장 표시';
 
   @override
+  String get shellTwoPageView => '두 페이지 보기';
+
+  @override
+  String get shellTwoPageCover => '표지를 따로 표시';
+
+  @override
   String get shellTabHere => '여기에 탭';
 
   @override
@@ -1839,6 +1845,13 @@ class DartPdfEditorLocalizationsKo extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => '페이지에서 색상 선택';
+
+  @override
+  String get tbRedactAsImages => '가린 페이지를 이미지로 바꾸기';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      '가장 안전함: 가린 각 페이지의 이미지만 남습니다. 해당 페이지의 텍스트는 더 이상 선택하거나 검색할 수 없으며 파일 크기가 커집니다.';
 
   @override
   String get tbRedactionsApplied => '교정이 적용되었습니다';

@@ -1134,6 +1134,12 @@ class DartPdfEditorLocalizationsNl extends DartPdfEditorLocalizations {
       'Hoofdstukken op de schuifbalk tonen';
 
   @override
+  String get shellTwoPageView => 'Weergave van twee pagina\'s';
+
+  @override
+  String get shellTwoPageCover => 'Voorpagina apart tonen';
+
+  @override
   String get shellTabHere => 'Tabblad hier';
 
   @override
@@ -1857,6 +1863,14 @@ class DartPdfEditorLocalizationsNl extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Een kleur van de pagina kiezen';
+
+  @override
+  String get tbRedactAsImages =>
+      'Geredigeerde pagina\'s vervangen door afbeeldingen';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Het veiligst: van elke geredigeerde pagina blijft alleen een afbeelding over. Tekst op die pagina\'s kan daarna niet meer worden geselecteerd of doorzocht, en het bestand wordt groter.';
 
   @override
   String get tbRedactionsApplied => 'Redacties toegepast';

@@ -1135,6 +1135,12 @@ class DartPdfEditorLocalizationsEs extends DartPdfEditorLocalizations {
       'Mostrar capítulos en la barra de desplazamiento';
 
   @override
+  String get shellTwoPageView => 'Vista de dos páginas';
+
+  @override
+  String get shellTwoPageCover => 'Mostrar la portada por separado';
+
+  @override
   String get shellTabHere => 'Pestaña aquí';
 
   @override
@@ -1858,6 +1864,14 @@ class DartPdfEditorLocalizationsEs extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Elegir un color de la página';
+
+  @override
+  String get tbRedactAsImages =>
+      'Reemplazar las páginas censuradas por imágenes';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Lo más seguro: de cada página censurada solo se conserva una imagen. El texto de esas páginas ya no se podrá seleccionar ni buscar, y el archivo ocupará más.';
 
   @override
   String get tbRedactionsApplied => 'Censuras aplicadas';

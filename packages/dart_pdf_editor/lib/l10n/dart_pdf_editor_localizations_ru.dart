@@ -1150,6 +1150,12 @@ class DartPdfEditorLocalizationsRu extends DartPdfEditorLocalizations {
       'Показывать главы на полосе прокрутки';
 
   @override
+  String get shellTwoPageView => 'Разворот из двух страниц';
+
+  @override
+  String get shellTwoPageCover => 'Показывать обложку отдельно';
+
+  @override
   String get shellTabHere => 'Вкладка сюда';
 
   @override
@@ -1881,6 +1887,14 @@ class DartPdfEditorLocalizationsRu extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Выбрать цвет со страницы';
+
+  @override
+  String get tbRedactAsImages =>
+      'Заменить отредактированные страницы изображениями';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Самый надёжный вариант: от каждой отредактированной страницы остаётся только изображение. Текст на этих страницах больше нельзя будет выделить или найти, а файл станет больше.';
 
   @override
   String get tbRedactionsApplied => 'Вымарывания применены';

@@ -1134,6 +1134,12 @@ class DartPdfEditorLocalizationsId extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => 'Tampilkan bab pada bilah gulir';
 
   @override
+  String get shellTwoPageView => 'Tampilan dua halaman';
+
+  @override
+  String get shellTwoPageCover => 'Tampilkan halaman sampul terpisah';
+
+  @override
   String get shellTabHere => 'Tab di sini';
 
   @override
@@ -1858,6 +1864,13 @@ class DartPdfEditorLocalizationsId extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Pilih warna dari halaman';
+
+  @override
+  String get tbRedactAsImages => 'Ganti halaman yang disensor dengan gambar';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Paling aman: hanya gambar dari setiap halaman yang disensor yang disimpan. Teks di halaman tersebut tidak dapat lagi dipilih atau dicari, dan ukuran file bertambah.';
 
   @override
   String get tbRedactionsApplied => 'Redaksi diterapkan';

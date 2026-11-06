@@ -1135,6 +1135,12 @@ class DartPdfEditorLocalizationsPt extends DartPdfEditorLocalizations {
       'Mostrar capítulos na barra de rolagem';
 
   @override
+  String get shellTwoPageView => 'Visualização de duas páginas';
+
+  @override
+  String get shellTwoPageCover => 'Mostrar a capa separadamente';
+
+  @override
   String get shellTabHere => 'Agrupar em aba aqui';
 
   @override
@@ -1857,6 +1863,13 @@ class DartPdfEditorLocalizationsPt extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Selecionar uma cor da página';
+
+  @override
+  String get tbRedactAsImages => 'Substituir as páginas ocultadas por imagens';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'Mais seguro: de cada página ocultada só fica uma imagem. O texto dessas páginas deixa de poder ser selecionado ou pesquisado, e o ficheiro fica maior.';
 
   @override
   String get tbRedactionsApplied => 'Tarjas aplicadas';

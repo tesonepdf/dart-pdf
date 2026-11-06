@@ -2166,6 +2166,18 @@ abstract class DartPdfEditorLocalizations {
   /// **'Show chapters on scrollbar'**
   String get shellShowScrollbarChapters;
 
+  /// Toggle label for the facing-pages layout: consecutive pages shown side by side as two-page spreads, like an open book or notebook.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-page view'**
+  String get shellTwoPageView;
+
+  /// Toggle label, shown with the two-page view, for keeping the first page alone (a book cover) so the spreads start at pages 2-3.
+  ///
+  /// In en, this message translates to:
+  /// **'Show cover page separately'**
+  String get shellTwoPageCover;
+
   /// Drop hint shown when dragging a docked panel over another panel to combine them into a tabbed group.
   ///
   /// In en, this message translates to:
@@ -3443,6 +3455,18 @@ abstract class DartPdfEditorLocalizations {
   /// In en, this message translates to:
   /// **'Pick a color from the page'**
   String get tbPickColorFromPage;
+
+  /// Checkbox in the apply-redactions dialog: turn each page with a redaction into a picture of itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace redacted pages with images'**
+  String get tbRedactAsImages;
+
+  /// Explanation under the replace-pages-with-images checkbox in the apply-redactions dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Most secure: only a picture of each redacted page is kept. Text on those pages can no longer be selected or searched, and the file gets larger.'**
+  String get tbRedactAsImagesDetail;
 
   /// Snackbar confirming redactions were applied.
   ///

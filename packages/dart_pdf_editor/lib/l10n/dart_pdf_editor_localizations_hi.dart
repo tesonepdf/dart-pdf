@@ -1130,6 +1130,12 @@ class DartPdfEditorLocalizationsHi extends DartPdfEditorLocalizations {
   String get shellShowScrollbarChapters => 'स्क्रॉलबार पर अध्याय दिखाएँ';
 
   @override
+  String get shellTwoPageView => 'दो-पृष्ठ दृश्य';
+
+  @override
+  String get shellTwoPageCover => 'कवर पृष्ठ अलग से दिखाएँ';
+
+  @override
   String get shellTabHere => 'यहाँ टैब करें';
 
   @override
@@ -1853,6 +1859,13 @@ class DartPdfEditorLocalizationsHi extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'पृष्ठ से एक रंग चुनें';
+
+  @override
+  String get tbRedactAsImages => 'रिडैक्ट किए गए पेजों को छवियों से बदलें';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'सबसे सुरक्षित: हर रिडैक्ट किए गए पेज की केवल एक छवि रखी जाती है। उन पेजों का टेक्स्ट अब चुना या खोजा नहीं जा सकेगा, और फ़ाइल बड़ी हो जाएगी।';
 
   @override
   String get tbRedactionsApplied => 'रिडैक्शन लागू किए गए';

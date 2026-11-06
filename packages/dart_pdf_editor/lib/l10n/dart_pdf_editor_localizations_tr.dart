@@ -1132,6 +1132,12 @@ class DartPdfEditorLocalizationsTr extends DartPdfEditorLocalizations {
       'Kaydırma çubuğunda bölümleri göster';
 
   @override
+  String get shellTwoPageView => 'İki sayfa görünümü';
+
+  @override
+  String get shellTwoPageCover => 'Kapak sayfasını ayrı göster';
+
+  @override
   String get shellTabHere => 'Buraya sekmele';
 
   @override
@@ -1852,6 +1858,13 @@ class DartPdfEditorLocalizationsTr extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Sayfadan bir renk seç';
+
+  @override
+  String get tbRedactAsImages => 'Karartılan sayfaları görüntülerle değiştir';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'En güvenlisi: Karartılan her sayfanın yalnızca bir görüntüsü kalır. Bu sayfalardaki metin artık seçilemez veya aranamaz ve dosya büyür.';
 
   @override
   String get tbRedactionsApplied => 'Karartmalar uygulandı';

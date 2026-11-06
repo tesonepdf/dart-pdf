@@ -1,6 +1,11 @@
 # Da fare e codice: consegna alla prossima chat
 
-Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-05.
+Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
+
+## Aggiornamento 2026-11-06
+
+- **Menu dell'app (da sistemare più avanti):** l'utente ha notato che il menu appare diverso quando non c'è un PDF aperto rispetto a quando il PDF è aperto. Non vuole che il menu cambi in base al documento aperto; per ora non modificare il comportamento, da riprendere su sua richiesta.
+- **Novità di Ben sul ramo `prova-sviluppatore`:** confrontate con la base comune `f5efa6e5` e importate dal commit Ben `66601339`. I 288 cambiamenti non sovrapposti sono nel repository; le 78 versioni di Ben dei file sovrapposti sono in `DA-VALUTARE` e si esaminano una alla volta. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Non modificare `main`.
 
 ## Aggiornamento 2026-11-05 (da #224)
 
