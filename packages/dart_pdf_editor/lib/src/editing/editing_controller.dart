@@ -27,6 +27,7 @@ import 'models/custom_stamp.dart';
 import 'models/ink_signature.dart';
 import 'models/measurement_scale.dart';
 import 'models/prompts.dart';
+import 'paste_routing.dart';
 import 'saved_annotation.dart';
 import 'signature_validation_worker.dart';
 import 'thumbnail_cache.dart';
@@ -870,6 +871,11 @@ class PdfEditingController extends ChangeNotifier {
   /// a session. See [copySelectedAnnotations], [cutSelectedAnnotations], and
   /// [pasteAnnotations].
   final PdfAnnotationSnapshotClipboard annotationClipboard;
+
+  late final PdfInAppClipboard _clipboard =
+      PdfInAppClipboard(snapshotClipboard, annotationClipboard);
+
+  PdfPasteSource? get inAppPasteSource => _clipboard.next;
 
   /// The session's shared page-thumbnail cache (and its viewport-ordered
   /// render queue). Every thumbnail surface - the docked strip, the
