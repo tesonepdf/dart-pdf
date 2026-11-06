@@ -1509,7 +1509,7 @@ class DartPdfEditorLocalizationsZh extends DartPdfEditorLocalizations {
   String get tbFindToRedact => '查找要涂黑的文本';
 
   @override
-  String get tbAutosizeTextBox => '自动调整文本框大小 (Alt+Z)';
+  String get tbAutosizeTextBox => '自动调整文本框大小';
 
   @override
   String get tbAutosizeTextFont => '使字体适应文本框';
@@ -4075,7 +4075,7 @@ class DartPdfEditorLocalizationsZhHant extends DartPdfEditorLocalizationsZh {
   String get tbFindToRedact => '尋找要塗黑的文字';
 
   @override
-  String get tbAutosizeTextBox => '自動調整文字方塊大小 (Alt+Z)';
+  String get tbAutosizeTextBox => '自動調整文字方塊大小';
 
   @override
   String get tbAutosizeTextFont => '讓字型符合文字方塊';

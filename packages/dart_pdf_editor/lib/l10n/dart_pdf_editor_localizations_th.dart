@@ -1518,7 +1518,7 @@ class DartPdfEditorLocalizationsTh extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'ค้นหาข้อความที่จะปกปิด';
 
   @override
-  String get tbAutosizeTextBox => 'ปรับขนาดกล่องข้อความอัตโนมัติ (Alt+Z)';
+  String get tbAutosizeTextBox => 'ปรับขนาดกล่องข้อความอัตโนมัติ';
 
   @override
   String get tbAutosizeTextFont => 'ปรับแบบอักษรให้พอดีกับกล่องข้อความ';

@@ -451,7 +451,7 @@
   "tbApplyRedactionsTitle": "Applicare gli oscuramenti?",
   "tbApplyRedactionsTooltip": "Applica oscuramenti (irreversibile)",
   "tbFindToRedact": "Trova testo da oscurare",
-  "tbAutosizeTextBox": "Adatta casella di testo (Alt+Z)",
+  "tbAutosizeTextBox": "Adatta casella di testo",
   "tbAutosizeTextFont": "Adatta il carattere alla casella di testo",
   "tbCalibrateScaleHint": "Disegna una linea di lunghezza nota per calibrare la scala.",
   "tbCharSpacing": "Spaziatura caratteri",

@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Schwärzungen anwenden?",
   "tbApplyRedactionsTooltip": "Schwärzungen anwenden (unwiderruflich)",
   "tbFindToRedact": "Text zum Schwärzen suchen",
-  "tbAutosizeTextBox": "Textfeld automatisch anpassen (Alt+Z)",
+  "tbAutosizeTextBox": "Textfeld automatisch anpassen",
   "tbAutosizeTextFont": "Schrift an Textfeld anpassen",
   "tbCalibrateScaleHint": "Zeichnen Sie eine Linie bekannter Länge, um den Maßstab zu kalibrieren.",
   "tbCharSpacing": "Zeichenabstand",

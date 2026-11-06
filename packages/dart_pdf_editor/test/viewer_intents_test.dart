@@ -63,7 +63,6 @@ void main() {
           PdfUndoIntent,
           PdfRedoIntent,
           PdfDeleteSelectionIntent,
-          PdfAutosizeTextBoxIntent,
           PdfRotateSelectionIntent,
           PdfNudgeSelectionIntent,
           PdfArmLastToolIntent,
@@ -72,6 +71,10 @@ void main() {
         pdfViewerDefaultShortcuts[
             const SingleActivator(LogicalKeyboardKey.backspace)],
         isA<PdfDeleteSelectionIntent>());
+    expect(
+        pdfViewerDefaultShortcuts[
+            const SingleActivator(LogicalKeyboardKey.keyZ, alt: true)],
+        isNull);
   });
 
   test('lastUsedTool is the tool before the current one, Select aside', () {

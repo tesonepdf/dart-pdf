@@ -10927,9 +10927,6 @@ class _PdfViewerState extends State<PdfViewer>
               widget.editing != null &&
               (widget.editing!.canRestyleSelectedText ||
                   _controller.selectedText.isNotEmpty)),
-      PdfAutosizeTextBoxIntent: action<PdfAutosizeTextBoxIntent>(
-          (_) => widget.editing?.autosizeSelectedTextBox(),
-          enabled: editing),
       PdfRotateSelectionIntent: action<PdfRotateSelectionIntent>(
           (intent) => widget.editing?.rotateSelected(intent.degrees),
           enabled: (_) => widget.editing?.canRotateSelected ?? false),

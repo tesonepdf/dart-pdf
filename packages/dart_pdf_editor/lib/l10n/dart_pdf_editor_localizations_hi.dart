@@ -1518,7 +1518,7 @@ class DartPdfEditorLocalizationsHi extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'रिडैक्ट करने के लिए टेक्स्ट खोजें';
 
   @override
-  String get tbAutosizeTextBox => 'टेक्स्ट बॉक्स स्वतः-आकार दें (Alt+Z)';
+  String get tbAutosizeTextBox => 'टेक्स्ट बॉक्स स्वतः-आकार दें';
 
   @override
   String get tbAutosizeTextFont => 'फ़ॉन्ट को टेक्स्ट बॉक्स में फ़िट करें';

@@ -9857,8 +9857,8 @@ class PdfEditingController extends ChangeNotifier {
     }
     // Only the gaps BETWEEN baselines consume line-height. The old
     // `lineCount * lineHeight` formula reserved a complete extra leading
-    // interval under the final line, which is the empty band Alt+Z left at
-    // the bottom of every box. Use the font's ascent/descent for the first
+    // interval under the final line, which left an empty band at the bottom
+    // of every box. Use the font's ascent/descent for the first
     // and last line and the box's own spacing between them.
     final height = math.max(
       1.0,

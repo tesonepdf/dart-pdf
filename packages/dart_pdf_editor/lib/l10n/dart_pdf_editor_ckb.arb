@@ -448,7 +448,7 @@
   "tbApplyRedactionsTitle": "سانسۆرکردن (ڕەشکردنەوە) جێبەجێ بکرێت؟",
   "tbApplyRedactionsTooltip": "جێبەجێکردنی سانسۆرکردن (ناگەڕێتەوە)",
   "tbFindToRedact": "دۆزینەوەی دەق بۆ شاردنەوە",
-  "tbAutosizeTextBox": "قەبارەی خۆکاری چوارگۆشەی دەق (Alt+Z)",
+  "tbAutosizeTextBox": "قەبارەی خۆکاری چوارگۆشەی دەق",
   "tbAutosizeTextFont": "گونجاندنی قەبارەی فۆنت لەگەڵ چوارگۆشەی دەق",
   "tbCalibrateScaleHint": "هێڵێک بە درێژییەکی دیاریکراو بکێشە بۆ کالیبرەکردنی پێوەر.",
   "tbCharSpacing": "بۆشایی پیتەکان",

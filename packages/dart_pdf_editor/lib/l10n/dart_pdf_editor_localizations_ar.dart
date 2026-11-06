@@ -1550,7 +1550,7 @@ class DartPdfEditorLocalizationsAr extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'البحث عن نص لتنقيحه';
 
   @override
-  String get tbAutosizeTextBox => 'تحجيم مربع النص تلقائيًا (Alt+Z)';
+  String get tbAutosizeTextBox => 'تحجيم مربع النص تلقائيًا';
 
   @override
   String get tbAutosizeTextFont => 'ملاءمة الخط لمربع النص';

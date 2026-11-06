@@ -1544,7 +1544,7 @@ class DartPdfEditorLocalizationsUk extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Знайти текст для приховування';
 
   @override
-  String get tbAutosizeTextBox => 'Автопідбір розміру текстового поля (Alt+Z)';
+  String get tbAutosizeTextBox => 'Автопідбір розміру текстового поля';
 
   @override
   String get tbAutosizeTextFont => 'Підігнати шрифт до текстового поля';

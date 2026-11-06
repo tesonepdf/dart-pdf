@@ -1522,7 +1522,7 @@ class DartPdfEditorLocalizationsVi extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Tìm văn bản để biên tập ẩn';
 
   @override
-  String get tbAutosizeTextBox => 'Tự động cỡ hộp văn bản (Alt+Z)';
+  String get tbAutosizeTextBox => 'Tự động cỡ hộp văn bản';
 
   @override
   String get tbAutosizeTextFont => 'Vừa phông chữ với hộp văn bản';

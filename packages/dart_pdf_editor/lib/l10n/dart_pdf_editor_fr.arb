@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Appliquer les caviardages ?",
   "tbApplyRedactionsTooltip": "Appliquer les caviardages (irréversible)",
   "tbFindToRedact": "Rechercher du texte à biffer",
-  "tbAutosizeTextBox": "Ajuster automatiquement la zone de texte (Alt+Z)",
+  "tbAutosizeTextBox": "Ajuster automatiquement la zone de texte",
   "tbAutosizeTextFont": "Adapter la police à la zone de texte",
   "tbCalibrateScaleHint": "Tracez une ligne de longueur connue pour calibrer l'échelle.",
   "tbCharSpacing": "Espacement des caractères",

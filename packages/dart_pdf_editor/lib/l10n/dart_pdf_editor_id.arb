@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Terapkan redaksi?",
   "tbApplyRedactionsTooltip": "Terapkan redaksi (tidak dapat dibatalkan)",
   "tbFindToRedact": "Cari teks untuk disensor",
-  "tbAutosizeTextBox": "Ukuran otomatis kotak teks (Alt+Z)",
+  "tbAutosizeTextBox": "Ukuran otomatis kotak teks",
   "tbAutosizeTextFont": "Sesuaikan font ke kotak teks",
   "tbCalibrateScaleHint": "Gambar garis dengan panjang yang diketahui untuk mengkalibrasi skala.",
   "tbCharSpacing": "Spasi karakter",

@@ -1520,7 +1520,7 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   String get tbFindToRedact => 'Trova testo da oscurare';
 
   @override
-  String get tbAutosizeTextBox => 'Adatta casella di testo (Alt+Z)';
+  String get tbAutosizeTextBox => 'Adatta casella di testo';
 
   @override
   String get tbAutosizeTextFont => 'Adatta il carattere alla casella di testo';

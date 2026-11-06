@@ -453,7 +453,7 @@
   "tbApplyRedactionsTitle": "Применить вымарывания?",
   "tbApplyRedactionsTooltip": "Применить вымарывания (необратимо)",
   "tbFindToRedact": "Найти текст для скрытия",
-  "tbAutosizeTextBox": "Автоподбор размера текстового поля (Alt+Z)",
+  "tbAutosizeTextBox": "Автоподбор размера текстового поля",
   "tbAutosizeTextFont": "Подогнать шрифт под текстовое поле",
   "tbCalibrateScaleHint": "Нарисуйте линию известной длины, чтобы откалибровать масштаб.",
   "tbCharSpacing": "Межбуквенный интервал",
