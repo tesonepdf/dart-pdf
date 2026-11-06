@@ -110,6 +110,8 @@ void main() {
         WidgetTester tester,
         Future<SaveResult> Function(BuildContext, Uint8List, String)
             save) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       await tester.binding.setSurfaceSize(const Size(1400, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(MaterialApp(

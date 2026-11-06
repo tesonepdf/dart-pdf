@@ -430,6 +430,7 @@ class _EditorScreenState extends State<EditorScreen>
   bool _draggingOverThumbnails = false;
 
   final List<DocumentTab> _tabs = [];
+  final Set<DocumentTab> _savingTabs = {};
   int _activeIndex = 0;
   // The tab strip's context, for its on-screen geometry. Not a GlobalKey:
   // the strip lives in the app bar, which an editable document draws inside
@@ -3926,6 +3927,15 @@ class _EditorScreenState extends State<EditorScreen>
   /// prompts for a location (save dialog / browser download / share sheet).
   /// An in-place write that fails (e.g. permissions) falls back to save-as.
   Future<void> _save(DocumentTab tab, {bool saveAs = false}) async {
+    if (!_savingTabs.add(tab)) return;
+    try {
+      await _saveOnce(tab, saveAs: saveAs);
+    } finally {
+      _savingTabs.remove(tab);
+    }
+  }
+
+  Future<void> _saveOnce(DocumentTab tab, {required bool saveAs}) async {
     FocusManager.instance.primaryFocus?.unfocus();
     FocusManager.instance.applyFocusChangesIfNeeded();
     tab.session?.finishInk();
@@ -5032,6 +5042,14 @@ class _EditorScreenState extends State<EditorScreen>
         requiresDocument: true,
         icon: Icons.compress_outlined,
         title: l.editorMenuReduceFileSize,
+        searchTerms: const [
+          'compress',
+          'shrink',
+          'make smaller',
+          'compresser',
+          '圧縮',
+          'ضغط',
+        ],
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_reduceFileSize(tab));
@@ -5346,6 +5364,7 @@ class _EditorScreenState extends State<EditorScreen>
             : blockedByReadOnly
                 ? l.editorMenuReadOnly
                 : null,
+        searchTerms: action.searchTerms,
         run: action.run,
       ));
     }
@@ -5402,6 +5421,21 @@ class _EditorScreenState extends State<EditorScreen>
           enabled: command.enabled.value && !blocked,
           disabledReason: blocked ? l.editorMenuReadOnly : null,
           selected: command.selected.value,
+          searchTerms: switch (command.id) {
+            'tool-freeText' => const [
+                'add text',
+                'ajouter du texte',
+                'テキストを追加',
+                'إضافة نص',
+              ],
+            'tool-signature' => const [
+                'sign',
+                'signer',
+                '手書き署名',
+                'توقيع',
+              ],
+            _ => const [],
+          },
           run: () => unawaited(command.invoke(context)),
         ));
       }
@@ -5420,6 +5454,21 @@ class _EditorScreenState extends State<EditorScreen>
           shortcut: tool == null ? null : pdfEditToolShortcutLabel(tool),
           enabled: false,
           disabledReason: l.paletteNeedsDocument,
+          searchTerms: switch (tool) {
+            PdfEditTool.freeText => const [
+                'add text',
+                'ajouter du texte',
+                'テキストを追加',
+                'إضافة نص',
+              ],
+            PdfEditTool.signature => const [
+                'sign',
+                'signer',
+                '手書き署名',
+                'توقيع',
+              ],
+            _ => const [],
+          },
           run: () {},
         ));
       }
@@ -8376,6 +8425,7 @@ class _MenuAction {
     required this.title,
     required this.run,
     this.shortcut,
+    this.searchTerms = const [],
     this.enabled = true,
     this.requiresDocument = false,
     this.hiddenWhenReadOnly = false,
@@ -8389,6 +8439,7 @@ class _MenuAction {
   final String title;
   final VoidCallback run;
   final String? shortcut;
+  final List<String> searchTerms;
 
   /// False for an action that is present but momentarily unavailable (a
   /// signature already in flight).

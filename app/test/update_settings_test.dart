@@ -92,7 +92,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuText(tester, 'Updates');
+    await tapMenuKey(tester, 'menu-updates');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
 
@@ -126,7 +126,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuText(tester, 'Updates');
+    await tapMenuKey(tester, 'menu-updates');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
     final check = find.byKey(const ValueKey('settings-check-updates'));
@@ -171,7 +171,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuText(tester, 'Settings');
+    await tapMenuKey(tester, 'menu-settings');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
 
@@ -196,7 +196,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuText(tester, 'Updates');
+    await tapMenuKey(tester, 'menu-updates');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
 
@@ -229,7 +229,7 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tapMenuText(tester, 'Updates');
+    await tapMenuKey(tester, 'menu-updates');
     await tester.pumpAndSettle();
     await expandSettingsSections(tester);
 
@@ -413,7 +413,7 @@ void main() {
 
       await tester.tap(find.byTooltip('DartPDF menu'));
       await tester.pumpAndSettle();
-      await tapMenuText(tester, 'Settings');
+      await tapMenuKey(tester, 'menu-settings');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
 

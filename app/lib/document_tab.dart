@@ -358,7 +358,13 @@ class DocumentTab {
 
   /// A stable identity per open document, used by the shells to remember the
   /// scroll position and zoom across reopens.
-  String get documentId => title;
+  String get documentId {
+    final path = originPath;
+    if (path != null && path.isNotEmpty) return path;
+    final cache = cachePath;
+    if (cache != null && cache.isNotEmpty) return cache;
+    return title;
+  }
 
   void dispose() {
     // Closing a still-loading preview cancels its ranged fetch and background
