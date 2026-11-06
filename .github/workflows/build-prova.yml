@@ -2,12 +2,11 @@ name: Build APK PROVA (ramo prova-sviluppatore)
 
 run-name: "${{ github.event.head_commit.message || 'Build a comando' }}"
 
-# Build della app "DartPDF Prova". Parte solo dai push sul ramo prova e usa
+# Build della app "DartPDF Prova". Parte dai push sul ramo prova-sviluppatore e usa
 # lo stesso procedimento della build ufficiale (build.yml), richiamato da qui:
 # i numeri build, la release (app-android-prova) e l'elenco su GitHub restano
-# separati da quelli dell'app ufficiale. Il numero build della prova e'
-# 10012 + numero della run (vedi NUM_BASE in build.yml) ed e' scritto nel
-# titolo di ogni run: la tabella del run-name vale per le prime 3000 run.
+# separati da quelli dell'app ufficiale. Dopo il riallineamento a main, il
+# prossimo commit e la relativa build ripartono dal numero #10014.
 
 on:
   push:
