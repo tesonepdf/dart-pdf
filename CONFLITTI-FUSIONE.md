@@ -25,6 +25,14 @@ Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche
 | 5 | suggerimento annulla/ripeti scelto per sistema: `⌘Z` su Mac e iPhone, `Ctrl+Z` su Windows, Linux e Android, e solo con una tastiera collegata. Prima la tua barra scriveva sempre `⌘Z`, anche su Windows. Corretti anche il test dell'app | `#10033` | applicato, build da verificare |
 | 6 | azioni in basso sul telefono: l'utente le vuole nei "paletti" | nessuno | da chiarire cosa sono i "paletti" |
 
+**DECISIONE DEL 07/11: LA FUSIONE GRAFICA È CHIUSA. Non c'è altro da fare con Ben, finché lui non pubblica novità nuove.**
+Controllato che le novità di Ben rimaste valgono su Android e Windows, e sono comunque da non prendere:
+- **OCR automatico spento che resta spento:** il tuo codice rispetta già l'interruttore per le scansioni nuove (`editor_screen.dart`, riga ~3592) e ha già il salvataggio del risultato OCR. Differenza con Ben: il recupero di lavori OCR automatici *interrotti* non guarda l'interruttore (la chiamata a `_ocr.recover` non passa `automaticEnabled`). Caso raro: **non preso**.
+- **Redazione con sostituzione a immagine:** a metà nel ramo (motore e dialogo dentro, casella e comando del controller no). L'utente non la usa: **non presa**.
+- **Condividi che segna il documento come salvato:** già a posto (`_saveResultFromShare`).
+- **Overlay, tasto X, riordini interni, sito, flussi di Ben, versioni:** non presi (vedi sopra).
+Quando Ben pubblica altro: si riparte da qui, si confronta solo il nuovo (`git fetch upstream main`, poi i commit dopo `66601339`), senza rifare i 78 file.
+
 **Cosa si vede oggi nell'app, dalla fusione grafica del 07/11 (onesto: sono poche cose)**
 - Opzioni di visualizzazione: "Vista a due pagine" e "Mostra la copertina separatamente" (spenta di base: se non la accendi non cambia niente).
 - Messaggi di conferma che possono avere una casella da spuntare, e menu a tendina con l'altezza giusta.
@@ -62,7 +70,7 @@ Fonte: `DA-VALUTARE/README.md` (Ben `66601339`, base `f5efa6e5`). Letti i titoli
 **Da decidere (21 file, per funzione)**
 1. **Guida ai moduli PDF e salvataggio che non perde le modifiche fatte mentre salva.** `app/lib/document_tab.dart`, `file_io.dart`, `editor_screen.dart`, `l10n/app_it.arb`, `l10n/app_localizations_it.dart`. Una parte è già dentro.
 2. **OCR automatico rispettato quando riprende i lavori interrotti.** `app/lib/ocr_native.dart`, `ocr_web.dart`, `ocr_stub.dart`, `editor_screen.dart`, test `ocr_auto_test.dart`. Quasi per niente preso.
-3. **Menu e comandi più facili da trovare, anche per chi usa il lettore schermo.** `editing_toolbar.dart`, `editor_screen.dart`, test `form_data_exchange_menu_test.dart`, `keyboard_availability_test.dart`, `settings_menu_test.dart`. Tocca i menu dell'utente (regola: i suoi menu si tengono sempre). **Fatto il 07/11: sottomenu del menu di Windows (#10031) e suggerimento annulla/ripeti per sistema (#10033). Resta la Impostazioni del telefono.**
+3. **Menu e comandi più facili da trovare, anche per chi usa il lettore schermo.** `editing_toolbar.dart`, `editor_screen.dart`, test `form_data_exchange_menu_test.dart`, `keyboard_availability_test.dart`, `settings_menu_test.dart`. Tocca i menu dell'utente (regola: i suoi menu si tengono sempre). **Fatto il 07/11: sottomenu del menu di Windows (#10031) e suggerimento annulla/ripeti per sistema (#10033). Resta da verificare sul telefono Impostazioni (vedi sotto).**
 4. **Esporta pagine con Ctrl/Cmd+Maiusc+X.** `pdf_editor_view.dart`.
 5. **Redazione, ultime correzioni di revisione.** `editing_controller.dart` e `editing_toolbar.dart`.
 6. **Correzione anteprime e annotazioni.** `editor_screen.dart`, test `progressive_open_test.dart`.
