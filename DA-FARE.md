@@ -30,6 +30,8 @@ Regola dell'utente: si va **un punto alla volta**, a ogni modifica si aggiorna q
 - **Da controllare tu su Windows** dopo la build: aprire il menu, spostarsi con Tab fino a "Apri recente" e premere Invio, il sottomenu deve aprirsi senza chiudere il menu.
 - **Da controllare sul telefono:** aprire un documento, modificarlo, entrare in Impostazioni e tornare: il documento e lo strumento devono esserci ancora. Se si perdono, dimmelo: è un errore da correggere.
 
+**`CONFLITTI-FUSIONE.md` (commit #10032):** unito con l'elenco per gruppi dell'utente (78 file in 9 gruppi, non uno per uno). C'è il registro dei punti con commit, la tabella di corrispondenza tra i punti del piano e i gruppi, e le righe superate sono corrette.
+
 **Prossimi punti, uno alla volta (nessuno cominciato):**
 4. Tasto X del pannello strumenti (la tua griglia 3x3 o la sua riga): decide l'utente.
 5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test; `Ctrl+Z` al posto di `⌘Z`).
