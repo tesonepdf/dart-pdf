@@ -1588,6 +1588,21 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     );
   }
 
+  /// The Undo / Redo tooltip. With a keyboard connected it names the
+  /// shortcut the person's own system uses: Cmd on Apple systems, Ctrl on
+  /// the others.
+  String _historyTooltip(BuildContext context, {required bool redo}) {
+    final l = pdfL10n(context);
+    final label = redo ? l.redo : l.undo;
+    if (!PdfKeyboardAvailability.of(context)) return label;
+    final apple = switch (Theme.of(context).platform) {
+      TargetPlatform.macOS || TargetPlatform.iOS => true,
+      _ => false,
+    };
+    if (apple) return redo ? l.tbRedoShortcut : l.tbUndoShortcut;
+    return '$label (${redo ? 'Ctrl+Shift+Z' : 'Ctrl+Z'})';
+  }
+
   Widget _dock(BuildContext context) {
     final axis = widget.dock.isHorizontal ? Axis.vertical : Axis.horizontal;
     final groups = _visibleGroups;
@@ -1605,17 +1620,13 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
         IconButton(
           key: const ValueKey('pdf-undo'),
           icon: const Icon(Icons.undo),
-          tooltip: PdfKeyboardAvailability.of(context)
-              ? pdfL10n(context).tbUndoShortcut
-              : pdfL10n(context).undo,
+          tooltip: _historyTooltip(context, redo: false),
           onPressed: controller.canUndo ? controller.undo : null,
         ),
         IconButton(
           key: const ValueKey('pdf-redo'),
           icon: const Icon(Icons.redo),
-          tooltip: PdfKeyboardAvailability.of(context)
-              ? pdfL10n(context).tbRedoShortcut
-              : pdfL10n(context).redo,
+          tooltip: _historyTooltip(context, redo: true),
           onPressed: controller.canRedo ? controller.redo : null,
         ),
         _DockDivider(axis: axis),
@@ -2824,18 +2835,14 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
             IconButton(
               key: const ValueKey('pdf-undo'),
               icon: const Icon(Icons.undo),
-              tooltip: PdfKeyboardAvailability.of(context)
-                  ? pdfL10n(context).tbUndoShortcut
-                  : pdfL10n(context).undo,
+              tooltip: _historyTooltip(context, redo: false),
               visualDensity: VisualDensity.compact,
               onPressed: controller.canUndo ? controller.undo : null,
             ),
             IconButton(
               key: const ValueKey('pdf-redo'),
               icon: const Icon(Icons.redo),
-              tooltip: PdfKeyboardAvailability.of(context)
-                  ? pdfL10n(context).tbRedoShortcut
-                  : pdfL10n(context).redo,
+              tooltip: _historyTooltip(context, redo: true),
               visualDensity: VisualDensity.compact,
               onPressed: controller.canRedo ? controller.redo : null,
             ),
