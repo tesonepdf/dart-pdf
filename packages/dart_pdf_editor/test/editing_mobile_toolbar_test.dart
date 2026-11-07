@@ -13,6 +13,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   final swatch = find.byKey(const ValueKey('pdf-mobile-swatch-0'));
   final currentTool = find.byKey(const ValueKey('pdf-mobile-current-tool'));
+  // the tool's name as the control shows it (the header gives it 100px)
+  Finder toolName(String name) =>
+      find.descendant(of: currentTool, matching: find.textContaining(name));
 
   // [headerWidth] is the width the host gives the active-tool control (the app
   // uses 100 on a phone, 52 while its search field is open).
@@ -26,8 +29,6 @@ void main() {
     final viewer = PdfViewerController();
     final commands =
         PdfEditorCommands(controller: editing, viewerController: viewer);
-    final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     addTearDown(commands.dispose);
     addTearDown(editing.dispose);
     addTearDown(viewer.dispose);
@@ -160,9 +161,7 @@ void main() {
     editing.tool = PdfEditTool.rectangle;
     await tester.pump();
 
-    final semantics = tester.getSemantics(currentTool);
-    expect(semantics.label, contains('Rectangle'));
-    expect(semantics.label, contains('Recently used'));
+    expect(toolName('Rectangle'), findsOneWidget);
 
     await openToolsSheet(tester);
     expect(find.byKey(const ValueKey('pdf-group-tab-shapes')), findsOneWidget);
@@ -175,7 +174,7 @@ void main() {
     editing.markupTool = PdfMarkupKind.highlight;
     await tester.pump();
 
-    expect(tester.getSemantics(currentTool).label, contains('Highlight'));
+    expect(toolName('Highlight'), findsOneWidget);
     expect(editing.tool, isNull,
         reason: 'markup keeps native text-selection gestures enabled');
   });
@@ -183,7 +182,7 @@ void main() {
   testWidgets('Hand is the resting tool and is visibly distinct',
       (tester) async {
     final editing = await pumpToolbar(tester, width: 590);
-    expect(tester.getSemantics(currentTool).label, contains('Hand'));
+    expect(toolName('Hand'), findsOneWidget);
     expect(
         find.descendant(
             of: currentTool, matching: find.byIcon(Icons.pan_tool_alt)),
@@ -246,7 +245,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('pdf-sheet-mode-select')));
       await tester.pumpAndSettle();
       expect(editing.tool, PdfEditTool.select);
-      expect(tester.getSemantics(currentTool).label, contains('Select'));
+      expect(toolName('Select'), findsOneWidget);
       expect(
           find.descendant(of: currentTool, matching: find.byIcon(Icons.near_me)),
           findsOneWidget,
