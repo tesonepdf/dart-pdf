@@ -1,41 +1,6 @@
 # Da fare e codice: consegna alla prossima chat
 
-Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-07.
-
-## Aggiornamento 2026-11-07 (fusione con Ben, un punto alla volta)
-
-Regola dell'utente: si va **un punto alla volta**, a ogni modifica si aggiorna questo file. Le sue funzioni restano, si prendono le novità grafiche di Ben, il resto si vede dopo. Elenco completo di cosa è preso e cosa no: `CONFLITTI-FUSIONE.md` (aggiornamento del 07/11).
-
-**Punto 1 - vista a due pagine (commit #10029): applicato.**
-- Cosa: nelle opzioni di visualizzazione compaiono "Vista a due pagine" e "Mostra la copertina separatamente". Le pagine si mostrano affiancate e le miniature seguono lo stesso schema. Per averla serve il nuovo motore del visualizzatore di Ben (`pdf_viewer.dart`), che prima non era nel ramo.
-- Tue funzioni rimesse nel motore nuovo: spazio sopra la prima pagina (`_leadMain`, in 5 punti), modalità `fill`, avviso "niente da incollare" (`onPasteNothing`, ora legato al nuovo sistema di incolla), ricerca che resta valida quando cambiano solo le annotazioni, Leggi ad alta voce. La marcatura col dito non era in conflitto ed è rimasta.
-- Non preso di `pdf_editor_view.dart`: l'esportazione pagine con Ctrl+Shift+X (è una funzione, da lasciare).
-- La CI di #10029 si è fermata su `flutter analyze`: il visualizzatore nuovo chiedeva al controller quattro cose che il tuo non aveva (`mode`, `selectsAnnotations`, `wantsPageOverlays`, `pageCurrency`). Risolto con il punto 2.
-
-**Punto 2 - controller (commit #10030): risolto aggiungendo quattro membri, senza prendere il controller di Ben.**
-- Perché non preso intero: Ben ha tolto dal controller la vecchia modifica del testo sul posto (selezione, richieste di stile, blocco della conferma) e l'ha messa in una sessione nuova (`PdfTextEditSession`). La tua barra e il tuo overlay usano ancora quella vecchia: con il controller di Ben la tua casella di testo non compilerebbe. Prenderlo vuol dire prendere insieme overlay e barra di Ben: è il punto 3.
-- Cosa è stato aggiunto: `mode` (ricavato dal tuo stato di strumento, marcatura, mano e annotazione salvata), `selectsAnnotations`, `wantsPageOverlays`, `pageCurrency` (non alimentato: l'overlay resta montato solo con strumento o selezione, come prima).
-- Non toccato: marcatore, filtro della gomma, riempimento e bordo della casella, blocco del focus.
-- **Da controllare sul telefono** dopo la build: aprire un PDF con la barra in alto (spazio sopra la prima pagina), tornare a una pagina salvata, segnare un testo con il dito e poi usare la ricerca; accendere la vista a due pagine dalle opzioni.
-
-**Punto 3 - overlay della casella di testo (`editing_overlay.dart`): letto, NON preso. Decisione da confermare.**
-- Cosa ho letto: Ben ha riorganizzato l'overlay. La modifica del testo sul posto passa in una sessione nuova (`PdfTextEditSession`), ha spostato blocchi di codice e ha aggiunto "immagini residue" (il risultato resta visibile finché la pagina non si aggiorna). Nel tuo elenco questo è "riordino interno, senza funzioni nuove".
-- Perché non preso: dentro ci sono le tue frecce, la X e l'adattamento della casella di testo. Il controller di Ben non ha più la vecchia API che usa la tua casella. Rischio alto, guadagno visibile piccolo.
-- Se vuoi la parte visibile: le "immagini residue" si possono prendere da sole come sotto-punto 3a, più avanti.
-
-**Punto 3-bis - menu accessibili (`editor_screen.dart`, commit #10031): applicato.**
-- Cosa: nel menu a comparsa di Windows i sottomenu ("Apri recente" e le righe `menu-group-*`) si raggiungono anche con la tastiera e con il lettore schermo. Il tuo menu non cambia: stesso ordine, stesse voci, stessi testi. Aggiunta la classe `_SubmenuMenuItem`.
-- Test: aggiunti i due test nuovi di Ben in `form_data_exchange_menu_test.dart` (tocco da lettore schermo, tastiera fino alla riga e Invio).
-- Non preso: Impostazioni sul telefono che conservano documento e strumento: nel test di Ben dipende dal suo riordino delle schede, non da una modifica isolata.
-- **Da controllare tu su Windows** dopo la build: aprire il menu, spostarsi con Tab fino a "Apri recente" e premere Invio, il sottomenu deve aprirsi senza chiudere il menu.
-- **Da controllare sul telefono:** aprire un documento, modificarlo, entrare in Impostazioni e tornare: il documento e lo strumento devono esserci ancora. Se si perdono, dimmelo: è un errore da correggere.
-
-**`CONFLITTI-FUSIONE.md` (commit #10032):** unito con l'elenco per gruppi dell'utente (78 file in 9 gruppi, non uno per uno). C'è il registro dei punti con commit, la tabella di corrispondenza tra i punti del piano e i gruppi, e le righe superate sono corrette.
-
-**Prossimi punti, uno alla volta (nessuno cominciato):**
-4. Tasto X del pannello strumenti (la tua griglia 3x3 o la sua riga): decide l'utente.
-5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test; `Ctrl+Z` al posto di `⌘Z`).
-6. Azioni in basso sul telefono: l'utente le vuole nei "paletti"; da chiarire cosa sono.
+Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
 
 ## Aggiornamento 2026-11-06
 

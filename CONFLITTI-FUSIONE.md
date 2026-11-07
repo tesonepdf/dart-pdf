@@ -22,8 +22,17 @@ Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche
 | 3 | `editing_overlay.dart` e modifica del testo di Ben contro la tua casella | nessuno | **letto, non preso** (vedi sotto) |
 | 3-bis | sottomenu del menu di Windows raggiungibili da tastiera e lettore schermo (`editor_screen.dart`), più 2 test di Ben | `#10031` (`c4dad47`) | applicato, build da verificare |
 | 4 | tasto X del pannello strumenti | nessuno | da decidere (griglia 3x3 tua o riga di Ben) |
-| 5 | suggerimento annulla/ripeti con scorciatoia (`Ctrl+Z` al posto di `⌘Z`) | nessuno | da decidere: cambia testi e 2 test |
+| 5 | suggerimento annulla/ripeti scelto per sistema: `⌘Z` su Mac e iPhone, `Ctrl+Z` su Windows, Linux e Android, e solo con una tastiera collegata. Prima la tua barra scriveva sempre `⌘Z`, anche su Windows. Corretti anche il test dell'app | `#10033` | applicato, build da verificare |
 | 6 | azioni in basso sul telefono: l'utente le vuole nei "paletti" | nessuno | da chiarire cosa sono i "paletti" |
+
+**Cosa si vede oggi nell'app, dalla fusione grafica del 07/11 (onesto: sono poche cose)**
+- Opzioni di visualizzazione: "Vista a due pagine" e "Mostra la copertina separatamente" (spenta di base: se non la accendi non cambia niente).
+- Messaggi di conferma che possono avere una casella da spuntare, e menu a tendina con l'altezza giusta.
+- Bacheca: il suggerimento col percorso dei recenti compare dopo una breve attesa.
+- Windows con tastiera: i sottomenu del menu si aprono con Tab e Invio.
+- Suggerimento annulla/ripeti: `Ctrl+Z` su Windows e Android, `⌘Z` su Mac e iPhone.
+- Da provare sul telefono dopo i punti 1 e 2: spazio sopra la prima pagina, tornare a una pagina salvata, segnare un testo col dito e poi cercare, e aprire un documento modificato, entrare in Impostazioni e tornare (il documento e lo strumento devono esserci ancora).
+- Il resto dei cambiamenti di Ben nei 78 file non è grafica: è il riordino interno dell'editor, che vale la pena solo se si decide di riportare la tua casella di testo sul suo sistema (punto 3).
 
 **Perché il 3 (overlay) non è preso.** Ben ha riorganizzato l'overlay: la modifica del testo sul posto passa in una sessione nuova (`PdfTextEditSession`), blocchi di codice sono stati spostati e ci sono "immagini residue" (il risultato resta visibile finché la pagina non si aggiorna). Nel tuo elenco è "riordino interno, senza funzioni nuove". Dentro ci sono le tue frecce, la X e l'adattamento della casella; il controller di Ben non ha più la vecchia API che la tua casella usa. Rischio alto, guadagno visibile piccolo. Se serve, le sole "immagini residue" si possono prendere dopo come sotto-punto.
 
@@ -31,7 +40,6 @@ Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche
 
 **Non preso, da vedere con te**
 - **`pdf_viewer.dart`:** ora preso (punto 1). Restano da vedere `editing_overlay.dart` ed `editing_controller.dart` (punto 3).
-- **Suggerimento annulla/ripeti con la scorciatoia:** punto 5.
 - **Impostazioni sul telefono che conservano documento e strumento:** nel test di Ben dipende dal suo riordino delle schede; da verificare sul telefono se da noi si perde il lavoro.
 - **Solo funzioni, lasciate:** redazioni come immagini, schede documento e recupero (`document_tab.dart`), elenco recenti (`recents.dart`), esportazione pagine con Ctrl+Maiusc+X.
 - **Cancellati da te, modificati da Ben:** sito, flussi di compilazione di Ben, `SECURITY.md`, `.vscode`, documenti: restano cancellati, non aperti uno a uno.
@@ -54,7 +62,7 @@ Fonte: `DA-VALUTARE/README.md` (Ben `66601339`, base `f5efa6e5`). Letti i titoli
 **Da decidere (21 file, per funzione)**
 1. **Guida ai moduli PDF e salvataggio che non perde le modifiche fatte mentre salva.** `app/lib/document_tab.dart`, `file_io.dart`, `editor_screen.dart`, `l10n/app_it.arb`, `l10n/app_localizations_it.dart`. Una parte è già dentro.
 2. **OCR automatico rispettato quando riprende i lavori interrotti.** `app/lib/ocr_native.dart`, `ocr_web.dart`, `ocr_stub.dart`, `editor_screen.dart`, test `ocr_auto_test.dart`. Quasi per niente preso.
-3. **Menu e comandi più facili da trovare, anche per chi usa il lettore schermo.** `editing_toolbar.dart`, `editor_screen.dart`, test `form_data_exchange_menu_test.dart`, `keyboard_availability_test.dart`, `settings_menu_test.dart`. Tocca i menu dell'utente (regola: i suoi menu si tengono sempre). **Fatto il 07/11 per i sottomenu del menu di Windows (#10031); restano il suggerimento annulla/ripeti (punto 5) e le Impostazioni del telefono.**
+3. **Menu e comandi più facili da trovare, anche per chi usa il lettore schermo.** `editing_toolbar.dart`, `editor_screen.dart`, test `form_data_exchange_menu_test.dart`, `keyboard_availability_test.dart`, `settings_menu_test.dart`. Tocca i menu dell'utente (regola: i suoi menu si tengono sempre). **Fatto il 07/11: sottomenu del menu di Windows (#10031) e suggerimento annulla/ripeti per sistema (#10033). Resta la Impostazioni del telefono.**
 4. **Esporta pagine con Ctrl/Cmd+Maiusc+X.** `pdf_editor_view.dart`.
 5. **Redazione, ultime correzioni di revisione.** `editing_controller.dart` e `editing_toolbar.dart`.
 6. **Correzione anteprime e annotazioni.** `editor_screen.dart`, test `progressive_open_test.dart`.
@@ -71,7 +79,7 @@ Fonte: `DA-VALUTARE/README.md` (Ben `66601339`, base `f5efa6e5`). Letti i titoli
 | 3 overlay e sessione del testo | gruppo 8 (e in parte il 5) |
 | 3-bis menu accessibili | gruppo 3 |
 | 4 tasto X del pannello strumenti | non nell'elenco (nasce dal conflitto nel pannello strumenti di `editing_toolbar.dart`) |
-| 5 annulla/ripeti con scorciatoia | gruppo 3 |
+| 5 annulla/ripeti per sistema | gruppo 3 |
 | 6 azioni in basso nei "paletti" | non nell'elenco (richiesta dell'utente del 07/11) |
 
 Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad47`) è in elaborazione. #10029 è fallita perché il visualizzatore nuovo non compilava senza il punto 2: corretta da #10030.
@@ -89,6 +97,8 @@ Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad
 - Non gli interessano numeri di righe, numeri di file, statistiche. Spiegare in italiano semplice cosa fa ogni cosa.
 - **Prima di parlare di un conflitto bisogna averlo letto.** Se non lo si è letto, dirlo subito. Descrivere conflitti mai visti lo ha fatto infuriare.
 - Il token GitHub non va mai scritto in file, commit o risposte. Se serve, lo dà lui nella chat.
+
+- **Gli appunti di lavoro si scrivono solo in questo file (`CONFLITTI-FUSIONE.md`), non in `DA-FARE.md`** (deciso dall'utente il 07/11). `DA-FARE.md` è stato riportato com'era prima delle note del 07/11.
 
 ## Il progetto
 
