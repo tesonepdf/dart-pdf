@@ -1,7 +1,7 @@
 # Conflitti della fusione con l'ufficiale: appunti per chi riprende il lavoro
 
 File per l'utente **e** per l'assistente che apre una nuova chat. Ogni conflitto è scritto due volte: in linguaggio tecnico (per l'assistente) e in italiano semplice (per l'utente).
-Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
+Aggiornato il 2026-10-30; ultime modifiche il 2026-11-07. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
 
 ## Aggiornamento 2026-11-06
 
@@ -9,19 +9,72 @@ Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`
 
 ## Aggiornamento 2026-11-07 (novità grafiche di Ben, le tue funzioni restano)
 
-Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche** di Ben, il resto si vede dopo. Per ognuno dei 46 file modificati da tutti e due ho provato la fusione automatica (base `f5efa6e5`, Ben `66601339`) e ho letto cosa ha cambiato Ben prima di prenderlo.
+Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche** di Ben, il resto si vede dopo; **un punto alla volta**, a ogni modifica si aggiorna `DA-FARE.md`. Per ognuno dei 46 file modificati da tutti e due ho provato la fusione automatica (base `f5efa6e5`, Ben `66601339`) e ho letto cosa ha cambiato Ben prima di prenderlo.
 
-**Applicato**
-- `#10027` (`2780f42`): dialoghi di conferma con casella da spuntare e correzione dell'altezza dei menu a tendina (3 file in `design/`). Non cambia nulla di tuo.
-- `#10028`: nella bacheca dei file recenti il suggerimento col percorso compare dopo una breve attesa, non appena passi il dito o il mouse.
+**Registro dei punti (ramo prova)**
+
+| Punto | Cosa | Commit | Stato |
+|---|---|---|---|
+| prima | dialoghi di conferma con casella, altezza menu a tendina (3 file in `design/`) | `#10027` (`2780f42`) | applicato |
+| prima | bacheca: suggerimento col percorso dei recenti dopo una breve attesa | `#10028` (`64aa7b7`) | applicato |
+| 1 | vista a due pagine (con copertina, miniature a coppie, voci nel menu Vista) con il visualizzatore di Ben (`pdf_viewer.dart`); tue funzioni rimesse a mano: spazio sopra la prima pagina, `fill`, "niente da incollare", ricerca valida se cambiano solo le annotazioni | `#10029` (`1c5339e`) | applicato; da solo non compilava, serve il 2 |
+| 2 | controller: aggiunti `mode`, `selectsAnnotations`, `wantsPageOverlays`, `pageCurrency` (il controller di Ben non è stato preso intero) | `#10030` (`1986af0`) | applicato, CI verde |
+| 3 | `editing_overlay.dart` e modifica del testo di Ben contro la tua casella | nessuno | **letto, non preso** (vedi sotto) |
+| 3-bis | sottomenu del menu di Windows raggiungibili da tastiera e lettore schermo (`editor_screen.dart`), più 2 test di Ben | `#10031` (`c4dad47`) | applicato, build da verificare |
+| 4 | tasto X del pannello strumenti | nessuno | da decidere (griglia 3x3 tua o riga di Ben) |
+| 5 | suggerimento annulla/ripeti con scorciatoia (`Ctrl+Z` al posto di `⌘Z`) | nessuno | da decidere: cambia testi e 2 test |
+| 6 | azioni in basso sul telefono: l'utente le vuole nei "paletti" | nessuno | da chiarire cosa sono i "paletti" |
+
+**Perché il 3 (overlay) non è preso.** Ben ha riorganizzato l'overlay: la modifica del testo sul posto passa in una sessione nuova (`PdfTextEditSession`), blocchi di codice sono stati spostati e ci sono "immagini residue" (il risultato resta visibile finché la pagina non si aggiorna). Nel tuo elenco è "riordino interno, senza funzioni nuove". Dentro ci sono le tue frecce, la X e l'adattamento della casella; il controller di Ben non ha più la vecchia API che la tua casella usa. Rischio alto, guadagno visibile piccolo. Se serve, le sole "immagini residue" si possono prendere dopo come sotto-punto.
+
+**Perché il controller (punto 2) è stato solo ampliato.** Stesso motivo: Ben ha tolto dal controller la vecchia modifica del testo (selezione, richieste di stile, blocco della conferma) e la tua barra e il tuo overlay la usano ancora. Prenderlo vuol dire prendere insieme overlay e barra: è il punto 3.
 
 **Non preso, da vedere con te**
-- **Vista a due pagine** (con copertina, miniature a coppie, voci nel menu Vista): dipende dal nuovo motore del visualizzatore (`pdf_viewer.dart`, 13 punti in conflitto con le tue anteprime e lo spazio sopra la prima pagina). Va preso insieme a quel file.
-- **`pdf_viewer.dart`, `editing_overlay.dart`, `editing_controller.dart`:** qui Ben ha riscritto il funzionamento (incolla dagli appunti, sessione di modifica del testo, anteprime dopo il salvataggio). Non è grafica e dentro ci sono le tue frecce e la casella di testo. Un file alla volta, con te.
-- **Tasto X del pannello strumenti:** nel tuo pannello i gruppi sono in una griglia 3x3, in quello di Ben in una riga che scorre. Sono due disegni diversi: scegli tu.
-- **Suggerimento annulla/ripeti con la scorciatoia:** cambia anche il testo nell'app (da `⌘Z` a `Ctrl+Z`) e due test. Da decidere.
-- **Solo funzioni, lasciate:** redazioni come immagini, schede documento e recupero (`document_tab.dart`), elenco recenti (`recents.dart`).
+- **`pdf_viewer.dart`:** ora preso (punto 1). Restano da vedere `editing_overlay.dart` ed `editing_controller.dart` (punto 3).
+- **Suggerimento annulla/ripeti con la scorciatoia:** punto 5.
+- **Impostazioni sul telefono che conservano documento e strumento:** nel test di Ben dipende dal suo riordino delle schede; da verificare sul telefono se da noi si perde il lavoro.
+- **Solo funzioni, lasciate:** redazioni come immagini, schede documento e recupero (`document_tab.dart`), elenco recenti (`recents.dart`), esportazione pagine con Ctrl+Maiusc+X.
 - **Cancellati da te, modificati da Ben:** sito, flussi di compilazione di Ben, `SECURITY.md`, `.vscode`, documenti: restano cancellati, non aperti uno a uno.
+
+## Elenco da decidere (2026-11-07): i 78 file di Ben che il ramo prova non ha ancora preso
+
+Fonte: `DA-VALUTARE/README.md` (Ben `66601339`, base `f5efa6e5`). Letti i titoli dei commit di Ben e confrontate le righe di ogni file con il ramo prova; il codice non è stato letto riga per riga. Le descrizioni sono quelle dichiarate da Ben. "Già dentro" = le righe nuove di Ben risultano tutte presenti nel file attuale (confronto automatico, non una prova). **L'elenco è per gruppi di funzione: non è uno per uno su ogni singola modifica.**
+
+**Già dentro, niente da decidere (13 file)**
+- Vista a due pagine: `pdf_viewer.dart`, `editing_thumbnails.dart`, `shell_chrome.dart`, `editing_preferences.dart`, `editor_commands.dart`, `pdf_reader.dart`. (Dal 07/11 è davvero dentro: punti 1 e 2.)
+- Redazione con sostituzione a immagine: `editor_presenter.dart`, `material_presenter.dart`, `pdf_document/lib/src/editor.dart`.
+- Dialogo scala e menu a tendina: `material_host.dart`.
+- Suggerimento ritardato nei recenti: `welcome_screen.dart`.
+- Testi italiani dell'editor: `dart_pdf_editor_it.arb`, `dart_pdf_editor_localizations_it.dart`.
+
+**Restano come deciso dall'utente (44 file)**
+- Cancellati da te e modificati da Ben, non riaperti: sito (24 file in `site/`), flussi di compilazione di Ben (3), documenti (3), `SECURITY.md`, `.vscode/settings.json`.
+- 12 `pubspec.yaml` (app e pacchetti): solo numeri di versione e dipendenze di Ben (14.0.0, 15.0.0).
+
+**Da decidere (21 file, per funzione)**
+1. **Guida ai moduli PDF e salvataggio che non perde le modifiche fatte mentre salva.** `app/lib/document_tab.dart`, `file_io.dart`, `editor_screen.dart`, `l10n/app_it.arb`, `l10n/app_localizations_it.dart`. Una parte è già dentro.
+2. **OCR automatico rispettato quando riprende i lavori interrotti.** `app/lib/ocr_native.dart`, `ocr_web.dart`, `ocr_stub.dart`, `editor_screen.dart`, test `ocr_auto_test.dart`. Quasi per niente preso.
+3. **Menu e comandi più facili da trovare, anche per chi usa il lettore schermo.** `editing_toolbar.dart`, `editor_screen.dart`, test `form_data_exchange_menu_test.dart`, `keyboard_availability_test.dart`, `settings_menu_test.dart`. Tocca i menu dell'utente (regola: i suoi menu si tengono sempre). **Fatto il 07/11 per i sottomenu del menu di Windows (#10031); restano il suggerimento annulla/ripeti (punto 5) e le Impostazioni del telefono.**
+4. **Esporta pagine con Ctrl/Cmd+Maiusc+X.** `pdf_editor_view.dart`.
+5. **Redazione, ultime correzioni di revisione.** `editing_controller.dart` e `editing_toolbar.dart`.
+6. **Correzione anteprime e annotazioni.** `editor_screen.dart`, test `progressive_open_test.dart`.
+7. **Elenco recenti e sessione riorganizzati dentro, senza cambi visibili.** `app/lib/recents.dart`, `session_store.dart`, `document_tab.dart`.
+8. **Riordino interno dell'editor di Ben, senza funzioni nuove:** incolla, cronologia, trascinamento selezione, sessione del testo, comportamento degli strumenti. `editing_controller.dart`, `editing_overlay.dart`, `pdf_editor_view.dart`, `editor_screen.dart`. Sono i conflitti pesanti; dentro ci sono le frecce e la casella di testo dell'utente. **Punto 3 del piano: letto, non preso (vedi sopra).**
+9. **`.gitignore` e `app/README.md`.** Marginali.
+
+**Corrispondenza tra i punti del piano del 07/11 e i gruppi di questo elenco**
+
+| Punto del piano | Gruppo dell'elenco |
+|---|---|
+| 1 vista a due pagine | "Già dentro" (vista a due pagine) |
+| 2 controller | parte del gruppo 8 |
+| 3 overlay e sessione del testo | gruppo 8 (e in parte il 5) |
+| 3-bis menu accessibili | gruppo 3 |
+| 4 tasto X del pannello strumenti | non nell'elenco (nasce dal conflitto nel pannello strumenti di `editing_toolbar.dart`) |
+| 5 annulla/ripeti con scorciatoia | gruppo 3 |
+| 6 azioni in basso nei "paletti" | non nell'elenco (richiesta dell'utente del 07/11) |
+
+Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad47`) è in elaborazione. #10029 è fallita perché il visualizzatore nuovo non compilava senza il punto 2: corretta da #10030.
 
 ## Regole dell'utente (valgono sempre, le ripete da mesi)
 
@@ -155,6 +208,8 @@ Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog d
 4. Casella di testo: tenuta quella dell'utente.
 
 ## Stato delle build (verificato con l'API di GitHub)
+
+**Aggiornamento 07/11:** quanto scritto sotto è del 30/10 ed è superato: l'errore `appItemCount` è chiuso. La CI del ramo prova passa (analyze, test, build APK debug) dal commit #10026; ultima build verificata verde #10030 (`1986af0`).
 
 - `main`: build #73 e #76 riuscite.
 - `prova-sviluppatore`: build #74, #75, #77, #80 **tutte fallite** nel passo "Compila l'APK". **Causa (dal log incollato dall'utente):** `app/lib/app_menu_sheet.dart` usa `appItemCount` (righe 202 e 204) ma la fusione ne ha perso la definizione, che nella versione dell'utente era una variabile locale di `_buildMain`. È il conflitto 12. Il log completo non si scarica dall'ambiente della chat (dominio bloccato): se servono altri errori li incolla l'utente. L'app Prova sul telefono non è aggiornata. Compilare in locale non è possibile (Flutter non è installato).
