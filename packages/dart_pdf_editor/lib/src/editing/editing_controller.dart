@@ -17,6 +17,7 @@ import '../renderer.dart';
 import '../text_selection_geometry.dart';
 import 'digital_signature.dart';
 import 'editing_annotation_clipboard.dart';
+import 'editing_mode.dart';
 import 'editing_page_clipboard.dart';
 import 'editing_preferences.dart';
 import 'editing_snapshot_clipboard.dart';
@@ -27,6 +28,7 @@ import 'models/custom_stamp.dart';
 import 'models/ink_signature.dart';
 import 'models/measurement_scale.dart';
 import 'models/prompts.dart';
+import 'page_currency.dart';
 import 'paste_routing.dart';
 import 'saved_annotation.dart';
 import 'signature_validation_worker.dart';
@@ -924,6 +926,7 @@ class PdfEditingController extends ChangeNotifier {
     _settlePick(null);
     _inkTimer?.cancel();
     _flashTimer?.cancel();
+    pageCurrency.clear();
     _changeFeed?.close();
     thumbnailCache.dispose();
     preferences.removeListener(notifyListeners);
@@ -2366,6 +2369,45 @@ class PdfEditingController extends ChangeNotifier {
   /// Text-markup tools are exposed separately through [markupTool]. They
   /// leave this value null so normal text-selection gestures remain active.
   PdfEditTool? get tool => _tool;
+
+  /// What pointer input does now - reader, hand, a tool, a text markup or a
+  /// saved annotation: exactly one at a time. Derived from the tool state
+  /// above; the viewer reads it to decide which gestures belong to it.
+  PdfEditingMode get mode {
+    final savedId = _activeSavedAnnotationId;
+    if (savedId != null) return PdfSavedAnnotationMode(savedId);
+    final markup = _markupTool;
+    if (markup != null) return PdfMarkupMode(markup);
+    final tool = _tool;
+    if (tool != null) return PdfToolMode(tool);
+    if (_handMode) return const PdfHandMode();
+    return const PdfReaderMode();
+  }
+
+  /// Whether a press on an annotation selects it: the Select tool, or a
+  /// default-mode annotation selection already in play.
+  bool get selectsAnnotations =>
+      _tool == PdfEditTool.select || (_tool == null && hasAnnotationSelection);
+
+  /// Whether pages need their editing overlay mounted for the session's own
+  /// state: an armed tool, the eyedropper, a saved-annotation placement, an
+  /// annotation selection, a pending attention flash, or the cursor guides,
+  /// rulers and snap grid.
+  bool get wantsPageOverlays =>
+      _tool != null ||
+      isPickingColor ||
+      activeSavedAnnotation != null ||
+      hasAnnotationSelection ||
+      pendingFlash != null ||
+      preferences.showVerticalCursorGuide ||
+      preferences.showHorizontalCursorGuide ||
+      preferences.showPageRulers ||
+      preferences.showSnapGrid;
+
+  /// Pending visual results of committed revisions and when each retires.
+  /// The viewer reports page readiness to it and asks whether a page still
+  /// needs its overlay mounted for a held result.
+  final PdfPageCurrency pageCurrency = PdfPageCurrency();
 
   /// The tool armed most recently before the current one, skipping Select -
   /// what [PdfArmLastToolIntent] (X by default) re-arms. Finishing a shape

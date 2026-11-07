@@ -6,16 +6,20 @@ Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (r
 
 Regola dell'utente: si va **un punto alla volta**, a ogni modifica si aggiorna questo file. Le sue funzioni restano, si prendono le novità grafiche di Ben, il resto si vede dopo. Elenco completo di cosa è preso e cosa no: `CONFLITTI-FUSIONE.md` (aggiornamento del 07/11).
 
-**Punto 1 - vista a due pagine (commit #10029): applicato, build da verificare.**
+**Punto 1 - vista a due pagine (commit #10029): applicato.**
 - Cosa: nelle opzioni di visualizzazione compaiono "Vista a due pagine" e "Mostra la copertina separatamente". Le pagine si mostrano affiancate e le miniature seguono lo stesso schema. Per averla serve il nuovo motore del visualizzatore di Ben (`pdf_viewer.dart`), che prima non era nel ramo.
-- Tue funzioni rimesse nel motore nuovo: spazio sopra la prima pagina (`_leadMain`, in 5 punti), modalità `fill`, avviso "niente da incollare" (`onPasteNothing`, ora legato al nuovo sistema di incolla), ricerca che resta valida quando cambiano solo le annotazioni, Leggi ad alta voce, marcatura col dito (non toccata dalla fusione).
+- Tue funzioni rimesse nel motore nuovo: spazio sopra la prima pagina (`_leadMain`, in 5 punti), modalità `fill`, avviso "niente da incollare" (`onPasteNothing`, ora legato al nuovo sistema di incolla), ricerca che resta valida quando cambiano solo le annotazioni, Leggi ad alta voce. La marcatura col dito non era in conflitto ed è rimasta.
 - Non preso di `pdf_editor_view.dart`: l'esportazione pagine con Ctrl+Shift+X (è una funzione, da lasciare).
-- **Non provato:** compilare e provare qui non è possibile. L'esito si vede dalla CI; se `flutter analyze` trova errori, di solito sono pezzi del controller di Ben che il visualizzatore nuovo si aspetta.
-- **Da controllare sul telefono** dopo la build: aprire un PDF con la barra in alto (spazio sopra la prima pagina), tornare a una pagina salvata, segnare un testo con il dito e poi usare la ricerca.
+- La CI di #10029 si è fermata su `flutter analyze`: il visualizzatore nuovo chiedeva al controller quattro cose che il tuo non aveva (`mode`, `selectsAnnotations`, `wantsPageOverlays`, `pageCurrency`). Risolto con il punto 2.
+
+**Punto 2 - controller (commit #10030): risolto aggiungendo quattro membri, senza prendere il controller di Ben.**
+- Perché non preso intero: Ben ha tolto dal controller la vecchia modifica del testo sul posto (selezione, richieste di stile, blocco della conferma) e l'ha messa in una sessione nuova (`PdfTextEditSession`). La tua barra e il tuo overlay usano ancora quella vecchia: con il controller di Ben la tua casella di testo non compilerebbe. Prenderlo vuol dire prendere insieme overlay e barra di Ben: è il punto 3.
+- Cosa è stato aggiunto: `mode` (ricavato dal tuo stato di strumento, marcatura, mano e annotazione salvata), `selectsAnnotations`, `wantsPageOverlays`, `pageCurrency` (non alimentato: l'overlay resta montato solo con strumento o selezione, come prima).
+- Non toccato: marcatore, filtro della gomma, riempimento e bordo della casella, blocco del focus.
+- **Da controllare sul telefono** dopo la build: aprire un PDF con la barra in alto (spazio sopra la prima pagina), tornare a una pagina salvata, segnare un testo con il dito e poi usare la ricerca; accendere la vista a due pagine dalle opzioni.
 
 **Prossimi punti, uno alla volta (nessuno cominciato):**
-2. `editing_controller.dart` (se la CI del punto 1 lo richiede).
-3. `editing_overlay.dart`: sessione di modifica del testo e maniglie di Ben contro la tua casella di testo con frecce e X. Il più delicato.
+3. `editing_overlay.dart` e parti di `editing_toolbar.dart` + `editing_controller.dart` di Ben: sessione di modifica del testo contro la tua casella con frecce e X. Il più delicato; va deciso con l'utente se farlo.
 4. Tasto X del pannello strumenti (la tua griglia 3x3 o la sua riga): decide l'utente.
 5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test).
 6. Azioni in basso sul telefono: l'utente le vuole nei "paletti"; da chiarire cosa sono.
