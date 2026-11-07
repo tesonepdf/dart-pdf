@@ -1,6 +1,24 @@
 # Da fare e codice: consegna alla prossima chat
 
-Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
+Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-07.
+
+## Aggiornamento 2026-11-07 (fusione con Ben, un punto alla volta)
+
+Regola dell'utente: si va **un punto alla volta**, a ogni modifica si aggiorna questo file. Le sue funzioni restano, si prendono le novità grafiche di Ben, il resto si vede dopo. Elenco completo di cosa è preso e cosa no: `CONFLITTI-FUSIONE.md` (aggiornamento del 07/11).
+
+**Punto 1 - vista a due pagine (commit #10029): applicato, build da verificare.**
+- Cosa: nelle opzioni di visualizzazione compaiono "Vista a due pagine" e "Mostra la copertina separatamente". Le pagine si mostrano affiancate e le miniature seguono lo stesso schema. Per averla serve il nuovo motore del visualizzatore di Ben (`pdf_viewer.dart`), che prima non era nel ramo.
+- Tue funzioni rimesse nel motore nuovo: spazio sopra la prima pagina (`_leadMain`, in 5 punti), modalità `fill`, avviso "niente da incollare" (`onPasteNothing`, ora legato al nuovo sistema di incolla), ricerca che resta valida quando cambiano solo le annotazioni, Leggi ad alta voce, marcatura col dito (non toccata dalla fusione).
+- Non preso di `pdf_editor_view.dart`: l'esportazione pagine con Ctrl+Shift+X (è una funzione, da lasciare).
+- **Non provato:** compilare e provare qui non è possibile. L'esito si vede dalla CI; se `flutter analyze` trova errori, di solito sono pezzi del controller di Ben che il visualizzatore nuovo si aspetta.
+- **Da controllare sul telefono** dopo la build: aprire un PDF con la barra in alto (spazio sopra la prima pagina), tornare a una pagina salvata, segnare un testo con il dito e poi usare la ricerca.
+
+**Prossimi punti, uno alla volta (nessuno cominciato):**
+2. `editing_controller.dart` (se la CI del punto 1 lo richiede).
+3. `editing_overlay.dart`: sessione di modifica del testo e maniglie di Ben contro la tua casella di testo con frecce e X. Il più delicato.
+4. Tasto X del pannello strumenti (la tua griglia 3x3 o la sua riga): decide l'utente.
+5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test).
+6. Azioni in basso sul telefono: l'utente le vuole nei "paletti"; da chiarire cosa sono.
 
 ## Aggiornamento 2026-11-06
 

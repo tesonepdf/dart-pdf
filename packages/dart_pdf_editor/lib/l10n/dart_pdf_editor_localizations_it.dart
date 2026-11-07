@@ -1135,6 +1135,12 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
       'Mostra capitoli sulla barra di scorrimento';
 
   @override
+  String get shellTwoPageView => 'Vista a due pagine';
+
+  @override
+  String get shellTwoPageCover => 'Mostra la copertina separatamente';
+
+  @override
   String get shellTabHere => 'Scheda qui';
 
   @override
@@ -1859,6 +1865,13 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
 
   @override
   String get tbPickColorFromPage => 'Scegli un colore dalla pagina';
+
+  @override
+  String get tbRedactAsImages => 'Sostituisci le pagine oscurate con immagini';
+
+  @override
+  String get tbRedactAsImagesDetail =>
+      'La scelta più sicura: di ogni pagina oscurata resta solo un\'immagine. Il testo di quelle pagine non potrà più essere selezionato né cercato e il file diventerà più grande.';
 
   @override
   String get tbRedactionsApplied => 'Oscuramenti applicati';

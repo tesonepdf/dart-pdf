@@ -1525,6 +1525,8 @@ enum _ViewOption {
   pageGrid,
   annotations,
   scrollbarChapters,
+  twoPageView,
+  twoPageCover,
   formHighlight,
   pageColor,
   bakePageColor,
@@ -1555,6 +1557,10 @@ Future<void> _selectViewOption(
       preferences.showAnnotations = !preferences.showAnnotations;
     case _ViewOption.scrollbarChapters:
       preferences.showScrollbarChapters = !preferences.showScrollbarChapters;
+    case _ViewOption.twoPageView:
+      preferences.twoPageView = !preferences.twoPageView;
+    case _ViewOption.twoPageCover:
+      preferences.twoPageCoverPage = !preferences.twoPageCoverPage;
     case _ViewOption.formHighlight:
       preferences.highlightFormFields = !preferences.highlightFormFields;
     case _ViewOption.pageColor:
@@ -1927,6 +1933,39 @@ Future<void> showPdfShellViewOptionsSheet(
                     setSheetState(() {});
                   },
                 ),
+                SwitchListTile(
+                  key: const ValueKey('pdf-shell-two-page-view'),
+                  secondary: const Icon(Icons.menu_book_outlined),
+                  title: Text(pdfL10n(context).shellTwoPageView),
+                  value: preferences.twoPageView,
+                  onChanged: (_) async {
+                    await _selectViewOption(
+                      context,
+                      _ViewOption.twoPageView,
+                      preferences: preferences,
+                      pageColor: pageColor,
+                      onAuthorPressed: onAuthorPressed,
+                    );
+                    setSheetState(() {});
+                  },
+                ),
+                if (preferences.twoPageView)
+                  SwitchListTile(
+                    key: const ValueKey('pdf-shell-two-page-cover'),
+                    secondary: const Icon(Icons.book_outlined),
+                    title: Text(pdfL10n(context).shellTwoPageCover),
+                    value: preferences.twoPageCoverPage,
+                    onChanged: (_) async {
+                      await _selectViewOption(
+                        context,
+                        _ViewOption.twoPageCover,
+                        preferences: preferences,
+                        pageColor: pageColor,
+                        onAuthorPressed: onAuthorPressed,
+                      );
+                      setSheetState(() {});
+                    },
+                  ),
                 SwitchListTile(
                   key: const ValueKey('pdf-shell-highlight-forms'),
                   secondary: const Icon(Icons.dynamic_form_outlined),
@@ -2380,6 +2419,20 @@ class PdfShellViewOptionsButton extends StatelessWidget {
           checked: preferences.showScrollbarChapters,
           child: Text(pdfL10n(context).shellShowScrollbarChapters),
         ),
+        CheckedPopupMenuItem(
+          key: const ValueKey('pdf-shell-two-page-view'),
+          value: _ViewOption.twoPageView,
+          checked: preferences.twoPageView,
+          child: Text(pdfL10n(context).shellTwoPageView),
+        ),
+        // only meaningful while the spreads are on
+        if (preferences.twoPageView)
+          CheckedPopupMenuItem(
+            key: const ValueKey('pdf-shell-two-page-cover'),
+            value: _ViewOption.twoPageCover,
+            checked: preferences.twoPageCoverPage,
+            child: Text(pdfL10n(context).shellTwoPageCover),
+          ),
         CheckedPopupMenuItem(
           key: const ValueKey('pdf-shell-highlight-forms'),
           value: _ViewOption.formHighlight,
