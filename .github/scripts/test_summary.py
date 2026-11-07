@@ -24,7 +24,7 @@ def locations(text):
     found = []
     # Solo i file dell'app (app/test, app/lib): i frame interni di flutter_test
     # non dicono dove si rompe il test.
-    for match in re.finditer(r'app/(?:test|lib)/([\w./-]+\.dart):(\d+)', text):
+    for match in re.finditer(r'(?:app|packages/[\w-]+)/(?:test|lib)/([\w./-]+\.dart):(\d+)', text):
         loc = match.group(1).rsplit('/', 1)[-1] + ':' + match.group(2)
         if loc not in found:
             found.append(loc)
