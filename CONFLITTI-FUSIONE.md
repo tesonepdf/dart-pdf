@@ -7,6 +7,22 @@ Aggiornato il 2026-10-30. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello 
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
 
+## Aggiornamento 2026-11-07 (novità grafiche di Ben, le tue funzioni restano)
+
+Regola data dall'utente: tenere le sue funzioni, applicare le novità **grafiche** di Ben, il resto si vede dopo. Per ognuno dei 46 file modificati da tutti e due ho provato la fusione automatica (base `f5efa6e5`, Ben `66601339`) e ho letto cosa ha cambiato Ben prima di prenderlo.
+
+**Applicato**
+- `#10027` (`2780f42`): dialoghi di conferma con casella da spuntare e correzione dell'altezza dei menu a tendina (3 file in `design/`). Non cambia nulla di tuo.
+- `#10028`: nella bacheca dei file recenti il suggerimento col percorso compare dopo una breve attesa, non appena passi il dito o il mouse.
+
+**Non preso, da vedere con te**
+- **Vista a due pagine** (con copertina, miniature a coppie, voci nel menu Vista): dipende dal nuovo motore del visualizzatore (`pdf_viewer.dart`, 13 punti in conflitto con le tue anteprime e lo spazio sopra la prima pagina). Va preso insieme a quel file.
+- **`pdf_viewer.dart`, `editing_overlay.dart`, `editing_controller.dart`:** qui Ben ha riscritto il funzionamento (incolla dagli appunti, sessione di modifica del testo, anteprime dopo il salvataggio). Non è grafica e dentro ci sono le tue frecce e la casella di testo. Un file alla volta, con te.
+- **Tasto X del pannello strumenti:** nel tuo pannello i gruppi sono in una griglia 3x3, in quello di Ben in una riga che scorre. Sono due disegni diversi: scegli tu.
+- **Suggerimento annulla/ripeti con la scorciatoia:** cambia anche il testo nell'app (da `⌘Z` a `Ctrl+Z`) e due test. Da decidere.
+- **Solo funzioni, lasciate:** redazioni come immagini, schede documento e recupero (`document_tab.dart`), elenco recenti (`recents.dart`).
+- **Cancellati da te, modificati da Ben:** sito, flussi di compilazione di Ben, `SECURITY.md`, `.vscode`, documenti: restano cancellati, non aperti uno a uno.
+
 ## Regole dell'utente (valgono sempre, le ripete da mesi)
 
 - Nessuna azione senza un suo "ok / sì / vai". Si può proporre, non eseguire.
