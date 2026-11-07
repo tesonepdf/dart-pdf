@@ -18,10 +18,21 @@ Regola dell'utente: si va **un punto alla volta**, a ogni modifica si aggiorna q
 - Non toccato: marcatore, filtro della gomma, riempimento e bordo della casella, blocco del focus.
 - **Da controllare sul telefono** dopo la build: aprire un PDF con la barra in alto (spazio sopra la prima pagina), tornare a una pagina salvata, segnare un testo con il dito e poi usare la ricerca; accendere la vista a due pagine dalle opzioni.
 
+**Punto 3 - overlay della casella di testo (`editing_overlay.dart`): letto, NON preso. Decisione da confermare.**
+- Cosa ho letto: Ben ha riorganizzato l'overlay. La modifica del testo sul posto passa in una sessione nuova (`PdfTextEditSession`), ha spostato blocchi di codice e ha aggiunto "immagini residue" (il risultato resta visibile finché la pagina non si aggiorna). Nel tuo elenco questo è "riordino interno, senza funzioni nuove".
+- Perché non preso: dentro ci sono le tue frecce, la X e l'adattamento della casella di testo. Il controller di Ben non ha più la vecchia API che usa la tua casella. Rischio alto, guadagno visibile piccolo.
+- Se vuoi la parte visibile: le "immagini residue" si possono prendere da sole come sotto-punto 3a, più avanti.
+
+**Punto 3-bis - menu accessibili (`editor_screen.dart`, commit #10031): applicato.**
+- Cosa: nel menu a comparsa di Windows i sottomenu ("Apri recente" e le righe `menu-group-*`) si raggiungono anche con la tastiera e con il lettore schermo. Il tuo menu non cambia: stesso ordine, stesse voci, stessi testi. Aggiunta la classe `_SubmenuMenuItem`.
+- Test: aggiunti i due test nuovi di Ben in `form_data_exchange_menu_test.dart` (tocco da lettore schermo, tastiera fino alla riga e Invio).
+- Non preso: Impostazioni sul telefono che conservano documento e strumento: nel test di Ben dipende dal suo riordino delle schede, non da una modifica isolata.
+- **Da controllare tu su Windows** dopo la build: aprire il menu, spostarsi con Tab fino a "Apri recente" e premere Invio, il sottomenu deve aprirsi senza chiudere il menu.
+- **Da controllare sul telefono:** aprire un documento, modificarlo, entrare in Impostazioni e tornare: il documento e lo strumento devono esserci ancora. Se si perdono, dimmelo: è un errore da correggere.
+
 **Prossimi punti, uno alla volta (nessuno cominciato):**
-3. `editing_overlay.dart` e parti di `editing_toolbar.dart` + `editing_controller.dart` di Ben: sessione di modifica del testo contro la tua casella con frecce e X. Il più delicato; va deciso con l'utente se farlo.
 4. Tasto X del pannello strumenti (la tua griglia 3x3 o la sua riga): decide l'utente.
-5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test).
+5. Suggerimento annulla/ripeti con la scorciatoia (cambia anche testi e test; `Ctrl+Z` al posto di `⌘Z`).
 6. Azioni in basso sul telefono: l'utente le vuole nei "paletti"; da chiarire cosa sono.
 
 ## Aggiornamento 2026-11-06
