@@ -4258,6 +4258,66 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     entry?.remove();
   }
 
+  /// Free move of the open text box by a drag of [delta] view pixels (the
+  /// button left of the close cross). Keeps the box inside the page and
+  /// leaves any rule it sat on.
+  void _dragTextEditBox(Offset delta) {
+    final pageRect = _textEditPageRect;
+    final view = _textEditRect;
+    if (pageRect == null || view == null) return;
+    final size = _geometry.viewSize;
+    final maxDx = math.max(0.0, size.width - view.width);
+    final maxDy = math.max(0.0, size.height - view.height);
+    final left = (view.left + delta.dx).clamp(0.0, maxDx).toDouble();
+    final top = (view.top + delta.dy).clamp(0.0, maxDy).toDouble();
+    final applied = Offset(left - view.left, top - view.top);
+    if (applied == Offset.zero) return;
+    final origin = _geometry.toPagePoint(Offset.zero);
+    final moved = _geometry.toPagePoint(applied);
+    final dx = moved.$1 - origin.$1;
+    final dy = moved.$2 - origin.$2;
+    _textEditFocus.requestFocus();
+    final (viewRotation, pageRotation) = _lineTilt(null);
+    setState(() {
+      _textEditLineField = null;
+      _textEditPageRect = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
+          pageRect.right + dx, pageRect.top + dy);
+      _textEditRotation = viewRotation;
+      _textEditPageRotation = pageRotation;
+    });
+  }
+
+  /// Resizes the open text box by a drag of [delta] view pixels (the button
+  /// right of the close cross): the top-left corner stays, the box gets
+  /// wider and longer. Typing then follows the new width (letter spacing)
+  /// and the new height (line spacing).
+  void _resizeTextEditBox(Offset delta) {
+    final view = _textEditRect;
+    if (_textEditPageRect == null || view == null) return;
+    final size = _geometry.viewSize;
+    const minWidth = 24.0, minHeight = 16.0;
+    final width = (view.width + delta.dx)
+        .clamp(minWidth, math.max(minWidth, size.width - view.left))
+        .toDouble();
+    final height = (view.height + delta.dy)
+        .clamp(minHeight, math.max(minHeight, size.height - view.top))
+        .toDouble();
+    if (width == view.width && height == view.height) return;
+    _textEditFocus.requestFocus();
+    final (viewRotation, pageRotation) = _lineTilt(null);
+    final next = _geometry.toPageRect(
+        Rect.fromLTWH(view.left, view.top, width, height));
+    setState(() {
+      _textEditLineField = null;
+      _textEditPageRect = next;
+      _textEditRotation = viewRotation;
+      _textEditPageRotation = pageRotation;
+      _textEditBaseWidth = next.right - next.left;
+      _textEditBaseHeight = next.top - next.bottom;
+    });
+    _growBoxForNewLines();
+  }
+
   /// The four arrows on the sides of the open text box (up above, down
   /// below, left and right) and the close cross above the up arrow. They
   /// ride the box, so a zoom or a move carries them along.
@@ -4331,10 +4391,64 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       );
     }
 
+    // draggable buttons beside the close cross: move (left), resize (right)
+    Widget dragButton(Offset center, IconData icon, void Function(Offset) onDrag,
+        {required String key}) {
+      final left = (center.dx - closeHit / 2)
+          .clamp(0.0, math.max(0.0, size.width - closeHit));
+      final top = (center.dy - closeHit / 2)
+          .clamp(0.0, math.max(0.0, size.height - closeHit));
+      return Positioned(
+        key: ValueKey(key),
+        left: left.toDouble(),
+        top: top.toDouble(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (details) => onDrag(details.delta),
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (_) => _holdChipFocus(),
+            onPointerUp: (_) => _releaseChipFocus(),
+            onPointerCancel: (_) => _releaseChipFocus(),
+            child: SizedBox(
+              width: closeHit,
+              height: closeHit,
+              child: Center(
+                child: Container(
+                  width: closeSize,
+                  height: closeSize,
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 2, color: Colors.black26)
+                    ],
+                  ),
+                  child: OverflowBox(
+                    maxWidth: closeSize,
+                    maxHeight: closeSize,
+                    child: Icon(icon, size: 8.4, color: scheme.onSurface),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final c = rect.center;
     final up = Offset(c.dx, rect.top - gap - d / 2);
+    final closeCenter = Offset(c.dx, up.dy - closeGap);
+    const sideGap = closeHit + 6;
     return [
-      button(Offset(c.dx, up.dy - closeGap), Icons.close, scheme.error),
+      button(closeCenter, Icons.close, scheme.error),
+      dragButton(Offset(closeCenter.dx - sideGap, closeCenter.dy),
+          Icons.open_with, _dragTextEditBox,
+          key: 'pdf-text-edit-move'),
+      dragButton(Offset(closeCenter.dx + sideGap, closeCenter.dy),
+          Icons.open_in_full, _resizeTextEditBox,
+          key: 'pdf-text-edit-resize'),
       button(up, Icons.keyboard_arrow_up, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowUp),
       button(Offset(c.dx, rect.bottom + gap + d / 2),
