@@ -135,10 +135,6 @@ class _PdfStepButtonsState extends State<PdfStepButtons> {
 
   Future<void> _editStep() async {
     final unit = _unitOf(widget.display(widget.value));
-    final box = context.findRenderObject() as RenderBox?;
-    final rowTop = box != null && box.hasSize
-        ? box.localToGlobal(Offset.zero).dy
-        : MediaQuery.sizeOf(context).height / 2;
     final controller =
         TextEditingController(text: _fmt(_step).replaceAll('.', ','));
     final picked = await showPdfDialog<double>(
@@ -154,19 +150,13 @@ class _PdfStepButtonsState extends State<PdfStepButtons> {
 
         final scheme = Theme.of(dialogContext).colorScheme;
         final size = MediaQuery.sizeOf(dialogContext);
-        final insets = MediaQuery.viewInsetsOf(dialogContext);
         final width = (size.width * 0.52).clamp(220.0, 300.0).toDouble();
-        // il riquadro sta a sinistra, subito sopra la riga del valore, cosi'
-        // il numero di partenza resta visibile a destra
-        final fromRow = size.height - rowTop + 8;
-        final bottom = [fromRow, insets.bottom + 12, 12.0]
-            .reduce((a, b) => a > b ? a : b)
-            .clamp(12.0, (size.height - 260).clamp(12.0, size.height))
-            .toDouble();
+        // il riquadro sta sempre in alto a sinistra, qualunque riga si tocchi
+        final top = MediaQuery.paddingOf(dialogContext).top + 16;
         return Padding(
-          padding: EdgeInsets.fromLTRB(12, 12, 12, bottom),
+          padding: EdgeInsets.fromLTRB(12, top, 12, 12),
           child: Align(
-            alignment: Alignment.bottomLeft,
+            alignment: Alignment.topLeft,
             child: SizedBox(
               width: width,
               child: Material(

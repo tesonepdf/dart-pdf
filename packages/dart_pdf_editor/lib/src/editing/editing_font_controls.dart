@@ -230,6 +230,7 @@ class PdfColorSwatchRow extends StatelessWidget {
     this.labelWidth = 86,
     this.allowNone = true,
     this.pickColor,
+    this.singleRow = false,
   });
 
   /// The row label (e.g. "Text fill").
@@ -253,6 +254,10 @@ class PdfColorSwatchRow extends StatelessWidget {
   /// Whether to include the leading "none" swatch. Background and border
   /// rows allow no colour; foreground text always needs one.
   final bool allowNone;
+
+  /// Keeps every swatch on one line (scaled down when the row is too
+  /// narrow) instead of wrapping onto a second line.
+  final bool singleRow;
 
   /// Opens the full colour picker for the "More colours…" button, given
   /// the current colour, and returns the chosen colour (or null when
@@ -300,10 +305,14 @@ class PdfColorSwatchRow extends StatelessWidget {
         // wraps instead of overflowing: a row that runs past the menu's edge
         // leaves its last swatches unreachable
         Expanded(
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
+          child: singleRow
+              ? FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
               if (allowNone)
                 swatch(
                   key: ValueKey('$keyPrefix-none'),
@@ -334,8 +343,45 @@ class PdfColorSwatchRow extends StatelessWidget {
                   if (picked != null) onChanged(picked);
                 },
               ),
-            ],
-          ),
+                    ],
+                  ),
+                )
+              : Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+              if (allowNone)
+                swatch(
+                  key: ValueKey('$keyPrefix-none'),
+                  color: null,
+                  selected: value == null,
+                  onTap: () => onChanged(null),
+                ),
+              for (var i = 0; i < palette.length; i++)
+                swatch(
+                  key: ValueKey('$keyPrefix-$i'),
+                  color: palette[i],
+                  selected: value != null &&
+                      (value!.toARGB32() & 0xFFFFFF) ==
+                          (palette[i].toARGB32() & 0xFFFFFF),
+                  onTap: () => onChanged(palette[i]),
+                ),
+              IconButton(
+                key: ValueKey('$keyPrefix-more'),
+                icon: const Icon(Icons.palette_outlined, size: 20),
+                tooltip: pdfL10n(context).propMoreColors,
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  final initial = value ?? const Color(0xFFFFFFFF);
+                  final picked = pickColor != null
+                      ? await pickColor!(context, initial)
+                      : await pdfPresentColor(
+                          context, PdfColorRequest(initial: initial));
+                  if (picked != null) onChanged(picked);
+                },
+              ),
+                  ],
+                ),
         ),
       ]),
     );
