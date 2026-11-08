@@ -4438,24 +4438,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       );
     }
 
-    // tutti i pulsanti stanno in una colonna sul lato sinistro della casella
-    // (con lo zoom quelli sopra e sotto finivano fuori schermo): dall'alto in
-    // basso sposta, chiudi, ridimensiona, freccia su, freccia sinistra,
-    // freccia giu'. La freccia destra resta sul lato destro.
+    // sul lato sinistro della casella, in colonna e distanziate: freccia su,
+    // freccia sinistra, freccia giu'. Accanto alla freccia su, in fila e
+    // distanziati: sposta, chiudi, ridimensiona (sopra il bordo alto della
+    // casella, per non coprirne il testo). La freccia destra sta a destra.
     final c = rect.center;
     final columnX = rect.left - gap - d / 2;
-    const arrowStep = 11.0, bigStep = 18.0;
+    const arrowStep = 16.0, rowStep = 20.0;
     final upY = c.dy - arrowStep;
-    final resizeY = upY - d / 2 - 3 - closeHit / 2;
-    final closeY = resizeY - bigStep;
-    final moveY = closeY - bigStep;
+    final rowY = math.min(upY, rect.top - gap - closeHit / 2);
+    final firstX = columnX + d / 2 + 3 + closeHit / 2;
     return [
-      dragButton(Offset(columnX, moveY), Icons.open_with, _dragTextEditBox,
-          key: 'pdf-text-edit-move'),
-      button(Offset(columnX, closeY), Icons.close, scheme.error),
-      dragButton(Offset(columnX, resizeY), Icons.open_in_full,
-          _resizeTextEditBox,
-          key: 'pdf-text-edit-resize'),
       button(Offset(columnX, upY), Icons.keyboard_arrow_up, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowUp),
       button(Offset(columnX, c.dy), Icons.keyboard_arrow_left, scheme.onSurface,
@@ -4463,6 +4456,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       button(Offset(columnX, c.dy + arrowStep), Icons.keyboard_arrow_down,
           scheme.onSurface,
           direction: LogicalKeyboardKey.arrowDown),
+      dragButton(Offset(firstX, rowY), Icons.open_with, _dragTextEditBox,
+          key: 'pdf-text-edit-move'),
+      button(Offset(firstX + rowStep, rowY), Icons.close, scheme.error),
+      dragButton(Offset(firstX + 2 * rowStep, rowY), Icons.open_in_full,
+          _resizeTextEditBox,
+          key: 'pdf-text-edit-resize'),
       button(Offset(rect.right + gap + d / 2, c.dy),
           Icons.keyboard_arrow_right, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowRight),
