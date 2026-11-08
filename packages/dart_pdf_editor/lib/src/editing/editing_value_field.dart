@@ -83,8 +83,25 @@ class _PdfSliderValueFieldState extends State<PdfSliderValueField> {
   void initState() {
     super.initState();
     _focus.addListener(() {
-      if (!_focus.hasFocus) _commit();
+      if (_focus.hasFocus) {
+        _selectOnTap = true;
+        // anche se il campo prende il focus senza un tocco (tastiera)
+        WidgetsBinding.instance.addPostFrameCallback((_) => _selectAll());
+      } else {
+        _commit();
+      }
     });
+  }
+
+  /// Vero subito dopo che il campo ha preso il focus: il primo tocco
+  /// seleziona tutto il numero, cosi' si scrive il nuovo valore senza
+  /// cancellare a mano quello vecchio.
+  bool _selectOnTap = false;
+
+  void _selectAll() {
+    if (!mounted || !_focus.hasFocus) return;
+    _controller.selection =
+        TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
   }
 
   @override
@@ -131,6 +148,14 @@ class _PdfSliderValueFieldState extends State<PdfSliderValueField> {
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
           hintText: widget.varies ? pdfL10n(context).propVaries : null,
         ),
+        onTap: () {
+          // il tocco che apre il campo imposta il cursore: lo sostituiamo con
+          // la selezione di tutto il numero (i tocchi dopo muovono il cursore)
+          if (_selectOnTap) {
+            _selectOnTap = false;
+            _selectAll();
+          }
+        },
         onSubmitted: (_) => _commit(),
         contextMenuBuilder: pdfTextContextMenu,
       ),

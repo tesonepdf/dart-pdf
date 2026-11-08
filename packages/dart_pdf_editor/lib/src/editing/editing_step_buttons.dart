@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show RenderBox;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,6 +135,10 @@ class _PdfStepButtonsState extends State<PdfStepButtons> {
 
   Future<void> _editStep() async {
     final unit = _unitOf(widget.display(widget.value));
+    final box = context.findRenderObject() as RenderBox?;
+    final rowTop = box != null && box.hasSize
+        ? box.localToGlobal(Offset.zero).dy
+        : MediaQuery.sizeOf(context).height / 2;
     final controller =
         TextEditingController(text: _fmt(_step).replaceAll('.', ','));
     final picked = await showPdfDialog<double>(
@@ -147,47 +152,79 @@ class _PdfStepButtonsState extends State<PdfStepButtons> {
           }
         }
 
-        return AlertDialog(
-          key: const ValueKey('pdf-step-dialog'),
-          title: Text(widget.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Valore adesso: ${widget.display(widget.value)}',
-                  style: Theme.of(dialogContext).textTheme.bodySmall),
-              const SizedBox(height: 12),
-              const Text('Cambia a ogni tocco di:'),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('pdf-step-field'),
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                ],
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  suffixText: unit.isEmpty ? null : unit,
+        final scheme = Theme.of(dialogContext).colorScheme;
+        final size = MediaQuery.sizeOf(dialogContext);
+        final insets = MediaQuery.viewInsetsOf(dialogContext);
+        final width = (size.width * 0.52).clamp(220.0, 300.0).toDouble();
+        // il riquadro sta a sinistra, subito sopra la riga del valore, cosi'
+        // il numero di partenza resta visibile a destra
+        final fromRow = size.height - rowTop + 8;
+        final bottom = [fromRow, insets.bottom + 12, 12.0]
+            .reduce((a, b) => a > b ? a : b)
+            .clamp(12.0, (size.height - 260).clamp(12.0, size.height))
+            .toDouble();
+        return Padding(
+          padding: EdgeInsets.fromLTRB(12, 12, 12, bottom),
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: SizedBox(
+              width: width,
+              child: Material(
+                key: const ValueKey('pdf-step-dialog'),
+                color: scheme.surfaceContainerHigh,
+                elevation: 6,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.title,
+                          style: Theme.of(dialogContext).textTheme.titleMedium),
+                      const SizedBox(height: 2),
+                      Text('Valore adesso: ${widget.display(widget.value)}',
+                          style: Theme.of(dialogContext).textTheme.bodySmall),
+                      const SizedBox(height: 12),
+                      const Text('Cambia a ogni tocco di:'),
+                      const SizedBox(height: 8),
+                      TextField(
+                        key: const ValueKey('pdf-step-field'),
+                        controller: controller,
+                        autofocus: true,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                        ],
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: const OutlineInputBorder(),
+                          suffixText: unit.isEmpty ? null : unit,
+                        ),
+                        onSubmitted: (_) => submit(),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('Annulla'),
+                          ),
+                          FilledButton(
+                            key: const ValueKey('pdf-step-ok'),
+                            onPressed: submit,
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                onSubmitted: (_) => submit(),
               ),
-            ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Annulla'),
-            ),
-            FilledButton(
-              key: const ValueKey('pdf-step-ok'),
-              onPressed: submit,
-              child: const Text('OK'),
-            ),
-          ],
         );
       },
     );
