@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Le pagine scritte dall'utente ("1,3,5-7") come indici da 0, in ordine e
 /// senza doppioni. Null se il testo e' vuoto, non si capisce o una pagina non
