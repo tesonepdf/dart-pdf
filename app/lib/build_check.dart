@@ -79,6 +79,38 @@ class BuildCheck {
   }
 }
 
+/// Esito di un flusso di GitHub (test o scansione dei segreti) per l'ultimo
+/// commit di `main`, indipendente dalla build installata: serve a vedere subito
+/// come sono andati i test di una build nuova.
+Future<BuildCheck> fetchLatestWorkflowCheck(
+  String workflow, {
+  http.Client? client,
+}) async {
+  final own = client == null;
+  final c = client ?? http.Client();
+  try {
+    final response = await c
+        .get(
+          Uri.https(
+            'api.github.com',
+            '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}'
+                '/actions/workflows/$workflow/runs',
+            {'branch': 'main', 'per_page': '1'},
+          ),
+          headers: const {'Accept': 'application/vnd.github+json'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      return const BuildCheck(BuildCheckState.unavailable);
+    }
+    return BuildCheck.fromRunsJson(response.body);
+  } catch (_) {
+    return const BuildCheck(BuildCheckState.unavailable);
+  } finally {
+    if (own) c.close();
+  }
+}
+
 /// Dove sta la compilazione dell'app (la build su GitHub Actions): in coda, in
 /// corso (con il passo a cui è arrivata), finita bene, fallita o annullata.
 ///

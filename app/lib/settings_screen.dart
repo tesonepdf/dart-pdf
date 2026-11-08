@@ -474,6 +474,16 @@ Widget _appInformationSection(BuildContext context) {
       Text(AppInfo.tagline, style: theme.textTheme.bodySmall),
       if (AppInfo.buildCommit != 'unknown') const _BuildCheckTile(),
       const _BuildRunTile(),
+      const _LatestWorkflowTile(
+        tileKey: 'settings-latest-ci',
+        label: 'Test dell\'ultima build',
+        workflow: 'ci.yml',
+      ),
+      const _LatestWorkflowTile(
+        tileKey: 'settings-latest-secret-scan',
+        label: 'Scansione segreti dell\'ultimo commit',
+        workflow: 'secret-scan.yml',
+      ),
       const SizedBox(height: 4),
       TextButton.icon(
         style: TextButton.styleFrom(padding: EdgeInsets.zero),
@@ -1221,6 +1231,86 @@ class _BuildCheckTileState extends State<_BuildCheckTile> {
         };
         return ListTile(
           key: const ValueKey('settings-build-check'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: Icon(icon, color: color),
+          title: Text(text),
+          onTap: check == null
+              ? null
+              : (check.state == BuildCheckState.failed && check.url != null)
+                  ? () => launchUrl(check.url!,
+                      mode: LaunchMode.externalApplication)
+                  : _reload,
+        );
+      },
+    );
+  }
+}
+
+
+/// Esito dell'ultimo flusso di GitHub su `main` (test o scansione segreti).
+class _LatestWorkflowTile extends StatefulWidget {
+  const _LatestWorkflowTile({
+    required this.tileKey,
+    required this.label,
+    required this.workflow,
+  });
+
+  final String tileKey;
+  final String label;
+  final String workflow;
+
+  @override
+  State<_LatestWorkflowTile> createState() => _LatestWorkflowTileState();
+}
+
+class _LatestWorkflowTileState extends State<_LatestWorkflowTile> {
+  late Future<BuildCheck> _check = fetchLatestWorkflowCheck(widget.workflow);
+
+  void _reload() =>
+      setState(() => _check = fetchLatestWorkflowCheck(widget.workflow));
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<BuildCheck>(
+      future: _check,
+      builder: (context, snapshot) {
+        final check = snapshot.data;
+        final (IconData icon, Color color, String text) = switch (check?.state) {
+          null => (
+              Icons.hourglass_empty,
+              scheme.onSurfaceVariant,
+              '${widget.label}: controllo…'
+            ),
+          BuildCheckState.passed => (
+              Icons.check_circle,
+              Colors.green,
+              '${widget.label}: superati'
+            ),
+          BuildCheckState.failed => (
+              Icons.cancel,
+              scheme.error,
+              '${widget.label}: FALLITI. Tocca per i dettagli'
+            ),
+          BuildCheckState.running => (
+              Icons.autorenew,
+              Colors.orange,
+              '${widget.label}: in corso. Tocca per ricontrollare'
+            ),
+          BuildCheckState.notStarted => (
+              Icons.schedule,
+              Colors.orange,
+              '${widget.label}: non ancora partiti. Tocca per ricontrollare'
+            ),
+          BuildCheckState.unavailable => (
+              Icons.help_outline,
+              scheme.onSurfaceVariant,
+              '${widget.label}: non disponibile. Tocca per riprovare'
+            ),
+        };
+        return ListTile(
+          key: ValueKey(widget.tileKey),
           contentPadding: EdgeInsets.zero,
           dense: true,
           leading: Icon(icon, color: color),
