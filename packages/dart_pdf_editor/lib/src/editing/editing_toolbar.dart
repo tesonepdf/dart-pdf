@@ -5155,9 +5155,15 @@ class _StyleMenuState extends State<_StyleMenu> {
                       onChanged: _setTextBorder,
                     ),
                     // anteprima in tempo reale della casella di testo
-                    ValueListenableBuilder<String>(
-                      valueListenable: controller.editingTextContent,
-                      builder: (context, typed, _) => _TextBoxPreview(
+                    ListenableBuilder(
+                      listenable: Listenable.merge([
+                        controller.editingTextContent,
+                        controller.editingTextScale,
+                      ]),
+                      builder: (context, _) {
+                        final typed = controller.editingTextContent.value;
+                        return _TextBoxPreview(
+                      scale: controller.editingTextScale.value,
                       text: controller.isEditingText && typed.isNotEmpty
                           ? typed
                           : (controller.selectedText?.isNotEmpty == true
@@ -5198,7 +5204,8 @@ class _StyleMenuState extends State<_StyleMenu> {
                       fontWidth: _draggingFontWidth ??
                           controller.selectedFreeTextStyle?.horizontalScale ??
                           controller.fontWidth,
-                    ),
+                    );
+                      },
                     ),
                   ],
                 ],
@@ -5542,8 +5549,11 @@ class _TextBoxPreview extends StatelessWidget {
     required this.lineSpacing,
     required this.charSpacing,
     required this.fontWidth,
+    required this.scale,
   });
 
+  /// Screen pixels per point: the preview draws at the size the page shows.
+  final double scale;
   final String text;
   final Color color;
   final Color? fill;
@@ -5579,6 +5589,8 @@ class _TextBoxPreview extends StatelessWidget {
     };
     final bold = font.isBold;
     final italic = font.isItalic;
+    final k = scale.isFinite && scale > 0 ? scale : 1.0;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.35;
     return Padding(
       key: const ValueKey('pdf-text-preview'),
       padding: const EdgeInsets.only(top: 12, bottom: 4),
@@ -5586,7 +5598,7 @@ class _TextBoxPreview extends StatelessWidget {
         // la carta della pagina: il riempimento trasparente si vede su bianco
         color: Colors.white,
         child: Container(
-          height: 120,
+          constraints: BoxConstraints(minHeight: 120, maxHeight: maxHeight),
           width: double.infinity,
           padding: const EdgeInsets.all(6),
           alignment: Alignment(ax, ay),
@@ -5595,7 +5607,7 @@ class _TextBoxPreview extends StatelessWidget {
             border: border != null
                 ? Border.all(
                     color: border!.withValues(alpha: opacity),
-                    width: borderWidth)
+                    width: borderWidth * k)
                 : Border.all(color: scheme.outlineVariant, width: 0.5),
           ),
           child: ClipRect(
@@ -5606,13 +5618,13 @@ class _TextBoxPreview extends StatelessWidget {
                 text,
                 textAlign: textAlign,
                 style: TextStyle(
-                  fontSize: size,
+                  fontSize: size * k,
                   color: color.withValues(alpha: opacity),
                   fontWeight: bold ? FontWeight.bold : FontWeight.normal,
                   fontStyle: italic ? FontStyle.italic : FontStyle.normal,
                   decoration:
                       underline ? TextDecoration.underline : TextDecoration.none,
-                  letterSpacing: charSpacing,
+                  letterSpacing: charSpacing * k,
                   height: lineSpacing,
                 ),
               ),
