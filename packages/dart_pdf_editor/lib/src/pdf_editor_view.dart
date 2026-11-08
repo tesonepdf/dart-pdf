@@ -2118,34 +2118,6 @@ class _PdfEditorViewState extends State<PdfEditorView> {
           // phone: the PDF fills the whole screen; header and toolbar are
           // drawn over it (they slide away while reading)
           final overlayChrome = compact && header != null;
-          // Contatore pagine in sovraimpressione in basso a destra ("4 / 55"):
-          // sta sopra la pagina, non fa parte del PDF e non viene stampato.
-          final pageBadge = Positioned(
-            right: 12,
-            bottom: MediaQuery.paddingOf(context).bottom + 12,
-            child: IgnorePointer(
-              child: ListenableBuilder(
-                listenable: _viewer,
-                builder: (context, _) {
-                  final count = _viewer.pageCount;
-                  if (count == 0) return const SizedBox.shrink();
-                  final scheme = Theme.of(context).colorScheme;
-                  return Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHigh.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_viewer.currentPage + 1} / $count',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
           Widget layout(Widget content) => overlayChrome
               ? Stack(children: [
                   Positioned.fill(child: content),
@@ -2196,7 +2168,6 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                       ),
                     ),
                   ),
-                  pageBadge,
                   if (toolbar != null && dockToolbar)
                     Positioned(
                       left: 0,
@@ -2205,14 +2176,9 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                       child: autoHideBar(toolbar, AxisDirection.down),
                     ),
                 ])
-              : Stack(children: [
-                  Positioned.fill(
-                    child: Column(children: [
-                      if (header != null) autoHideBar(header, AxisDirection.up),
-                      Expanded(child: content),
-                    ]),
-                  ),
-                  pageBadge,
+              : Column(children: [
+                  if (header != null) autoHideBar(header, AxisDirection.up),
+                  Expanded(child: content),
                 ]);
           return layout(
               PdfShellPanelLayout(
