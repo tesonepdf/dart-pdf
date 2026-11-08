@@ -10809,31 +10809,7 @@ class _PdfViewerPageState extends State<_PdfViewerPage> {
             currentMatch: widget.currentMatch,
             selection: widget.selection,
             theme: PdfViewerTheme.of(context),
-          ),
-        ),
-      ),
-      // Numero di pagina in fondo alla pagina, a destra: scorre insieme alla
-      // pagina (cosi' si sa sempre di quale pagina si tratta) e non fa parte
-      // del PDF.
-      Positioned(
-        right: 6,
-        bottom: 4,
-        child: IgnorePointer(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xCCFFFFFF),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${widget.index + 1} / ${widget.pageCount}',
-              style: const TextStyle(
-                color: Color(0xFF424242),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                decoration: TextDecoration.none,
-              ),
-            ),
+            pageLabel: '${widget.index + 1} / ${widget.pageCount}',
           ),
         ),
       ),
@@ -11096,6 +11072,7 @@ class _HighlightPainter extends CustomPainter {
     required this.currentMatch,
     required this.selection,
     required this.theme,
+    this.pageLabel,
   });
 
   final PdfRect box;
@@ -11104,6 +11081,10 @@ class _HighlightPainter extends CustomPainter {
   final PdfTextMatch? currentMatch;
   final List<PdfTextQuad> selection;
   final PdfViewerThemeData theme;
+
+  /// Numero di pagina ("4 / 55") disegnato in fondo alla pagina, a destra:
+  /// scorre con la pagina, non fa parte del PDF e non si stampa da qui.
+  final String? pageLabel;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -11122,6 +11103,35 @@ class _HighlightPainter extends CustomPainter {
         _paintQuad(canvas, geometry, quad, paint);
       }
     }
+    _paintPageLabel(canvas, size);
+  }
+
+  void _paintPageLabel(Canvas canvas, Size size) {
+    final label = pageLabel;
+    if (label == null) return;
+    final text = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Color(0xFF424242),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final rect = Rect.fromLTWH(
+      size.width - 6 - text.width - 12,
+      size.height - 4 - text.height - 4,
+      text.width + 12,
+      text.height + 4,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(8)),
+      Paint()..color = const Color(0xCCFFFFFF),
+    );
+    text.paint(canvas, Offset(rect.left + 6, rect.top + 2));
+    text.dispose();
   }
 
   /// Maps the quad's four page-space corners into view space and fills the
@@ -11140,7 +11150,8 @@ class _HighlightPainter extends CustomPainter {
       oldDelegate.matches != matches ||
       oldDelegate.currentMatch != currentMatch ||
       oldDelegate.selection != selection ||
-      oldDelegate.theme != theme;
+      oldDelegate.theme != theme ||
+      oldDelegate.pageLabel != pageLabel;
 }
 
 /// Drives the touch fling controller: the controller's value is elapsed
