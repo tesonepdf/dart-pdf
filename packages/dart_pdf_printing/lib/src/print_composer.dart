@@ -227,6 +227,19 @@ class _PrintComposer {
       writer
         ..drawXObject('Page$i')
         ..restore();
+      if (settings.pageNumbers) {
+        // "N / total" in the bottom-right corner of the cell, drawn last so it
+        // sits over the page. Helvetica 9 pt; widths from the AFM table.
+        final label = '${pageIndices[i] + 1} / ${document.pageCount}';
+        final labelWidth = _helveticaWidth(label, 9);
+        final labelX = math.max(left, left + cellWidth - 8 - labelWidth);
+        writer
+          ..save()
+          ..fillColor(0x000000)
+          ..raw('BT /FNum 9 Tf ${labelX.toStringAsFixed(2)} '
+              '${(bottom + 8).toStringAsFixed(2)} Td ($label) Tj ET')
+          ..restore();
+      }
       if (multiple && settings.printBorder) {
         writer
           ..save()
@@ -243,7 +256,18 @@ class _PrintComposer {
     return CosDictionary({
       'Type': const CosName('Page'),
       'MediaBox': _rect(PdfRect(0, 0, width, height)),
-      'Resources': CosDictionary({'XObject': xObjects}),
+      'Resources': CosDictionary({
+        'XObject': xObjects,
+        if (settings.pageNumbers)
+          'Font': CosDictionary({
+            'FNum': CosDictionary({
+              'Type': const CosName('Font'),
+              'Subtype': const CosName('Type1'),
+              'BaseFont': const CosName('Helvetica'),
+              'Encoding': const CosName('WinAnsiEncoding'),
+            }),
+          }),
+      }),
       'Contents': builder.add(_stream(writer.takeBytes())),
     });
   }
@@ -816,6 +840,15 @@ CosArray _rect(PdfRect rect) => CosArray([
       CosReal(rect.right),
       CosReal(rect.top),
     ]);
+
+/// Width in points of [text] in Helvetica at [size] (digits, space, slash).
+double _helveticaWidth(String text, double size) {
+  var units = 0;
+  for (final c in text.codeUnits) {
+    units += (c >= 0x30 && c <= 0x39) ? 556 : 278;
+  }
+  return units * size / 1000;
+}
 
 CosStream _stream(Uint8List bytes) =>
     CosStream(CosDictionary({'Length': CosInteger(bytes.length)}), bytes);

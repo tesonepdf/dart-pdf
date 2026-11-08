@@ -1040,6 +1040,13 @@ class _PrintPreviewDialogState extends State<PrintPreviewDialog> {
               _settings.printVisibleHyperlinks,
               (value) =>
                   _change(_settings.copyWith(printVisibleHyperlinks: value))),
+          _check(
+              'page-numbers',
+              Localizations.localeOf(context).languageCode == 'it'
+                  ? 'Numera le pagine (4 / 55) in basso a destra'
+                  : 'Number pages (4 / 55) at the bottom right',
+              _settings.pageNumbers,
+              (value) => _change(_settings.copyWith(pageNumbers: value))),
         ]),
       ]);
 
