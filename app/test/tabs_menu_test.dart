@@ -11,6 +11,15 @@ import 'package:dart_pdf_editor_app/editor_screen.dart';
 import 'package:dart_pdf_editor_app/file_io.dart';
 import 'package:dart_pdf_editor_app/incoming_file.dart';
 import 'package:dart_pdf_editor_app/middle_ellipsis_text.dart';
+import 'test_finders.dart';
+
+/// Opens the phone's open-tabs sheet from the app menu (the header no longer
+/// has a tabs button).
+Future<void> tapMobileTabsButton(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
+  await tester.pumpAndSettle();
+  await tapMenuKey(tester, 'menu-tabs');
+}
 
 void main() {
   late PdfEditingPreferences prefs;
@@ -158,28 +167,12 @@ void main() {
     await openTab(tester, 'beta.pdf');
 
     expect(find.byKey(const ValueKey('tab-strip')), findsNothing);
-    expect(find.byKey(const ValueKey('mobile-tabs-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('mobile-tabs-count')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('mobile-tabs-button')),
-        matching: find.text('2'),
-      ),
-      findsOneWidget,
-    );
-    // one header: the editor's own app bar carries the tabs button; the
-    // save/share action lives in the app menu on the phone
+    // the header has no tabs button any more: the open tabs come from the
+    // app menu ("menu-tabs")
+    expect(find.byKey(const ValueKey('mobile-tabs-button')), findsNothing);
     expect(find.byKey(const ValueKey('pdf-shell-save')), findsNothing);
-    final appBar = find.byKey(const ValueKey('editor-app-bar'));
-    expect(appBar, findsOneWidget);
-    expect(
-      find.descendant(
-          of: appBar,
-          matching: find.byKey(const ValueKey('mobile-tabs-button'))),
-      findsOneWidget,
-    );
 
-    await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
+    await tapMobileTabsButton(tester);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('mobile-tabs-grid')), findsOneWidget);
@@ -345,7 +338,7 @@ void main() {
       await openTab(tester, 'tab-$i.pdf');
     }
 
-    await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
+    await tapMobileTabsButton(tester);
     await tester.pumpAndSettle();
     final grid = find.byKey(const ValueKey('mobile-tabs-grid'));
     final scrollable = find
@@ -399,7 +392,7 @@ void main() {
           matching: find.byKey(const ValueKey('mobile-tab-tile')),
         );
 
-    await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
+    await tapMobileTabsButton(tester);
     await tester.pumpAndSettle();
     // The last-opened tab is active: the grid lands on it, not the first row.
     expect(tile('tab-19.pdf'), findsOneWidget);
@@ -418,7 +411,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('mobile-tabs-grid')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
+    await tapMobileTabsButton(tester);
     await tester.pumpAndSettle();
     final viewport = tester.getRect(scrollable);
     final active = tester.getRect(tile('tab-9.pdf'));
@@ -826,7 +819,7 @@ void main() {
     await tester.pump();
     await openTab(tester, 'alpha.pdf');
     await openTab(tester, 'beta.pdf');
-    await tester.tap(find.byKey(const ValueKey('mobile-tabs-button')));
+    await tapMobileTabsButton(tester);
     await tester.pumpAndSettle();
 
     Finder tile(String name) => find.ancestor(

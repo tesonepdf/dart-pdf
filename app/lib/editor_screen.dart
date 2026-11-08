@@ -5643,12 +5643,12 @@ class _EditorScreenState extends State<EditorScreen>
               if (build == null) return const SizedBox.shrink();
               return Padding(
                 padding: EdgeInsets.symmetric(horizontal: phone ? 2 : 4),
-                // phone: while the search is unfolded the tool shrinks to its
-                // icon, so it stays selectable next to the search field
+                // phone: the tool is always just its icon (no label, no
+                // chevron), see _currentToolSurface
                 child: ValueListenableBuilder<bool>(
                   valueListenable: pdfSearchOpen,
                   builder: (context, searching, _) => SizedBox(
-                      width: phone ? (searching ? 52 : 100) : 150,
+                      width: phone ? 52 : 150,
                       child: build(context)),
                 ),
               );
@@ -5692,8 +5692,8 @@ class _EditorScreenState extends State<EditorScreen>
                 leading: [
                   // while the search is unfolded the other controls step
                   // aside, so the field and the "more" button stay visible
-                  if (parts.pageNumber case final pageNumber?)
-                    hideWhileSearching(pageNumber),
+                  // telefono: niente numero di pagina in alto (sta in fondo
+                  // a ogni pagina)
                   if (toolPart != null) toolPart,
                   if (phone && undoRedo != null && !_readOnly)
                     hideWhileSearching(undoRedo),
@@ -6129,7 +6129,7 @@ class _EditorScreenState extends State<EditorScreen>
                   },
                 ),
         ),
-      if (compact && _tabs.isNotEmpty) _buildMobileTabsButton(),
+      // telefono: le schede aperte si aprono dal menu, non da un pulsante
     ];
   }
 
