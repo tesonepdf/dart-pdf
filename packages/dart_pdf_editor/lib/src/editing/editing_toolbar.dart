@@ -32,6 +32,7 @@ import 'editing_fonts.dart';
 import 'editing_form_options.dart';
 import 'editing_form_style.dart';
 import 'editing_panel.dart';
+import 'editing_step_buttons.dart';
 import 'editing_value_field.dart';
 import 'editing_preferences.dart';
 import 'editing_takeoff.dart';
@@ -5192,33 +5193,40 @@ class _StyleMenuState extends State<_StyleMenu> {
     double? fieldMin,
     double? fieldMax,
   }) {
+    final stepId = key is ValueKey ? '${key.value}' : label;
     return Row(key: key, children: [
       SizedBox(width: 86, child: Text(label)),
       Expanded(
-        child: Slider(
-          key: key is ValueKey ? ValueKey('${key.value}-slider') : null,
-          value: value.clamp(min, max),
-          min: min,
-          max: max,
-          onChanged: onChanged,
-          onChangeEnd: onChangeEnd,
+        child: Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: PdfStepButtons(
+              stepId: stepId,
+              title: label,
+              value: value,
+              min: fieldMin ?? min,
+              max: fieldMax ?? max,
+              display: display,
+              // meno e piu' valgono come un valore scritto a mano
+              onStep: onChangeEnd ?? onChanged,
+              // il numero si puo' ancora scrivere (regola generale: ogni
+              // valore e' modificabile direttamente)
+              valueField: PdfSliderValueField(
+                key: key is ValueKey ? ValueKey('${key.value}-input') : null,
+                value: value,
+                min: min,
+                max: max,
+                fieldMin: fieldMin,
+                fieldMax: fieldMax,
+                width: 50,
+                display: display,
+                parse: parse,
+                onSubmit: onChangeEnd ?? onChanged,
+              ),
+            ),
+          ),
         ),
-      ),
-      // the readout is editable: type an exact value (general rule across
-      // the editing UI) - committing routes through the change-end callback,
-      // or onChanged for sliders that have none (live-only). The typed value
-      // may run past the slider's scale (fieldMin/fieldMax) within reason.
-      PdfSliderValueField(
-        key: key is ValueKey ? ValueKey('${key.value}-input') : null,
-        value: value,
-        min: min,
-        max: max,
-        fieldMin: fieldMin,
-        fieldMax: fieldMax,
-        width: 56,
-        display: display,
-        parse: parse,
-        onSubmit: onChangeEnd ?? onChanged,
       ),
     ]);
   }
