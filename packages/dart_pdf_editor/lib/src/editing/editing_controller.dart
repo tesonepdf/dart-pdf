@@ -2870,6 +2870,12 @@ class PdfEditingController extends ChangeNotifier {
   // in-place text editing
 
   bool _editingText = false;
+
+  /// The text currently typed in the open inline editor, kept up to date by
+  /// the page overlay so the style panel's preview shows the real text. A
+  /// plain notifier: it changes on every keystroke and must not rebuild
+  /// everything that listens to the controller.
+  final ValueNotifier<String> editingTextContent = ValueNotifier<String>('');
   TextSelection? _editingTextSelection;
   int _editingTextStyleRevision = 0;
   ({
@@ -2936,6 +2942,7 @@ class PdfEditingController extends ChangeNotifier {
     if (!value) {
       _editingTextSelection = null;
       _editingTextStyleRequest = null;
+      editingTextContent.value = '';
     }
     notifyListeners();
   }

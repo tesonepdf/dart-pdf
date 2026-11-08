@@ -3400,6 +3400,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _onTextEditChanged() {
     if (_textEditRect == null) return;
     _controller.setEditingTextSelection(_textEditText.selection);
+    _controller.editingTextContent.value = _textEditText.text;
     _growBoxForNewLines();
     if (mounted) setState(() {});
   }
@@ -4585,6 +4586,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _controller.takeEditingBoxColors();
     _beginInteraction(PdfEditingInteractionIntent.text, _lastPointerKind);
     _controller.setEditingText(true);
+    _controller.editingTextContent.value = _textEditText.text;
     // the field's autofocus is ignored: the creating gesture's
     // pointer-down put primary focus on the viewer's own node, and
     // autofocus only fires into an unfocused scope - claim it so typing
@@ -8676,6 +8678,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                                   controller: _textEditText,
                                   focusNode: _textEditFocus,
                                   autofocus: true,
+                                  // con il pannello delle impostazioni aperto
+                                  // la tastiera non serve: resta nascosta
+                                  keyboardType:
+                                      _controller.shouldKeepEditingTextFocused
+                                          ? TextInputType.none
+                                          : TextInputType.multiline,
                                   maxLines: null,
                                   expands: true,
                                   onSubmitted: (_) => _commitTextEdit(),
