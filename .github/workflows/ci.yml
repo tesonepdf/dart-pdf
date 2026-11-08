@@ -48,8 +48,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ci-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('app/pubspec.lock', 'pubspec.lock', 'app/android/**/*.gradle', 'app/android/**/*.kts', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          # Se la CI non ha ancora una sua cache, parte da quella della build
+          # APK (stessi file Gradle): senza, scaricava Gradle da zero e, se il
+          # download falliva, la cache non veniva mai salvata.
           restore-keys: |
             ci-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
+            apk-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
 
       - name: flutter pub get
         run: flutter pub get
