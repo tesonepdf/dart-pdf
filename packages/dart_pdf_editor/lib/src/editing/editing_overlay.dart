@@ -4324,7 +4324,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 8.4, closeSize = 8.64, closeHit = 16.0, gap = 2.0, closeGap = 14.0;
+    const d = 8.4, closeSize = 8.64, closeHit = 16.0, gap = 2.0;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
