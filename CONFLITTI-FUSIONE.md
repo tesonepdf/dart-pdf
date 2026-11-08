@@ -14,6 +14,7 @@ Deciso dall'utente il 07/11: tutto quello che era su `prova-sviluppatore` è sta
 | Data | Richiesta | Commit | Stato |
 |---|---|---|---|
 | 08/11 | La barra in alto con il numero di pagina deve essere **sempre visibile**, non sparire scorrendo (`editor_screen.dart`: `autoHideChrome: false`). | `#10036` | applicato, da provare sul telefono |
+| 08/11 | Condividi, WhatsApp (due voci) e Salva con nome chiedono **cosa mandare**: tutto il documento, solo la pagina che si guarda, o alcune pagine (`1,3,5-7`). Finestra nuova in `app/lib/page_choice.dart`, collegata in `editor_screen.dart`, accesa da `app.dart` (`askPagesBeforeSending`, spenta di base per i test). Con "Salva con nome" e poche pagine si salva una copia e si apre in una scheda nuova: il documento intero non passa a un file parziale. Non chiede su un documento di una pagina. | `#10037` | applicato, da provare sul telefono |
 
 ## Aggiornamento 2026-11-06
 
