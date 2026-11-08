@@ -130,6 +130,20 @@ class OfficialUpdateChecker extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// True when the latest official release was skipped by the user.
+  bool get isSkipped => latestVersion != null && latestLabel == skippedLabel;
+
+  /// Undo "Skip this version": the release is offered again.
+  Future<void> restoreSkipped() async {
+    skippedLabel = null;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_skippedKey);
+    } catch (_) {}
+    await check();
+  }
+
   /// Marks the latest upstream release as merged into this copy.
   Future<void> markLatestMerged() async {
     final version = latestVersion;

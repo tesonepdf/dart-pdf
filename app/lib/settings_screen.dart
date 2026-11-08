@@ -691,8 +691,10 @@ class _OfficialUpdatePanel extends StatelessWidget {
               'New official version: ${checker.latestLabel}'),
           OfficialUpdateStatus.upToDate => _t(
               context,
-              'Nessuna novita\' ufficiale oltre la ${checker.mergedLabel}.',
-              'Nothing newer upstream than ${checker.mergedLabel}.'),
+              'Nessuna novita\' ufficiale oltre la ${checker.mergedLabel}.'
+                  '${checker.latestVersion == null ? '' : ' Ultima ufficiale trovata: ${checker.latestLabel}${checker.isSkipped ? ' (saltata)' : ''}.'}',
+              'Nothing newer upstream than ${checker.mergedLabel}.'
+                  '${checker.latestVersion == null ? '' : ' Latest upstream found: ${checker.latestLabel}${checker.isSkipped ? ' (skipped)' : ''}.'}'),
           OfficialUpdateStatus.error => _t(context,
               'Controllo non riuscito: ${checker.error}',
               'Check failed: ${checker.error}'),
@@ -788,6 +790,15 @@ class _OfficialUpdatePanel extends StatelessWidget {
             if (status.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(status, style: theme.textTheme.bodySmall),
+            ],
+            if (checker.isSkipped) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const ValueKey('settings-official-restore'),
+                onPressed: checker.restoreSkipped,
+                child: Text(_t(context, 'Ripristina versione saltata',
+                    'Restore skipped version')),
+              ),
             ],
             if (checker.status == OfficialUpdateStatus.newer) ...[
               const SizedBox(height: 8),
