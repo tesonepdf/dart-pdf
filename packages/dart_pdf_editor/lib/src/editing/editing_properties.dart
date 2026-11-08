@@ -12,6 +12,7 @@ import 'editing_fonts.dart';
 import 'editing_form_style.dart';
 import 'editing_panel.dart';
 import 'editing_preferences.dart';
+import 'editing_step_buttons.dart';
 import 'editing_value_field.dart';
 import 'text_prompt.dart';
 import 'line_style.dart';
@@ -483,32 +484,38 @@ class _PdfAnnotationPropertiesPanelState
         Flexible(
             child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis)),
         Expanded(
-          child: Slider(
-            key: key,
-            value: value.clamp(min, max),
-            min: min,
-            max: max,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: PdfStepButtons(
+                key: key,
+                stepId: base,
+                title: label,
+                value: value,
+                min: fieldMin ?? min,
+                max: fieldMax ?? max,
+                display: display ?? _fmt,
+                onStep: onChangeEnd,
+                // il valore si legge e si scrive anche come numero (regola
+                // generale: ogni valore e' modificabile direttamente)
+                valueField: PdfSliderValueField(
+                  key: ValueKey('$base-input'),
+                  value: value,
+                  min: min,
+                  max: max,
+                  fieldMin: fieldMin,
+                  fieldMax: fieldMax,
+                  width: 50,
+                  display: display ?? _fmt,
+                  parse: parse,
+                  varies: varies,
+                  onSubmit: onChangeEnd,
+                ),
+              ),
+            ),
           ),
         ),
-        // the value also reads back as an editable number, so it can be set
-        // exactly without nudging the slider (general rule: any slider's
-        // value is directly typeable). A typed value may exceed the slider's
-        // scale within reason (fieldMin/fieldMax).
-        PdfSliderValueField(
-          key: ValueKey('$base-input'),
-          value: value,
-          min: min,
-          max: max,
-          fieldMin: fieldMin,
-          fieldMax: fieldMax,
-          display: display ?? _fmt,
-          parse: parse,
-          varies: varies,
-          onSubmit: onChangeEnd,
-        ),
-        const SizedBox(width: 8),
       ]),
     );
   }
