@@ -100,6 +100,14 @@ class RecentsStore extends ChangeNotifier {
     super.dispose();
   }
 
+  // Le operazioni asincrone (load, add, ...) possono finire dopo la chiusura
+  // dell'archivio: in quel caso non c'e' piu' nessuno da avvisare.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   List<RecentFile> get items => List.unmodifiable(_items);
   bool get isEmpty => _items.isEmpty;
 
