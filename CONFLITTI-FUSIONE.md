@@ -16,6 +16,38 @@ Deciso dall'utente il 07/11: tutto quello che era su `prova-sviluppatore` è sta
 | 08/11 | La barra in alto con il numero di pagina deve essere **sempre visibile**, non sparire scorrendo (`editor_screen.dart`: `autoHideChrome: false`). | `#10036` | applicato, da provare sul telefono |
 | 08/11 | Condividi, WhatsApp (due voci) e Salva con nome chiedono **cosa mandare**: tutto il documento, solo la pagina che si guarda, o alcune pagine (`1,3,5-7`). Finestra nuova in `app/lib/page_choice.dart`, collegata in `editor_screen.dart`, accesa da `app.dart` (`askPagesBeforeSending`, spenta di base per i test). Con "Salva con nome" e poche pagine si salva una copia e si apre in una scheda nuova: il documento intero non passa a un file parziale. Non chiede su un documento di una pagina. | `#10037`, corretto in `#10038` (l'app importa `material_ui`, non `flutter/material`) | applicato, da provare sul telefono |
 
+## NUMERI DEI COMMIT E DELLE BUILD: contano solo quelli di `main`
+
+Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stesso della build su Actions e della release "DartPDF #N". Lo scrive in testa al messaggio l'hook `.githooks/commit-msg`: in ogni clone nuovo va attivato con `git config core.hooksPath .githooks` (e `chmod +x .githooks/commit-msg`). **Non si scrivono i numeri a mano.** I numeri `#10xxx` erano la serie del ramo prova (cancellato il 07/11): nei messaggi che vengono dalla prova restano, ma il numero vero è quello della tabella. I quattro commit fatti a mano dopo l'unione (da `#10035` a `#10038`) avevano il numero sbagliato nel titolo: la build e la release sono invece giuste (la release dice "DartPDF #251"). La storia di `main` non è stata riscritta.
+
+| N. ufficiale (main) | N. nel titolo | Commit | Cosa |
+|---|---|---|---|
+| 227 | #10014 | `60f12a7` | Restore separate prova numbering |
+| 228 | #10015 | `67e606e` | Import Ben updates and stage file reviews |
+| 229 | #10016 | `d5bde66` | Fix OCR merge and move information |
+| 230 | #10017 | `12a8af0` | Fix editor compile integration |
+| 231 | #10018 | `ed43859` | Remove Alt+Z and expand CI coverage |
+| 232 | #10019 | `311aebf` | Scope CI to integrated code |
+| 233 | #10020 | `131c1d7` | Add Hand and Select to mobile tools |
+| 234 | #10021 | `d8c7c88` | Fix app CI test failures |
+| 235 | #10022 | `cb1b3d7` | Keep edits made during save dirty |
+| 236 | #10023 | `240c913` | CI: errori dei test editor e redaction leggibili nelle annotaz |
+| 237 | #10024 | `d7857c5` | Test barra mobile allineati alla barra attuale (controllo stru |
+| 238 | #10025 | `4720fc1` | Test barra mobile: nome dello strumento dal testo, senza acces |
+| 239 | #10026 | `9ba9c0e` | CI: patch dei plugin Android prima della build debug (compileS |
+| 240 | #10027 | `2780f42` | Dialoghi di Ben: casella nelle conferme e altezza menu a tendi |
+| 241 | #10028 | `64aa7b7` | Bacheca: suggerimento recenti con attesa (Ben) e aggiornamento |
+| 242 | #10029 | `1c5339e` | Vista a due pagine di Ben con il suo visualizzatore, tue funzi |
+| 243 | #10030 | `1986af0` | Controller: mode, selectsAnnotations, wantsPageOverlays e page |
+| 244 | #10031 | `c4dad47` | Menu: sottomenu raggiungibili da tastiera e lettore schermo (B |
+| 245 | #10032 | `969c53d` | Appunti di fusione: elenco per gruppi dell'utente + registro d |
+| 246 | #10033 | `b3aff89` | Suggerimento annulla/ripeti per sistema (Cmd su Mac, Ctrl altr |
+| 247 | #10034 | `e5381d1` | Appunti: fusione grafica chiusa, OCR e redazione non presi, re |
+| 248 | #10035 | `4fad18c` | Script confronta-ben (solo novita' nuove di Ben) + appunti: un |
+| 249 | #10036 | `ca6742b` | Barra in alto con numero di pagina sempre visibile (non si nas |
+| 250 | #10037 | `871c7e4` | Condividi, WhatsApp e Salva con nome chiedono cosa mandare: tu |
+| 251 | #10038 | `81d9963` | Finestra scelta pagine: import material_ui come il resto dell' |
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
