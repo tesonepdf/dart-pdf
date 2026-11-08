@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:material_ui/material_ui.dart';
 import 'package:pdf_document/pdf_document.dart'
     show
@@ -4436,6 +4437,7 @@ class _StyleMenuState extends State<_StyleMenu> {
   double? _draggingCharSpacing;
   double? _draggingFontWidth;
   bool _holdingTextEditFocus = false;
+  final MenuController _menuController = MenuController();
 
   @override
   void dispose() {
@@ -4607,6 +4609,7 @@ class _StyleMenuState extends State<_StyleMenu> {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
+      controller: _menuController,
       onClose: _endTextEditFocusHold,
       menuChildren: [
         // the menu lives in its own overlay, outside the toolbar's
@@ -4689,19 +4692,35 @@ class _StyleMenuState extends State<_StyleMenu> {
                       controller: controller,
                       fontPicker: widget.fontPicker,
                     ),
-                  if (!isEraser && controller.canArmToolEraser)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        key: const ValueKey('pdf-tool-eraser'),
-                        icon: const Icon(Icons.auto_fix_normal),
-                        label: Text(
-                            Localizations.localeOf(context).languageCode == 'it'
-                                ? 'Gomma (solo questo strumento)'
-                                : 'Eraser (this tool only)'),
-                        onPressed: controller.armEraserForCurrentTool,
-                      ),
+                  Row(children: [
+                    Expanded(
+                      child: !isEraser && controller.canArmToolEraser
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                key: const ValueKey('pdf-tool-eraser'),
+                                icon: const Icon(Icons.auto_fix_normal),
+                                label: Text(Localizations.localeOf(context)
+                                            .languageCode ==
+                                        'it'
+                                    ? 'Gomma (solo questo strumento)'
+                                    : 'Eraser (this tool only)'),
+                                onPressed: controller.armEraserForCurrentTool,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
+                    // salva e chiudi la finestra delle impostazioni
+                    IconButton(
+                      key: const ValueKey('pdf-style-save'),
+                      icon: const Icon(Icons.save),
+                      tooltip:
+                          Localizations.localeOf(context).languageCode == 'it'
+                              ? 'Salva ed esci'
+                              : 'Save and close',
+                      onPressed: _menuController.close,
+                    ),
+                  ]),
                   if (isEraser)
                     _slider(
                       key: const ValueKey('pdf-eraser-size'),
@@ -5136,11 +5155,18 @@ class _StyleMenuState extends State<_StyleMenu> {
                       onChanged: _setTextBorder,
                     ),
                     // anteprima in tempo reale della casella di testo
-                    _TextBoxPreview(
-                      text: Localizations.localeOf(context).languageCode ==
-                              'it'
-                          ? 'Testo di prova\nsecondo rigo'
-                          : 'Sample text\nsecond line',
+                    ValueListenableBuilder<String>(
+                      valueListenable: controller.editingTextContent,
+                      builder: (context, typed, _) => _TextBoxPreview(
+                      text: controller.isEditingText && typed.isNotEmpty
+                          ? typed
+                          : (controller.selectedText?.isNotEmpty == true
+                              ? controller.selectedText!
+                              : (Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'it'
+                                  ? 'Testo di prova\nsecondo rigo'
+                                  : 'Sample text\nsecond line')),
                       color: textValue,
                       fill: fillValue,
                       border: borderValue,
@@ -5173,6 +5199,7 @@ class _StyleMenuState extends State<_StyleMenu> {
                           controller.selectedFreeTextStyle?.horizontalScale ??
                           controller.fontWidth,
                     ),
+                    ),
                   ],
                 ],
               ),
@@ -5190,6 +5217,10 @@ class _StyleMenuState extends State<_StyleMenu> {
             }
             _beginTextEditFocusHold();
             menu.open();
+            // la tastiera dell'editor non serve nelle impostazioni
+            SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+            WidgetsBinding.instance.addPostFrameCallback((_) =>
+                SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
           }
 
           final tip = widget.fields.eraser
