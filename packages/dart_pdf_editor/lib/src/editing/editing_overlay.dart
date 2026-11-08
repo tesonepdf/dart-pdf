@@ -8479,15 +8479,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                         // opens - content must sit exactly on the box
                         padding: EdgeInsets.fromLTRB(
                             2, 2, 2 - _textEditGutterOverflow, 2),
-                        // the box's own fill when it has one; otherwise wash
-                        // the paper color over what's underneath: faint for a
-                        // fresh box, fully opaque when editing existing text
-                        // so the old rendering doesn't ghost through and read
-                        // as a misaligned shadow behind the live text
-                        color: _textEditFill ??
-                            (_textEditExisting
-                                ? widget.pageColor
-                                : Colors.transparent),
+                        // the box's own fill when it has one; otherwise
+                        // transparent, as the box was before editing (also
+                        // when editing an existing box)
+                        color: _textEditFill ?? Colors.transparent,
                         foregroundDecoration: BoxDecoration(
                           border: Border.all(
                               color: PdfViewerTheme.of(context).chrome,
