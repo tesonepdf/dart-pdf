@@ -158,6 +158,14 @@ Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad
 
 ## Regole dell'utente (valgono sempre, le ripete da mesi)
 
+**REGOLE PER L'ASSISTENTE: cosa si può toccare (deciso dall'utente il 07/11). I paletti valgono anche per l'assistente, non solo per Ben.**
+- **Si fa solo quello che l'utente ha chiesto, e si toccano solo i file che quella richiesta richiede.** Niente extra: niente file nuovi, niente opzioni aggiunte, niente "già che ci sono", niente di più della richiesta (se ha detto "Condividi" non si estende a "Salva con nome"). Se la richiesta si può leggere in due modi, si dice in una riga come è stata capita, in testo normale, prima di fare.
+- **Prima di toccare i file** si scrive all'utente quali file si toccano e perché (le 5-6 righe già previste). Se un file non serve alla richiesta, non si tocca.
+- **Prima di ogni commit** si guarda l'elenco dei file cambiati (`git diff --stat`) e lo si confronta con la richiesta. Se c'è un file che la richiesta non giustifica, quella parte si toglie prima del commit.
+- **Mai toccare i paletti** (sezione PALETTI). Se una richiesta li cambierebbe, si ferma e si dice quale paletto è toccato: allarme, come per Ben.
+- **A fine lavoro, nella risposta, una riga "File toccati: ..."** con i nomi, così l'utente controlla subito che non sia stato toccato altro.
+
+
 - Nessuna azione senza un suo "ok / sì / vai". Si può proporre, non eseguire.
 - Mai popup con bottoni (`ask_user_input_v0`). Le domande, se servono, sono testo normale e una sola.
 - Niente resoconti lunghi, niente suggerimenti, nemmeno di sicurezza. A fine lavoro basta "ok".
