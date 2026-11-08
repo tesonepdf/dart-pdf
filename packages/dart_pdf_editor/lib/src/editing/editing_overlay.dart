@@ -4438,26 +4438,31 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       );
     }
 
+    // tutti i pulsanti stanno in una colonna sul lato sinistro della casella
+    // (con lo zoom quelli sopra e sotto finivano fuori schermo): dall'alto in
+    // basso sposta, chiudi, ridimensiona, freccia su, freccia sinistra,
+    // freccia giu'. La freccia destra resta sul lato destro.
     final c = rect.center;
-    final up = Offset(c.dx, rect.top - gap - d / 2);
-    final closeCenter = Offset(c.dx, up.dy - closeGap);
-    const sideGap = closeHit + 6;
+    final columnX = rect.left - gap - d / 2;
+    const arrowStep = 11.0, bigStep = 18.0;
+    final upY = c.dy - arrowStep;
+    final resizeY = upY - d / 2 - 3 - closeHit / 2;
+    final closeY = resizeY - bigStep;
+    final moveY = closeY - bigStep;
     return [
-      button(closeCenter, Icons.close, scheme.error),
-      dragButton(Offset(closeCenter.dx - sideGap, closeCenter.dy),
-          Icons.open_with, _dragTextEditBox,
+      dragButton(Offset(columnX, moveY), Icons.open_with, _dragTextEditBox,
           key: 'pdf-text-edit-move'),
-      dragButton(Offset(closeCenter.dx + sideGap, closeCenter.dy),
-          Icons.open_in_full, _resizeTextEditBox,
+      button(Offset(columnX, closeY), Icons.close, scheme.error),
+      dragButton(Offset(columnX, resizeY), Icons.open_in_full,
+          _resizeTextEditBox,
           key: 'pdf-text-edit-resize'),
-      button(up, Icons.keyboard_arrow_up, scheme.onSurface,
+      button(Offset(columnX, upY), Icons.keyboard_arrow_up, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowUp),
-      button(Offset(c.dx, rect.bottom + gap + d / 2),
-          Icons.keyboard_arrow_down, scheme.onSurface,
-          direction: LogicalKeyboardKey.arrowDown),
-      button(Offset(rect.left - gap - d / 2, c.dy),
-          Icons.keyboard_arrow_left, scheme.onSurface,
+      button(Offset(columnX, c.dy), Icons.keyboard_arrow_left, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowLeft),
+      button(Offset(columnX, c.dy + arrowStep), Icons.keyboard_arrow_down,
+          scheme.onSurface,
+          direction: LogicalKeyboardKey.arrowDown),
       button(Offset(rect.right + gap + d / 2, c.dy),
           Icons.keyboard_arrow_right, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowRight),
