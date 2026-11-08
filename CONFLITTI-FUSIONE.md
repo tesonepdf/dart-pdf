@@ -3,6 +3,12 @@
 File per l'utente **e** per l'assistente che apre una nuova chat. Ogni conflitto è scritto due volte: in linguaggio tecnico (per l'assistente) e in italiano semplice (per l'utente).
 Aggiornato il 2026-10-30; ultime modifiche il 2026-11-07. Cosa fare dopo e il codice: vedi `DA-FARE.md`. Quello che qui è "verificato" l'ho controllato con git; il resto è dichiarato come non verificato.
 
+## NUOVO FLUSSO (07/11): un solo ramo, `main`. Il ramo `prova-sviluppatore` non esiste più.
+
+Deciso dall'utente il 07/11: tutto quello che era su `prova-sviluppatore` è stato portato in `main` (avanzamento senza conflitti, `main` era già un antenato di `prova`, quindi non si è perso niente) e poi il ramo `prova-sviluppatore` è stato cancellato. Le parti di questo file che parlano del "ramo prova" restano come storia: da ora i commit, le build e la CI sono tutti su `main`.
+- Il push su `main` pubblica la release Android ufficiale (`app-android-latest`) con la CI; `build-prova.yml` resta nel repo ma non parte più (era legato al ramo cancellato). La release `app-android-prova` e l'app "DartPDF Prova" non vengono più aggiornate: se non servono, si tolgono con un ok dell'utente.
+- **Per le novità di Ben non si rifà più l'elenco dei file.** Si usa `tools/confronta-ben.sh`: legge in `tools/fusione-ben.stato` l'ultimo commit di Ben già letto (oggi `66601339`), dice i titoli dei commit nuovi, quali file si fondono da soli e quali hanno conflitti veri. Non modifica il progetto. `--copia-puliti` copia i file puliti (senza commit), `--segna` aggiorna lo stato dopo la decisione. Le cose che per decisione dell'utente non si guardano (sito, flussi di Ben, versioni, documenti) sono ignorate. Provato il 07/11: Ben non ha pubblicato niente dopo `66601339`.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
