@@ -9,6 +9,12 @@ Deciso dall'utente il 07/11: tutto quello che era su `prova-sviluppatore` è sta
 - Il push su `main` pubblica la release Android ufficiale (`app-android-latest`) con la CI; `build-prova.yml` resta nel repo ma non parte più (era legato al ramo cancellato). La release `app-android-prova` e l'app "DartPDF Prova" non vengono più aggiornate: se non servono, si tolgono con un ok dell'utente.
 - **Per le novità di Ben non si rifà più l'elenco dei file.** Si usa `tools/confronta-ben.sh`: legge in `tools/fusione-ben.stato` l'ultimo commit di Ben già letto (oggi `66601339`), dice i titoli dei commit nuovi, quali file si fondono da soli e quali hanno conflitti veri. Non modifica il progetto. `--copia-puliti` copia i file puliti (senza commit), `--segna` aggiorna lo stato dopo la decisione. Le cose che per decisione dell'utente non si guardano (sito, flussi di Ben, versioni, documenti) sono ignorate. Provato il 07/11: Ben non ha pubblicato niente dopo `66601339`.
 
+## Modifiche richieste dall'utente dopo la fusione (sempre su `main`)
+
+| Data | Richiesta | Commit | Stato |
+|---|---|---|---|
+| 08/11 | La barra in alto con il numero di pagina deve essere **sempre visibile**, non sparire scorrendo (`editor_screen.dart`: `autoHideChrome: false`). | `#10036` | applicato, da provare sul telefono |
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.

@@ -5968,7 +5968,12 @@ class _EditorScreenState extends State<EditorScreen>
     }
     return PdfEditorView(
       key: ValueKey(tab),
-      features: PdfEditorFeatures(undoRedo: !_usesAppMenuSheet(context)),
+      // The header with the page number stays on screen while reading: it is
+      // not hidden by scrolling on a phone.
+      features: PdfEditorFeatures(
+        undoRedo: !_usesAppMenuSheet(context),
+        autoHideChrome: false,
+      ),
       documentId: tab.documentId,
       controller: tab.session,
       viewerController: tab.viewer,
