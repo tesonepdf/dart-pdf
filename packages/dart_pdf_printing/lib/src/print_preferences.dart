@@ -85,6 +85,7 @@ class PrintPreferences {
       copies: copies == copies.roundToDouble() ? copies.toInt() : 1,
       collate: flag('collate', true),
       reverse: flag('reverse', false),
+      pageNumbers: flag('pageNumbers', false),
     );
   }
 
@@ -112,6 +113,7 @@ class PrintPreferences {
       'copies': settings.copies,
       'collate': settings.collate,
       'reverse': settings.reverse,
+      'pageNumbers': settings.pageNumbers,
     };
     return _save();
   }

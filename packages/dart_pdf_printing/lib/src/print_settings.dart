@@ -65,6 +65,7 @@ class PrintSettings {
     this.copies = 1,
     this.collate = true,
     this.reverse = false,
+    this.pageNumbers = false,
     this.region,
   }) : pages = List.unmodifiable(pages);
 
@@ -90,6 +91,10 @@ class PrintSettings {
   final int copies;
   final bool collate;
   final bool reverse;
+
+  /// Prints "N / total" (source page number) at the bottom right of each
+  /// printed page, over the page; never written into the document itself.
+  final bool pageNumbers;
 
   /// Display-space crop: left, top, right, bottom, in rotated page units,
   /// with y growing down. Only valid for a single selected source page.
@@ -117,6 +122,7 @@ class PrintSettings {
     int? copies,
     bool? collate,
     bool? reverse,
+    bool? pageNumbers,
     PdfRect? region,
     bool clearRegion = false,
   }) =>
@@ -142,6 +148,7 @@ class PrintSettings {
         copies: copies ?? this.copies,
         collate: collate ?? this.collate,
         reverse: reverse ?? this.reverse,
+        pageNumbers: pageNumbers ?? this.pageNumbers,
         region: clearRegion ? null : region ?? this.region,
       );
 }
