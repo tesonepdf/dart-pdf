@@ -37,6 +37,20 @@ jobs:
           channel: stable
           cache: true
 
+      # Riusa Gradle e Cargo tra una CI e l'altra: il download di Gradle da
+      # services.gradle.org a volte da' errore 504 e fa fallire il passo.
+      - name: Cache Gradle e Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ci-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('app/pubspec.lock', 'pubspec.lock', 'app/android/**/*.gradle', 'app/android/**/*.kts', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ci-${{ runner.os }}-${{ env.FLUTTER_VERSION }}-
+
       - name: flutter pub get
         run: flutter pub get
 
@@ -169,12 +183,19 @@ jobs:
             echo "No CargoKit Gradle plugin found; skipping patch."
           fi
 
+      # Fino a 3 tentativi: se GitHub o Gradle non rispondono (HTTP 504) si
+      # riprova; un errore di compilazione vero fallisce comunque alla fine.
       - name: flutter build apk --debug
         working-directory: app
         run: |
           set +e
-          flutter build apk --debug 2>&1 | tee /tmp/step.txt
-          code=${PIPESTATUS[0]}
+          for i in 1 2 3; do
+            flutter build apk --debug 2>&1 | tee /tmp/step.txt
+            code=${PIPESTATUS[0]}
+            [ "$code" -eq 0 ] && break
+            echo "Tentativo $i fallito, riprovo tra 20s"
+            sleep 20
+          done
           if [ "$code" -ne 0 ]; then
             echo "::error title=flutter build apk::$(tail -c 6000 /tmp/step.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
           fi
