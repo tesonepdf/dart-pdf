@@ -78,6 +78,10 @@ if [ "${#puliti[@]}" -gt 0 ]; then echo; echo "== Si fondono da soli =="; printf
 if [ "${#nuovi[@]}" -gt 0 ]; then echo; echo "== Nuovi =="; printf '  %s\n' "${nuovi[@]}"; fi
 if [ "${#binari[@]}" -gt 0 ]; then echo; echo "== Binari =="; printf '  %s\n' "${binari[@]}"; fi
 echo; echo "File fusi in $OUT (nei conflitti ci sono i marcatori <<<<<<<)."
+echo
+echo "== PALETTI: funzioni dell'utente da non toccare (da CONFLITTI-FUSIONE.md) =="
+awk '/^## PALETTI/{f=1;next} /^## /{f=0} f' CONFLITTI-FUSIONE.md 2>/dev/null
+echo "Se una novita' di Ben cambia una di queste descrizioni: ALLARME, ci si ferma e si chiede all'utente."
 
 if [ "${1:-}" = "--copia-puliti" ]; then
   for f in "${puliti[@]}" "${nuovi[@]}"; do mkdir -p "$(dirname "$f")"; cp "$OUT/$f" "$f"; done
