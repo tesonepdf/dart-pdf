@@ -106,9 +106,8 @@ void main() {
       // 1,368 per tick when the shell rebuilt MaterialApp + EditorScreen,
       // 1,034 without. What remains is PdfEditorView's own preference
       // listener (a separate follow-up), so this ceiling only guards the
-      // shell half. +10 for the page-number badge overlay (a few extra
-      // elements rebuilt with the editor view).
-      expect(total ~/ ticks, lessThanOrEqualTo(1110),
+      // shell half.
+      expect(total ~/ ticks, lessThanOrEqualTo(1100),
           reason: 'element rebuilds per stroke-width tick');
 
       await tester.pumpWidget(const SizedBox());

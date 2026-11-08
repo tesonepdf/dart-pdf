@@ -9120,6 +9120,7 @@ class _PdfViewerState extends State<PdfViewer>
             tileCacheNamespace: _tileCacheNamespace,
             effectiveRotation: _effectiveRotation(index),
             index: index,
+            pageCount: _pages.length,
             pageColor: widget.pageColor,
             showAnnotations: widget.showAnnotations,
             hiddenAnnotationSubtypes: widget.hiddenAnnotationSubtypes,
@@ -10358,6 +10359,7 @@ class _PdfViewerPage extends StatefulWidget {
     required this.tileCacheNamespace,
     required this.effectiveRotation,
     required this.index,
+    required this.pageCount,
     required this.pageColor,
     required this.showAnnotations,
     required this.hiddenAnnotationSubtypes,
@@ -10414,6 +10416,9 @@ class _PdfViewerPage extends StatefulWidget {
   final int effectiveRotation;
 
   final int index;
+
+  /// Pagine del documento, per l'etichetta "N / totale" in fondo alla pagina.
+  final int pageCount;
   final Color pageColor;
   final bool showAnnotations;
   final Set<String> hiddenAnnotationSubtypes;
@@ -10804,6 +10809,31 @@ class _PdfViewerPageState extends State<_PdfViewerPage> {
             currentMatch: widget.currentMatch,
             selection: widget.selection,
             theme: PdfViewerTheme.of(context),
+          ),
+        ),
+      ),
+      // Numero di pagina in fondo alla pagina, a destra: scorre insieme alla
+      // pagina (cosi' si sa sempre di quale pagina si tratta) e non fa parte
+      // del PDF.
+      Positioned(
+        right: 6,
+        bottom: 4,
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xCCFFFFFF),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${widget.index + 1} / ${widget.pageCount}',
+              style: const TextStyle(
+                color: Color(0xFF424242),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
           ),
         ),
       ),
