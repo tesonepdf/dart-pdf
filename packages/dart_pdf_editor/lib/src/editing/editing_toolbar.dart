@@ -12,7 +12,8 @@ import 'package:pdf_document/pdf_document.dart'
         PdfSignature,
         PdfStandardFont,
         PdfTextAlign,
-        PdfTextFont;
+        PdfTextFont,
+        PdfTextVerticalAlign;
 
 import '../design/editor_theme.dart';
 import '../dialog.dart';
@@ -4546,6 +4547,8 @@ class _StyleMenuState extends State<_StyleMenu> {
         palette: widget.palette,
         onChanged: onChanged,
         allowNone: allowNone,
+        singleRow: true,
+        labelWidth: 96,
         pickColor: (context, initial) =>
             pickEditingColor(context, controller, initial: initial),
       );
@@ -4671,8 +4674,11 @@ class _StyleMenuState extends State<_StyleMenu> {
             // shape/cloud/line outline: a selected shape shows its own /C,
             // else the creation default
             final strokeColorValue = controller.displayColor;
+            // sul telefono il pannello parte dal margine sinistro dello
+            // schermo e arriva a quello destro
+            final screenWidth = MediaQuery.sizeOf(context).width;
             return Container(
-              width: 300,
+              width: screenWidth < 600 ? screenWidth : 300,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -5129,6 +5135,44 @@ class _StyleMenuState extends State<_StyleMenu> {
                       value: borderValue,
                       onChanged: _setTextBorder,
                     ),
+                    // anteprima in tempo reale della casella di testo
+                    _TextBoxPreview(
+                      text: Localizations.localeOf(context).languageCode ==
+                              'it'
+                          ? 'Testo di prova\nsecondo rigo'
+                          : 'Sample text\nsecond line',
+                      color: textValue,
+                      fill: fillValue,
+                      border: borderValue,
+                      borderWidth: (boxStyle?.borderWidth ??
+                              controller.preferences.strokeWidth)
+                          .toDouble()
+                          .clamp(0.5, 6.0),
+                      opacity: opacityValue,
+                      size: _draggingFontSize ??
+                          selectedStyle?.size ??
+                          controller.preferences.fontSize,
+                      font: selectedStyle?.font ??
+                          captionStyle?.font ??
+                          controller.fontFamily,
+                      align: controller.selectedTextAlign ??
+                          controller.preferences.textAlign ??
+                          PdfTextAlign.left,
+                      verticalAlign: controller.selectedTextVerticalAlign ??
+                          controller.preferences.textVerticalAlign,
+                      underline:
+                          controller.selectedFreeTextStyle?.underline ??
+                              controller.textUnderline,
+                      lineSpacing: _draggingLineSpacing ??
+                          controller.selectedFreeTextStyle?.lineSpacing ??
+                          controller.lineSpacing,
+                      charSpacing: _draggingCharSpacing ??
+                          controller.selectedFreeTextStyle?.charSpacing ??
+                          controller.charSpacing,
+                      fontWidth: _draggingFontWidth ??
+                          controller.selectedFreeTextStyle?.horizontalScale ??
+                          controller.fontWidth,
+                    ),
                   ],
                 ],
               ),
@@ -5446,4 +5490,105 @@ class _PanelBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => child;
+}
+
+/// Anteprima in tempo reale della casella di testo, in fondo al pannello
+/// delle proprieta': mostra colore, riempimento, bordo, carattere,
+/// allineamento, interlinea, spaziatura e larghezza dei caratteri.
+class _TextBoxPreview extends StatelessWidget {
+  const _TextBoxPreview({
+    required this.text,
+    required this.color,
+    required this.fill,
+    required this.border,
+    required this.borderWidth,
+    required this.opacity,
+    required this.size,
+    required this.font,
+    required this.align,
+    required this.verticalAlign,
+    required this.underline,
+    required this.lineSpacing,
+    required this.charSpacing,
+    required this.fontWidth,
+  });
+
+  final String text;
+  final Color color;
+  final Color? fill;
+  final Color? border;
+  final double borderWidth;
+  final double opacity;
+  final double size;
+  final PdfStandardFont font;
+  final PdfTextAlign align;
+  final PdfTextVerticalAlign verticalAlign;
+  final bool underline;
+  final double lineSpacing;
+  final double charSpacing;
+  final double fontWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textAlign = switch (align) {
+      PdfTextAlign.left => TextAlign.left,
+      PdfTextAlign.center => TextAlign.center,
+      PdfTextAlign.right => TextAlign.right,
+    };
+    final ax = switch (align) {
+      PdfTextAlign.left => -1.0,
+      PdfTextAlign.center => 0.0,
+      PdfTextAlign.right => 1.0,
+    };
+    final ay = switch (verticalAlign) {
+      PdfTextVerticalAlign.top => -1.0,
+      PdfTextVerticalAlign.center => 0.0,
+      PdfTextVerticalAlign.bottom => 1.0,
+    };
+    final bold = font.isBold;
+    final italic = font.isItalic;
+    return Padding(
+      key: const ValueKey('pdf-text-preview'),
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: ColoredBox(
+        // la carta della pagina: il riempimento trasparente si vede su bianco
+        color: Colors.white,
+        child: Container(
+          height: 120,
+          width: double.infinity,
+          padding: const EdgeInsets.all(6),
+          alignment: Alignment(ax, ay),
+          decoration: BoxDecoration(
+            color: fill?.withValues(alpha: opacity),
+            border: border != null
+                ? Border.all(
+                    color: border!.withValues(alpha: opacity),
+                    width: borderWidth)
+                : Border.all(color: scheme.outlineVariant, width: 0.5),
+          ),
+          child: ClipRect(
+            child: Transform.scale(
+              scaleX: (fontWidth / 100).clamp(0.1, 4.0).toDouble(),
+              alignment: Alignment(ax, 0),
+              child: Text(
+                text,
+                textAlign: textAlign,
+                style: TextStyle(
+                  fontSize: size,
+                  color: color.withValues(alpha: opacity),
+                  fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                  fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+                  decoration:
+                      underline ? TextDecoration.underline : TextDecoration.none,
+                  letterSpacing: charSpacing,
+                  height: lineSpacing,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

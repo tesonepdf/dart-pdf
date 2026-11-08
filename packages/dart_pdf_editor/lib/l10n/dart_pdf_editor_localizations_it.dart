@@ -1952,16 +1952,16 @@ class DartPdfEditorLocalizationsIt extends DartPdfEditorLocalizations {
   String get tbTakeoffTotals => 'Totali computo';
 
   @override
-  String get tbTextBorder => 'Bordo del testo';
+  String get tbTextBorder => 'Bordo';
 
   @override
-  String get tbTextColour => 'Colore del testo';
+  String get tbTextColour => 'Colore';
 
   @override
   String get tbTextFieldOption => 'Campo di testo';
 
   @override
-  String get tbTextFill => 'Riempimento del testo';
+  String get tbTextFill => 'Riempimento';
 
   @override
   String get tbTextStyleEllipsis => 'Stile del testo…';
