@@ -11113,8 +11113,8 @@ class _HighlightPainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: const TextStyle(
-          color: Color(0xFF424242),
-          fontSize: 11,
+          color: Color(0x80555555),
+          fontSize: 5.5,
           fontWeight: FontWeight.w600,
         ),
       ),
