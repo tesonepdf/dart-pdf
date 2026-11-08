@@ -66,6 +66,7 @@ import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
 import 'save_folder.dart';
+import 'page_choice.dart';
 import 'whatsapp_send.dart';
 import 'open_with_rank.dart';
 import 'update_installer.dart';
@@ -174,6 +175,7 @@ class EditorScreen extends StatefulWidget {
     this.recentThumbnails,
     this.ocr,
     this.autoOcr,
+    this.askPagesBeforeSending = false,
   });
 
   final PdfEditingPreferences prefs;
@@ -199,6 +201,12 @@ class EditorScreen extends StatefulWidget {
   /// plain widget tests stay hermetic - no startup network traffic. The
   /// Settings panel can still check on demand regardless.
   final bool autoCheckUpdates;
+
+  /// Se prima di condividere, mandare su WhatsApp o salvare con nome si chiede
+  /// cosa mandare: tutto il documento, la pagina che si guarda o alcune pagine.
+  /// L'app vera lo accende; di base e' spento, cosi' i test che condividono o
+  /// salvano con nome non trovano una finestra davanti.
+  final bool askPagesBeforeSending;
 
   /// Override for the print action. Tests inject a fake to assert the menu and
   /// shortcut wiring without the native printer's platform channel.
@@ -3941,6 +3949,18 @@ class _EditorScreenState extends State<EditorScreen>
     tab.session?.finishInk();
     final session = tab.session;
     if (session == null) return;
+    if (saveAs) {
+      final pick = await _askPagesToSend(tab, title: 'Cosa vuoi salvare?');
+      if (pick == null || !mounted) return;
+      final pages = pick.pages;
+      if (pages != null) {
+        // Solo alcune pagine: si salva una copia e si apre in una scheda
+        // nuova. Il documento davanti resta quello intero, non passa a un
+        // file con poche pagine.
+        await _exportPages(tab, session.exportPages(pages));
+        return;
+      }
+    }
     // the file on disk may carry the page colour; the session never does,
     // so the next save bakes over the same base again
     final revisionLength = session.bytes.length;
@@ -4040,7 +4060,12 @@ class _EditorScreenState extends State<EditorScreen>
     tab.session?.finishInk();
     final session = tab.session;
     if (session == null) return;
-    final bytes = _withBakedPageColor(session.bytes, source: session.document);
+    final all = _withBakedPageColor(session.bytes, source: session.document);
+    final pick = await _askPagesToSend(tab);
+    if (pick == null || !mounted) return;
+    final pages = pick.pages;
+    final bytes =
+        pages == null ? all : _withBakedPageColor(session.exportPages(pages));
     final saveAs = widget.saveDocumentAs;
     final result = saveAs != null
         ? await saveAs(context, bytes, tab.title)
@@ -4048,6 +4073,22 @@ class _EditorScreenState extends State<EditorScreen>
             pdfLabel: appL10n(context).fileTypePdf);
     if (!mounted) return;
     if (result.message != null && !result.succeeded) _toast(result.message!);
+  }
+
+  /// Chiede se mandare tutto il documento, la pagina che si sta guardando o
+  /// alcune pagine. Null se si annulla; `pages` null vuol dire tutto il
+  /// documento. Non chiede se l'opzione e' spenta o se il documento ha una
+  /// sola pagina.
+  Future<PageChoice?> _askPagesToSend(DocumentTab tab,
+      {String title = 'Cosa vuoi mandare?'}) async {
+    final PageChoice all = (pages: null);
+    final session = tab.session;
+    if (!widget.askPagesBeforeSending || session == null) return all;
+    final count = session.document.pageCount;
+    if (count <= 1) return all;
+    final current = (tab.viewer?.currentPage ?? 0).clamp(0, count - 1);
+    return askPageChoice(context,
+        pageCount: count, currentPage: current, title: title);
   }
 
   /// Chiede il nome del file prima di salvare nella cartella scelta.
@@ -4165,17 +4206,24 @@ class _EditorScreenState extends State<EditorScreen>
   Future<void> _sendWhatsapp(DocumentTab tab, {required bool chooseSaved}) async {
     try {
       FocusManager.instance.primaryFocus?.unfocus();
+      final all = await _shareableBytes(tab);
+      if (!mounted) return;
+      if (all == null) {
+        _toast('Documento non disponibile');
+        return;
+      }
+      final pick = await _askPagesToSend(tab);
+      if (pick == null || !mounted) return;
+      final pages = pick.pages;
+      final session = tab.session;
+      final bytes = pages != null && session != null
+          ? _withBakedPageColor(session.exportPages(pages))
+          : all;
       String? number;
       if (chooseSaved) {
         final contact = await WhatsappSend.pickContact(context);
         if (contact == null || !mounted) return;
         number = contact.number;
-      }
-      final bytes = await _shareableBytes(tab);
-      if (!mounted) return;
-      if (bytes == null) {
-        _toast('Documento non disponibile');
-        return;
       }
       final r = await WhatsappSend.send(
           bytes: bytes,

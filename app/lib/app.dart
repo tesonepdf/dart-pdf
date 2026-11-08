@@ -275,6 +275,7 @@ class _DartPdfWindow extends StatelessWidget {
             tabDragCoordinator: tabDragCoordinator,
             launchArgs: launchArgs,
             autoCheckUpdates: autoCheckUpdates,
+            askPagesBeforeSending: true,
             onNewWindow: onNewWindow,
             initialHandoff: initialHandoff,
             oidcTokenProvider: oidcTokenProvider,
