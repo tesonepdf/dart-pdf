@@ -160,7 +160,10 @@ void main() {
       expect(find.descendant(of: find.byType(PdfReader), matching: appBar),
           findsOneWidget);
       // the reader's own controls ride in the same bar; no save there
-      expect(find.byType(PdfPageNumberField), findsOneWidget);
+      // (the phone has no page number in the header: it sits at the bottom of
+      // every page)
+      expect(find.byType(PdfPageNumberField),
+          name == 'compact' ? findsNothing : findsOneWidget);
       expect(save, findsNothing);
     });
   }
