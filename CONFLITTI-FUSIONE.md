@@ -48,6 +48,25 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 | 250 | #10037 | `871c7e4` | Condividi, WhatsApp e Salva con nome chiedono cosa mandare: tu |
 | 251 | #10038 | `81d9963` | Finestra scelta pagine: import material_ui come il resto dell' |
 
+## PALETTI: le funzioni dell'utente da non toccare (solo descrizioni, niente codice)
+
+**Come funzionano (deciso dall'utente il 07/11).** Qui ci sono solo descrizioni in italiano di cosa fa l'app dell'utente, **senza codice e senza nomi di file**. Quando si confronta Ben (`tools/confronta-ben.sh`, che stampa questa sezione) e una sua modifica cambierebbe una di queste descrizioni, **scatta l'ALLARME**: ci si ferma, si dice all'utente quale paletto è toccato e perché, e si aspetta il suo ok. Non si prende niente da Ben che cambi quello che è scritto qui. **Niente file nuovi per le funzioni dell'utente:** il codice resta dove sta. L'utente dice cosa aggiungere o togliere.
+
+**BOZZA dell'assistente, ricavata dal codice letto: l'utente corregge.**
+1. **Casella di testo.** Si sposta con le frecce disegnate ai suoi lati, si chiude con la X, si adatta da sola al testo, e mentre si scrive si scelgono colore di riempimento e bordo. Le frecce della tastiera muovono solo il cursore nel testo. Le frecce disegnate restano fuori dal riquadro, anche su Windows.
+2. **Menu.** I menu dell'utente (File / Questo documento / App, la ricerca, i recenti) si tengono sempre. Le voci nuove di Ben vanno nella voce giusta o in "Da organizzare". Mai il menu di Ben.
+3. **Aggiornamenti.** All'avvio un popup con Scarica, Dopo, Salta; dopo "Dopo" resta un banner fisso. L'app legge solo la propria release e sceglie il file giusto per il telefono.
+4. **Aprire file.** Si aprono PDF e foto (la foto diventa un PDF di una pagina). Il filtro "Apri" mostra PDF e foto.
+5. **Pannello strumenti e barre sul telefono.** I gruppi di strumenti stanno in una griglia 3x3. Lo strumento attivo si vede in alto e apre il pannello. In basso non ci sono i pallini dei colori: la barra in basso compare solo con qualcosa di selezionato, per le azioni su quella selezione, e sparisce se non c'è niente.
+6. **Barra in alto sempre visibile** con il numero di pagina: non si nasconde scorrendo.
+7. **Condividi, WhatsApp e Salva con nome** chiedono cosa mandare: tutto, la pagina che si guarda, o alcune pagine (`1,3,5-7`). Con Salva con nome e poche pagine si salva una copia in una scheda nuova.
+8. **Segnare il testo col dito** (tratti dritti, doppio tocco su una parola) e l'evidenziatore. La ricerca resta valida dopo aver segnato.
+9. **Prima pagina e posizione.** Resta lo spazio libero sopra la prima pagina, sotto la barra; la prima pagina può riempire la larghezza.
+10. **Appunti e voce.** Se gli appunti sono vuoti, un avviso "niente da incollare". "Leggi ad alta voce" resta.
+11. **OCR** (dichiarato dall'utente, da verificare nel codice): il risultato della scansione si salva e non si rifà ogni volta; nel menu si può spegnere l'OCR automatico.
+12. **Salvare su Android.** Salva con nome sceglie la cartella e chiede il nome del file. WhatsApp: a un contatto salvato o scegliendo il contatto.
+13. **Tutto in italiano.** Ogni testo nuovo che entra nell'app, anche di Ben, è tradotto in italiano.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
@@ -151,6 +170,7 @@ Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad
 - **Prima di parlare di un conflitto bisogna averlo letto.** Se non lo si è letto, dirlo subito. Descrivere conflitti mai visti lo ha fatto infuriare.
 - Il token GitHub non va mai scritto in file, commit o risposte. Se serve, lo dà lui nella chat.
 
+- **Niente file nuovi per le funzioni dell'utente e niente codice nei paletti, solo descrizioni** (deciso il 07/11). La sezione PALETTI qui sotto dice cosa non si tocca; se una novità di Ben la cambia, scatta l'allarme.
 - **Gli appunti di lavoro si scrivono solo in questo file (`CONFLITTI-FUSIONE.md`), non in `DA-FARE.md`** (deciso dall'utente il 07/11). `DA-FARE.md` è stato riportato com'era prima delle note del 07/11.
 
 ## Il progetto
