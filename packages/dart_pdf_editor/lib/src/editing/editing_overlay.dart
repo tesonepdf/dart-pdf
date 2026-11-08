@@ -7968,6 +7968,18 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         }
       });
     }
+    if (_textEditRect != null ||
+        (_controller.selectedPage == widget.pageIndex &&
+            _controller.selectedAnnotation != null)) {
+      // the style panel previews the text at the size this page shows it
+      final zoom = widget.zoom.isFinite && widget.zoom > 0 ? widget.zoom : 1.0;
+      final screenScale = _geometry.scale * zoom;
+      if ((_controller.editingTextScale.value - screenScale).abs() > 0.001) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _controller.editingTextScale.value = screenScale;
+        });
+      }
+    }
     if (_textEditRect != null) {
       // colours and spacing picked in the text menu show on the open editor
       // at once (a new box also commits with them)

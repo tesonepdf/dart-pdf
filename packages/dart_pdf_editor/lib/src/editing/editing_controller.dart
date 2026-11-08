@@ -2876,6 +2876,11 @@ class PdfEditingController extends ChangeNotifier {
   /// plain notifier: it changes on every keystroke and must not rebuild
   /// everything that listens to the controller.
   final ValueNotifier<String> editingTextContent = ValueNotifier<String>('');
+
+  /// On-screen pixels per page point of the page showing the text box (page
+  /// scale times the viewer's zoom), kept up to date by the page overlay so
+  /// the style panel's preview draws the text at the size the page shows it.
+  final ValueNotifier<double> editingTextScale = ValueNotifier<double>(1);
   TextSelection? _editingTextSelection;
   int _editingTextStyleRevision = 0;
   ({
