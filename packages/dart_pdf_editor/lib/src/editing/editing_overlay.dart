@@ -1238,6 +1238,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// centre. They exist only for the live drag and never enter the PDF.
   List<_AlignmentGuide> _alignmentGuides = const [];
 
+  /// The red guide lines shown while an arrow-nudged text box is less than a
+  /// step from lining up with another box (the open box also turns red).
+  List<_AlignmentGuide> _nudgeGuides = const [];
+
   /// The global position of the annotation or content move's current point -
   /// captured so a drop over another page can be resolved to a page point
   /// (drag-end details carry no position).
@@ -4041,59 +4045,98 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return (moved.$1 - origin.$1, moved.$2 - origin.$2);
   }
 
-  /// [rect] moved by ([dx], [dy]) page points, against the page's rules.
-  /// Moving up or down toward a rule snaps the box onto it once the rule is
-  /// within a step (and a little) ahead; moving sideways keeps a box that
-  /// sits on a rule on it (and lets go at the rule's end); moving away from
-  /// a rule just leaves it.
-  ({PdfRect rect, PdfLineField? line}) _nudgeAgainstLines(
-      PdfRect rect, double dx, double dy, PdfLineField? on) {
-    final height = rect.top - rect.bottom;
-    var moved = PdfRect(
-        rect.left + dx, rect.bottom + dy, rect.right + dx, rect.top + dy);
-    var line = on;
-    final centerX = (moved.left + moved.right) / 2;
-    if (dy != 0) {
-      line = null;
-      final heading = dy > 0 ? 1.0 : -1.0;
-      var nearest = double.infinity;
-      for (final candidate in _controller.lineFieldsFor(widget.pageIndex)) {
-        if (centerX < candidate.left - 6 || centerX > candidate.right + 6) {
-          continue;
-        }
-        final target = candidate.yAt(centerX) - _lineSnapGap;
-        final ahead = (target - rect.bottom) * heading;
-        if (ahead <= 0.01 || ahead > dy.abs() + 3 || ahead >= nearest) {
-          continue;
-        }
-        nearest = ahead;
-        line = candidate;
-      }
-      if (line != null) {
-        final target = line.yAt(centerX) - _lineSnapGap;
-        moved = PdfRect(moved.left, target, moved.right, target + height);
-      }
-    } else if (line != null) {
-      if (centerX < line.left - 6 || centerX > line.right + 6) {
-        line = null;
-      } else {
-        final target = line.yAt(centerX) - _lineSnapGap;
-        moved = PdfRect(moved.left, target, moved.right, target + height);
-      }
-    }
-    return (rect: moved, line: line);
+  /// The other plain text boxes of this page (page space): the ones a nudged
+  /// box lines its left and bottom edges up with.
+  List<PdfRect> _otherTextBoxRects() {
+    final skip = <int>{
+      for (final slot in _controller.selectedAnnotationSlots)
+        if (slot.$1 == widget.pageIndex) slot.$2,
+    };
+    final editing = _textEditAnnotationSlot;
+    if (editing != null && editing.$1 == widget.pageIndex) skip.add(editing.$2);
+    final annotations = _controller.pageAt(widget.pageIndex).annotations;
+    return [
+      for (var i = 0; i < annotations.length; i++)
+        if (!skip.contains(i) &&
+            annotations[i].subtype == 'FreeText' &&
+            !annotations[i].isHidden &&
+            !annotations[i].isNoView)
+          annotations[i].rect,
+    ];
   }
 
-  /// The rule [rect] already sits exactly on (snapped there), if any.
-  PdfLineField? _lineOf(PdfRect rect) {
-    final centerX = (rect.left + rect.right) / 2;
-    for (final line in _controller.lineFieldsFor(widget.pageIndex)) {
-      if (centerX < line.left - 6 || centerX > line.right + 6) continue;
-      if ((rect.bottom - (line.yAt(centerX) - _lineSnapGap)).abs() < 0.05) {
-        return line;
+  /// One arrow step of ([dx], [dy]) page points for [rect], shortened to the
+  /// distance still missing when the box's left (or bottom) edge is less than
+  /// a step away from the left (or bottom) edge of another text box in the
+  /// direction of travel: that tap lands exactly on the alignment.
+  (double, double) _alignNudge(PdfRect rect, double dx, double dy) {
+    const eps = 0.01;
+    final others = _otherTextBoxRects();
+    if (dx != 0) {
+      double? best;
+      for (final other in others) {
+        final t = other.left - rect.left;
+        if (t * dx > eps &&
+            t.abs() < dx.abs() - eps &&
+            (best == null || t.abs() < best.abs())) {
+          best = t;
+        }
+      }
+      if (best != null) dx = best;
+    }
+    if (dy != 0) {
+      double? best;
+      for (final other in others) {
+        final t = other.bottom - rect.bottom;
+        if (t * dy > eps &&
+            t.abs() < dy.abs() - eps &&
+            (best == null || t.abs() < best.abs())) {
+          best = t;
+        }
+      }
+      if (best != null) dy = best;
+    }
+    return (dx, dy);
+  }
+
+  /// The red guide lines for [rect]: a vertical one on the left edge of a text
+  /// box less than one horizontal arrow step away, a horizontal one on the
+  /// bottom edge of a text box less than one vertical step away. Empty when
+  /// nothing is that close. (Closer than a tap: the next tap lands on it.)
+  List<_AlignmentGuide> _alignReadyGuides(PdfRect rect) {
+    final prefs = _controller.preferences;
+    final stepX = prefs.lineArrowStepX, stepY = prefs.lineArrowStepY;
+    PdfRect? nearX, nearY;
+    var bestX = double.infinity, bestY = double.infinity;
+    for (final other in _otherTextBoxRects()) {
+      final dx = (other.left - rect.left).abs();
+      if (dx < stepX && dx < bestX) {
+        bestX = dx;
+        nearX = other;
+      }
+      final dy = (other.bottom - rect.bottom).abs();
+      if (dy < stepY && dy < bestY) {
+        bestY = dy;
+        nearY = other;
       }
     }
-    return null;
+    const margin = 6.0;
+    final guides = <_AlignmentGuide>[];
+    if (nearX != null) {
+      final low = math.min(rect.bottom, nearX.bottom) - margin;
+      final high = math.max(rect.top, nearX.top) + margin;
+      final a = _geometry.toViewOffset(nearX.left, low);
+      final b = _geometry.toViewOffset(nearX.left, high);
+      guides.add((axis: Axis.vertical, position: a.dx, from: a.dy, to: b.dy));
+    }
+    if (nearY != null) {
+      final low = math.min(rect.left, nearY.left) - margin;
+      final high = math.max(rect.right, nearY.right) + margin;
+      final a = _geometry.toViewOffset(low, nearY.bottom);
+      final b = _geometry.toViewOffset(high, nearY.bottom);
+      guides.add((axis: Axis.horizontal, position: a.dy, from: a.dx, to: b.dx));
+    }
+    return guides;
   }
 
   /// Nudges the open text box - or, with a box selected instead of open,
@@ -4106,16 +4149,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final pageRect = _textEditPageRect;
     if (pageRect == null) return;
     _textEditFocus.requestFocus();
-    final (dx, dy) = _arrowPageDelta(direction);
-    if (dx == 0 && dy == 0) return;
-    final result =
-        _nudgeAgainstLines(pageRect, dx, dy, _textEditLineField);
-    final (viewRotation, pageRotation) = _lineTilt(result.line);
+    final (rawDx, rawDy) = _arrowPageDelta(direction);
+    if (rawDx == 0 && rawDy == 0) return;
+    final (dx, dy) = _alignNudge(pageRect, rawDx, rawDy);
+    final moved = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
+        pageRect.right + dx, pageRect.top + dy);
+    // un movimento in verticale stacca la casella dalla riga (inclinata) su
+    // cui era stata creata; uno in orizzontale la lascia com'e'
+    final line = rawDy == 0 ? _textEditLineField : null;
+    final (viewRotation, pageRotation) = _lineTilt(line);
     setState(() {
-      _textEditLineField = result.line;
-      _textEditPageRect = result.rect;
+      _textEditLineField = line;
+      _textEditPageRect = moved;
       _textEditRotation = viewRotation;
       _textEditPageRotation = pageRotation;
+      _nudgeGuides = _alignReadyGuides(moved);
     });
   }
 
@@ -4125,12 +4173,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (annotation == null || _controller.selectedPage != widget.pageIndex) {
       return;
     }
-    final (dx, dy) = _arrowPageDelta(direction);
-    if (dx == 0 && dy == 0) return;
-    final rect = annotation.rect;
-    final result = _nudgeAgainstLines(rect, dx, dy, _lineOf(rect));
-    _controller.moveSelected(
-        result.rect.left - rect.left, result.rect.bottom - rect.bottom);
+    final (rawDx, rawDy) = _arrowPageDelta(direction);
+    if (rawDx == 0 && rawDy == 0) return;
+    final (dx, dy) = _alignNudge(annotation.rect, rawDx, rawDy);
+    _controller.moveSelected(dx, dy);
   }
 
   /// A lone plain text box (not a callout) is selected. It is placed with
@@ -4282,6 +4328,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _textEditFocus.requestFocus();
     final (viewRotation, pageRotation) = _lineTilt(null);
     setState(() {
+      _nudgeGuides = const [];
       _textEditLineField = null;
       _textEditPageRect = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
           pageRect.right + dx, pageRect.top + dy);
@@ -4311,6 +4358,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final next = _geometry.toPageRect(
         Rect.fromLTWH(view.left, view.top, width, height));
     setState(() {
+      _nudgeGuides = const [];
       _textEditLineField = null;
       _textEditPageRect = next;
       _textEditRotation = viewRotation;
@@ -5158,6 +5206,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _textEditCalloutTarget = null;
     _textEditCloudRegion = null;
     _textEditLineField = null;
+    _nudgeGuides = const [];
     if (mounted) {
       setState(() {
         _textEditRect = null;
@@ -8430,6 +8479,22 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   size: Size.infinite,
                 ),
               ),
+              if (_nudgeGuides.isNotEmpty)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        key: const ValueKey('pdf-nudge-guides'),
+                        painter: _AlignmentGuidePainter(
+                          guides: _nudgeGuides,
+                          chromeScale: _chromeScale,
+                          color: const Color(0xFFE53935),
+                        ),
+                        size: Size.infinite,
+                      ),
+                    ),
+                  ),
+                ),
               if (_controller.preferences.smartAlignmentGuides &&
                   _alignmentGuides.isNotEmpty)
                 Positioned.fill(
@@ -8626,7 +8691,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                         color: _textEditFill ?? Colors.transparent,
                         foregroundDecoration: BoxDecoration(
                           border: Border.all(
-                              color: PdfViewerTheme.of(context).chrome,
+                              color: _nudgeGuides.isNotEmpty
+                                  ? const Color(0xFFE53935)
+                                  : PdfViewerTheme.of(context).chrome,
                               width: 1.5 * _chromeScale),
                         ),
                         child: ValueListenableBuilder<TextEditingValue>(
