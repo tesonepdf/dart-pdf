@@ -4069,8 +4069,26 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             annotations[i].subtype == 'FreeText' &&
             !annotations[i].isHidden &&
             !annotations[i].isNoView)
-          (i, annotations[i].rect),
+          (
+            i,
+            _withTextInset(annotations[i].rect,
+                annotations[i].behavior.style.freeText?.textInset ?? 0)
+          ),
     ];
+  }
+
+  /// [rect] con il bordo sinistro portato dove parte il testo (bordo piu' il
+  /// rientro salvato nella casella): e' li che si vede l'allineamento.
+  static PdfRect _withTextInset(PdfRect rect, double inset) =>
+      inset == 0
+          ? rect
+          : PdfRect(rect.left + inset, rect.bottom, rect.right, rect.top);
+
+  /// Rientro del testo della casella che si sta spostando (in punti).
+  double _movingTextInset() {
+    if (_textEditRect != null) return _textEditInset;
+    return _controller.selectedAnnotation?.behavior.style.freeText?.textInset ??
+        0;
   }
 
   /// La sola casella di testo piu' vicina a [rect] (distanza tra i bordi dei
@@ -4135,6 +4153,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// from the same edge of another text box in the direction of travel: that
   /// tap lands exactly on the alignment.
   (double, double) _alignNudge(PdfRect rect, double dx, double dy) {
+    rect = _withTextInset(rect, _movingTextInset());
     const eps = 0.01;
     final others = _nearestTextBox(rect);
     double? shorten(double move, bool across) {
@@ -4165,6 +4184,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// alignment the user crossed away stays off until the box has moved a
   /// step or more away from it.
   void _refreshNudgeGuides(PdfRect rect) {
+    rect = _withTextInset(rect, _movingTextInset());
     final prefs = _controller.preferences;
     final others = _nearestTextBox(rect);
     final guides = <_AlignmentGuide>[];
