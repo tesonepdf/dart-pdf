@@ -4045,9 +4045,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     return (moved.$1 - origin.$1, moved.$2 - origin.$2);
   }
 
-  /// The other plain text boxes of this page (page space): the ones a nudged
-  /// box lines its left and bottom edges up with.
-  List<PdfRect> _otherTextBoxRects() {
+  /// The other plain text boxes of this page (page space) with their
+  /// annotation index: the ones a nudged box lines up with.
+  List<(int, PdfRect)> _otherTextBoxRects() {
     final skip = <int>{
       for (final slot in _controller.selectedAnnotationSlots)
         if (slot.$1 == widget.pageIndex) slot.$2,
@@ -4061,82 +4061,199 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             annotations[i].subtype == 'FreeText' &&
             !annotations[i].isHidden &&
             !annotations[i].isNoView)
-          annotations[i].rect,
+          (i, annotations[i].rect),
     ];
   }
 
+  /// The edges (L/R/CX across, B/T/CY up and down) turned on in Settings.
+  List<String> _nudgeEdges({required bool across}) {
+    final prefs = _controller.preferences;
+    return across
+        ? [
+            if (prefs.nudgeAlignLeft) 'L',
+            if (prefs.nudgeAlignRight) 'R',
+            if (prefs.nudgeAlignCenterX) 'CX',
+          ]
+        : [
+            if (prefs.nudgeAlignBottom) 'B',
+            if (prefs.nudgeAlignTop) 'T',
+            if (prefs.nudgeAlignCenterY) 'CY',
+          ];
+  }
+
+  static double _nudgeEdgeValue(String edge, PdfRect r) => switch (edge) {
+        'L' => r.left,
+        'R' => r.right,
+        'CX' => (r.left + r.right) / 2,
+        'B' => r.bottom,
+        'T' => r.top,
+        _ => (r.bottom + r.top) / 2,
+      };
+
+  /// Alignments the user crossed away with the X on their red line, for the
+  /// box now open. Keys are '<other box index>:<edge>'.
+  final Set<String> _nudgeDismissed = <String>{};
+
+  /// Keys of [_nudgeGuides], one per line, in the same order.
+  List<String> _nudgeGuideKeys = const [];
+
+  void _clearNudgeGuides() {
+    _clearNudgeGuides();
+    _nudgeGuideKeys = const [];
+  }
+
   /// One arrow step of ([dx], [dy]) page points for [rect], shortened to the
-  /// distance still missing when the box's left (or bottom) edge is less than
-  /// a step away from the left (or bottom) edge of another text box in the
-  /// direction of travel: that tap lands exactly on the alignment.
+  /// distance still missing when an enabled edge is less than a step away
+  /// from the same edge of another text box in the direction of travel: that
+  /// tap lands exactly on the alignment.
   (double, double) _alignNudge(PdfRect rect, double dx, double dy) {
     const eps = 0.01;
     final others = _otherTextBoxRects();
-    if (dx != 0) {
+    double? shorten(double move, bool across) {
       double? best;
-      for (final other in others) {
-        final t = other.left - rect.left;
-        if (t * dx > eps &&
-            t.abs() < dx.abs() - eps &&
-            (best == null || t.abs() < best.abs())) {
-          best = t;
+      for (final edge in _nudgeEdges(across: across)) {
+        for (final (index, other) in others) {
+          if (_nudgeDismissed.contains('$index:$edge')) continue;
+          final t =
+              _nudgeEdgeValue(edge, other) - _nudgeEdgeValue(edge, rect);
+          if (t * move > eps &&
+              t.abs() < move.abs() - eps &&
+              (best == null || t.abs() < best.abs())) {
+            best = t;
+          }
         }
       }
-      if (best != null) dx = best;
+      return best;
     }
-    if (dy != 0) {
-      double? best;
-      for (final other in others) {
-        final t = other.bottom - rect.bottom;
-        if (t * dy > eps &&
-            t.abs() < dy.abs() - eps &&
-            (best == null || t.abs() < best.abs())) {
-          best = t;
-        }
-      }
-      if (best != null) dy = best;
-    }
+
+    if (dx != 0) dx = shorten(dx, true) ?? dx;
+    if (dy != 0) dy = shorten(dy, false) ?? dy;
     return (dx, dy);
   }
 
-  /// The red guide lines for [rect]: a vertical one on the left edge of a text
-  /// box less than one horizontal arrow step away, a horizontal one on the
-  /// bottom edge of a text box less than one vertical step away. Empty when
-  /// nothing is that close. (Closer than a tap: the next tap lands on it.)
-  List<_AlignmentGuide> _alignReadyGuides(PdfRect rect) {
+  /// Sets the red guide lines for [rect]: one across and one up and down at
+  /// most, each on the nearest enabled edge of another text box that is
+  /// less than one arrow step away (so the next tap lands on it). An
+  /// alignment the user crossed away stays off until the box has moved a
+  /// step or more away from it.
+  void _refreshNudgeGuides(PdfRect rect) {
     final prefs = _controller.preferences;
-    final stepX = prefs.lineArrowStepX, stepY = prefs.lineArrowStepY;
-    PdfRect? nearX, nearY;
-    var bestX = double.infinity, bestY = double.infinity;
-    for (final other in _otherTextBoxRects()) {
-      final dx = (other.left - rect.left).abs();
-      if (dx < stepX && dx < bestX) {
-        bestX = dx;
-        nearX = other;
-      }
-      final dy = (other.bottom - rect.bottom).abs();
-      if (dy < stepY && dy < bestY) {
-        bestY = dy;
-        nearY = other;
-      }
-    }
-    const margin = 6.0;
+    final others = _otherTextBoxRects();
     final guides = <_AlignmentGuide>[];
-    if (nearX != null) {
-      final low = math.min(rect.bottom, nearX.bottom) - margin;
-      final high = math.max(rect.top, nearX.top) + margin;
-      final a = _geometry.toViewOffset(nearX.left, low);
-      final b = _geometry.toViewOffset(nearX.left, high);
-      guides.add((axis: Axis.vertical, position: a.dx, from: a.dy, to: b.dy));
+    final keys = <String>[];
+    const margin = 6.0;
+    for (final across in [true, false]) {
+      final step = across ? prefs.lineArrowStepX : prefs.lineArrowStepY;
+      String? bestKey, bestEdge;
+      PdfRect? bestOther;
+      var bestDistance = double.infinity;
+      for (final edge in _nudgeEdges(across: across)) {
+        for (final (index, other) in others) {
+          final key = '$index:$edge';
+          final distance = (_nudgeEdgeValue(edge, other) -
+                  _nudgeEdgeValue(edge, rect))
+              .abs();
+          if (distance >= step) {
+            // far enough: a dismissed alignment comes back
+            _nudgeDismissed.remove(key);
+            continue;
+          }
+          if (_nudgeDismissed.contains(key)) continue;
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestKey = key;
+            bestEdge = edge;
+            bestOther = other;
+          }
+        }
+      }
+      if (bestOther == null || bestEdge == null || bestKey == null) continue;
+      final at = _nudgeEdgeValue(bestEdge, bestOther);
+      if (across) {
+        final low = math.min(rect.bottom, bestOther.bottom) - margin;
+        final high = math.max(rect.top, bestOther.top) + margin;
+        final a = _geometry.toViewOffset(at, low);
+        final b = _geometry.toViewOffset(at, high);
+        guides.add((axis: Axis.vertical, position: a.dx, from: a.dy, to: b.dy));
+      } else {
+        final low = math.min(rect.left, bestOther.left) - margin;
+        final high = math.max(rect.right, bestOther.right) + margin;
+        final a = _geometry.toViewOffset(low, at);
+        final b = _geometry.toViewOffset(high, at);
+        guides
+            .add((axis: Axis.horizontal, position: a.dy, from: a.dx, to: b.dx));
+      }
+      keys.add(bestKey);
     }
-    if (nearY != null) {
-      final low = math.min(rect.left, nearY.left) - margin;
-      final high = math.max(rect.right, nearY.right) + margin;
-      final a = _geometry.toViewOffset(low, nearY.bottom);
-      final b = _geometry.toViewOffset(high, nearY.bottom);
-      guides.add((axis: Axis.horizontal, position: a.dy, from: a.dx, to: b.dx));
-    }
-    return guides;
+    _nudgeGuides = guides;
+    _nudgeGuideKeys = keys;
+  }
+
+  /// The X on a red line: this box stops lining up with that one (that edge)
+  /// until it has moved away and come back.
+  void _dismissNudgeGuide(String key) {
+    _nudgeDismissed.add(key);
+    final rect = _textEditPageRect;
+    setState(() {
+      if (rect == null) {
+        _clearNudgeGuides();
+      } else {
+        _refreshNudgeGuides(rect);
+      }
+    });
+  }
+
+  /// The small X at the end of a red guide line.
+  Widget _nudgeCross(int index) {
+    const hit = 16.0, face = 8.64;
+    final guide = _nudgeGuides[index];
+    final end = math.max(guide.from, guide.to);
+    final start = math.min(guide.from, guide.to);
+    final center = guide.axis == Axis.vertical
+        ? Offset(guide.position, start - hit / 2 - 1)
+        : Offset(end + hit / 2 + 1, guide.position);
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      key: ValueKey('pdf-nudge-cross-$index'),
+      left: center.dx - hit / 2,
+      top: center.dy - hit / 2,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          _textEditFocus.requestFocus();
+          _dismissNudgeGuide(_nudgeGuideKeys[index]);
+        },
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => _holdChipFocus(),
+          onPointerUp: (_) => _releaseChipFocus(),
+          onPointerCancel: (_) => _releaseChipFocus(),
+          child: SizedBox(
+            width: hit,
+            height: hit,
+            child: Center(
+              child: Container(
+                width: face,
+                height: face,
+                decoration: BoxDecoration(
+                  color: scheme.surface.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: const [
+                    BoxShadow(blurRadius: 2, color: Colors.black26)
+                  ],
+                ),
+                child: OverflowBox(
+                  maxWidth: face,
+                  maxHeight: face,
+                  child: const Icon(Icons.close,
+                      size: 8.4, color: Color(0xFFE53935)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Nudges the open text box - or, with a box selected instead of open,
@@ -4163,7 +4280,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _textEditPageRect = moved;
       _textEditRotation = viewRotation;
       _textEditPageRotation = pageRotation;
-      _nudgeGuides = _alignReadyGuides(moved);
+      _refreshNudgeGuides(moved);
     });
   }
 
@@ -4328,7 +4445,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _textEditFocus.requestFocus();
     final (viewRotation, pageRotation) = _lineTilt(null);
     setState(() {
-      _nudgeGuides = const [];
+      _clearNudgeGuides();
       _textEditLineField = null;
       _textEditPageRect = PdfRect(pageRect.left + dx, pageRect.bottom + dy,
           pageRect.right + dx, pageRect.top + dy);
@@ -4358,7 +4475,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final next = _geometry.toPageRect(
         Rect.fromLTWH(view.left, view.top, width, height));
     setState(() {
-      _nudgeGuides = const [];
+      _clearNudgeGuides();
       _textEditLineField = null;
       _textEditPageRect = next;
       _textEditRotation = viewRotation;
@@ -4515,6 +4632,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       button(Offset(rect.right + gap + d / 2, c.dy),
           Icons.keyboard_arrow_right, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowRight),
+      // la X sulle righe rosse: toglie quell'allineamento per questa casella
+      for (var i = 0; i < _nudgeGuides.length; i++) _nudgeCross(i),
     ];
   }
 
@@ -5206,7 +5325,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _textEditCalloutTarget = null;
     _textEditCloudRegion = null;
     _textEditLineField = null;
-    _nudgeGuides = const [];
+    _clearNudgeGuides();
+    _nudgeDismissed.clear();
     if (mounted) {
       setState(() {
         _textEditRect = null;

@@ -181,6 +181,12 @@ class PdfEditingPreferences extends ChangeNotifier
   double _gridSpacing = 10;
   double _lineArrowStepX = 4;
   double _lineArrowStepY = 4;
+  bool _nudgeAlignLeft = true;
+  bool _nudgeAlignRight = false;
+  bool _nudgeAlignCenterX = false;
+  bool _nudgeAlignBottom = true;
+  bool _nudgeAlignTop = false;
+  bool _nudgeAlignCenterY = false;
   double _fontSize = 14;
   PdfStandardFont _fontFamily = PdfStandardFont.helvetica;
   String? _embeddedFontData;
@@ -321,6 +327,18 @@ class PdfEditingPreferences extends ChangeNotifier
           store.getBool('${_prefix}showPageRulers') ?? _showPageRulers;
       _showSnapGrid = store.getBool('${_prefix}showSnapGrid') ?? _showSnapGrid;
       _snapToGrid = store.getBool('${_prefix}snapToGrid') ?? _snapToGrid;
+      _nudgeAlignLeft =
+          store.getBool('${_prefix}nudgeAlignLeft') ?? _nudgeAlignLeft;
+      _nudgeAlignRight =
+          store.getBool('${_prefix}nudgeAlignRight') ?? _nudgeAlignRight;
+      _nudgeAlignCenterX =
+          store.getBool('${_prefix}nudgeAlignCenterX') ?? _nudgeAlignCenterX;
+      _nudgeAlignBottom =
+          store.getBool('${_prefix}nudgeAlignBottom') ?? _nudgeAlignBottom;
+      _nudgeAlignTop =
+          store.getBool('${_prefix}nudgeAlignTop') ?? _nudgeAlignTop;
+      _nudgeAlignCenterY =
+          store.getBool('${_prefix}nudgeAlignCenterY') ?? _nudgeAlignCenterY;
       final gridSpacing = store.getDouble('${_prefix}gridSpacing');
       if (gridSpacing != null && gridSpacing.isFinite && gridSpacing > 0) {
         _gridSpacing = gridSpacing;
@@ -1057,6 +1075,69 @@ class PdfEditingPreferences extends ChangeNotifier
     if (value == _smartAlignmentGuides) return;
     _smartAlignmentGuides = value;
     _write((s) => s.setBool('${_prefix}smartAlignmentGuides', value));
+    notifyListeners();
+  }
+
+
+  // Which edges an arrow-nudged text box lines up with on other text boxes.
+
+  /// Align the left edge with the left edge of other text boxes.
+  bool get nudgeAlignLeft => _nudgeAlignLeft;
+
+  set nudgeAlignLeft(bool value) {
+    if (value == _nudgeAlignLeft) return;
+    _nudgeAlignLeft = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignLeft', value));
+    notifyListeners();
+  }
+
+  /// Align the right edge with the right edge of other text boxes.
+  bool get nudgeAlignRight => _nudgeAlignRight;
+
+  set nudgeAlignRight(bool value) {
+    if (value == _nudgeAlignRight) return;
+    _nudgeAlignRight = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignRight', value));
+    notifyListeners();
+  }
+
+  /// Align the horizontal centre with the horizontal centre of other text boxes.
+  bool get nudgeAlignCenterX => _nudgeAlignCenterX;
+
+  set nudgeAlignCenterX(bool value) {
+    if (value == _nudgeAlignCenterX) return;
+    _nudgeAlignCenterX = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignCenterX', value));
+    notifyListeners();
+  }
+
+  /// Align the bottom edge with the bottom edge of other text boxes.
+  bool get nudgeAlignBottom => _nudgeAlignBottom;
+
+  set nudgeAlignBottom(bool value) {
+    if (value == _nudgeAlignBottom) return;
+    _nudgeAlignBottom = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignBottom', value));
+    notifyListeners();
+  }
+
+  /// Align the top edge with the top edge of other text boxes.
+  bool get nudgeAlignTop => _nudgeAlignTop;
+
+  set nudgeAlignTop(bool value) {
+    if (value == _nudgeAlignTop) return;
+    _nudgeAlignTop = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignTop', value));
+    notifyListeners();
+  }
+
+  /// Align the vertical centre with the vertical centre of other text boxes.
+  bool get nudgeAlignCenterY => _nudgeAlignCenterY;
+
+  set nudgeAlignCenterY(bool value) {
+    if (value == _nudgeAlignCenterY) return;
+    _nudgeAlignCenterY = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignCenterY', value));
     notifyListeners();
   }
 
