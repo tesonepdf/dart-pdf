@@ -365,6 +365,75 @@ class _EditorScreenState extends State<EditorScreen>
       widget.recentThumbnails ?? RecentThumbnailCache();
   final _session = SessionStore();
 
+  Timer? _stateTimer;
+  String? _lastActiveKey;
+  Map<String, int> _lastPages = const {};
+  Map<String, int> _pendingPages = {};
+  int _pendingPageTicks = 0;
+
+  String? _sessionKey(DocumentTab tab) {
+    final path = tab.originPath;
+    final key = (path != null && path.isNotEmpty) ? path : tab.cachePath;
+    return (key == null || key.isEmpty) ? null : key;
+  }
+
+  /// Ogni 2 secondi: avvia il tracciamento delle modifiche anche per schede
+  /// aperte in modi che non passano da `_persistSession`, salva la scheda
+  /// attiva se e' cambiata e la pagina in vista di ogni scheda.
+  void _tickSessionState() {
+    if (!mounted || !widget.ownsApplicationSession) return;
+    _autosave.syncTracking(_tabs);
+    if (!_sessionLoaded) return;
+    _applyPendingPages();
+    final activeKey = _tabs.isEmpty ? null : _sessionKey(_active);
+    if (activeKey != _lastActiveKey) {
+      _lastActiveKey = activeKey;
+      unawaited(_persistSession());
+    }
+    final pages = <String, int>{..._session.pages};
+    for (final tab in _tabs) {
+      final key = _sessionKey(tab);
+      if (key == null || _pendingPages.containsKey(key)) continue;
+      final viewer = tab.viewer;
+      final session = tab.session;
+      if (viewer == null || session == null) continue;
+      try {
+        pages[key] = viewer.currentPage;
+      } catch (_) {}
+    }
+    if (!mapEquals(pages, _lastPages)) {
+      _lastPages = pages;
+      unawaited(_session.savePages(pages));
+    }
+  }
+
+  /// Dopo il ripristino, riporta ogni scheda sull'ultima pagina in vista.
+  void _applyPendingPages() {
+    if (_pendingPages.isEmpty) return;
+    if (++_pendingPageTicks > 40) {
+      _pendingPages.clear();
+      return;
+    }
+    for (final tab in _tabs) {
+      final key = _sessionKey(tab);
+      final page = key == null ? null : _pendingPages[key];
+      if (page == null) continue;
+      final viewer = tab.viewer;
+      final session = tab.session;
+      if (viewer == null || session == null) continue;
+      if (page <= 0 || page >= session.document.pageCount) {
+        _pendingPages.remove(key);
+        continue;
+      }
+      _pendingPages.remove(key);
+      unawaited(Future<void>(() async {
+        try {
+          await viewer.jumpToPage(page);
+        } catch (_) {}
+      }));
+    }
+  }
+
   /// Mirrors dirty documents to durable storage (a private directory on
   /// native, IndexedDB on the web) so a crash never costs unsaved work, and
   /// hands back whatever a previous run lost. See autosave.dart.
@@ -515,6 +584,10 @@ class _EditorScreenState extends State<EditorScreen>
     super.initState();
     PdfAnnotationSnapshotClipboard.instance.addListener(_onLocalAnnotationCopy);
     WidgetsBinding.instance.addObserver(this);
+    // Controllo ogni 2 secondi: tiene aggiornati salvataggio provvisorio,
+    // scheda attiva e pagina in vista, qualunque strada abbia cambiato lo stato.
+    _stateTimer =
+        Timer.periodic(const Duration(seconds: 2), (_) => _tickSessionState());
     if (kDevToolsEnabled) {
       HardwareKeyboard.instance.addHandler(_onGlobalKeyEvent);
     }
@@ -947,6 +1020,7 @@ class _EditorScreenState extends State<EditorScreen>
     // Detaches only - the mirrored records stay, so an editor torn down with
     // dirty tabs (a crash, a forced quit) can still hand the work back.
     _prefs.removeListener(_onPrefsForMeasureScale);
+    _stateTimer?.cancel();
     _autosave.dispose();
     unawaited(ReadAloud.instance.stop());
     for (final tab in _tabs) {
@@ -1021,6 +1095,7 @@ class _EditorScreenState extends State<EditorScreen>
           tab.session?.commitPendingTextEdit();
         }
       }
+      _tickSessionState();
       unawaited(_autosave.flushPending());
       unawaited(_refreshSnapshots());
     }
@@ -1072,6 +1147,8 @@ class _EditorScreenState extends State<EditorScreen>
     await _recoverUnsavedChanges();
     if (!mounted) return;
     final documents = await _session.load();
+    _pendingPages = Map<String, int>.of(_session.pages);
+    _lastPages = Map<String, int>.of(_session.pages);
     if (mounted && !_hasExplicitLaunchTarget) {
       // Suppress lazy materialization while restoring: each tab is briefly the
       // active one as it is added, and we don't want every restored file to
@@ -6599,6 +6676,7 @@ class _EditorScreenState extends State<EditorScreen>
 
     void activate(int index) {
       setState(() => _activeIndex = index);
+      unawaited(_persistSession());
       Navigator.of(overlayContext).pop();
     }
 
@@ -6900,6 +6978,7 @@ class _EditorScreenState extends State<EditorScreen>
               unawaited(_renameDocument(tab));
             } else {
               setState(() => _activeIndex = index);
+              unawaited(_persistSession());
             }
           },
           onSecondaryTapUp: (details) =>

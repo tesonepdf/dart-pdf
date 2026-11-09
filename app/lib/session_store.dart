@@ -72,6 +72,19 @@ class SessionStore {
 
   static const _key = 'dart_pdf_editor_app.session';
   static const _activeKey = 'dart_pdf_editor_app.session_active';
+  static const _pagesKey = 'dart_pdf_editor_app.session_pages';
+
+  /// Ultima pagina in vista per documento (chiave: percorso o copia privata).
+  Map<String, int> _pages = const {};
+  Map<String, int> get pages => _pages;
+
+  Future<void> savePages(Map<String, int> pages) async {
+    _pages = Map.unmodifiable(pages);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pagesKey, jsonEncode(pages));
+    } catch (_) {}
+  }
 
   /// Posizione (nell'elenco dei documenti) di quello che si stava guardando.
   int _activeIndex = 0;
@@ -89,6 +102,18 @@ class SessionStore {
       final prefs = await SharedPreferences.getInstance();
       // -1: nessuna scelta salvata (sessione vecchia), resta attiva l'ultima scheda
       _activeIndex = prefs.getInt(_activeKey) ?? -1;
+      try {
+        final rawPages = prefs.getString(_pagesKey);
+        if (rawPages != null) {
+          final m = jsonDecode(rawPages);
+          if (m is Map) {
+            _pages = {
+              for (final e in m.entries)
+                if (e.value is int) e.key as String: e.value as int
+            };
+          }
+        }
+      } catch (_) {}
       final raw = prefs.getString(_key);
       if (raw == null) return _documents;
       final decoded = jsonDecode(raw);
