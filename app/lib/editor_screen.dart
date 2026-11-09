@@ -44,6 +44,7 @@ import 'l10n/app_l10n.dart';
 import 'middle_ellipsis_text.dart';
 import 'new_document.dart';
 import 'ocr.dart';
+import 'ocr_jobs.dart' show ocrStableKey;
 import 'ocr_auto.dart';
 import 'ocr_cache.dart';
 import 'ocr_status_chip.dart';
@@ -3755,10 +3756,16 @@ class _EditorScreenState extends State<EditorScreen>
     // L'istantanea prima dell'attesa: se il documento cambia nel frattempo,
     // il testo non finisce sulle pagine sbagliate (vedi OcrSessionSnapshot).
     final snapshot = OcrSessionSnapshot.of(controller);
+    final pageCount = controller.document.pageCount;
+    // Prima il file identico, poi lo stesso documento con le tue modifiche.
     final spans = await _ocr.cache.loadQuietly(
-      OcrCache.keyFor(controller.bytes),
-      pageCount: controller.document.pageCount,
-    );
+          OcrCache.keyFor(controller.bytes),
+          pageCount: pageCount,
+        ) ??
+        await _ocr.cache.loadQuietly(
+          ocrStableKey(controller.bytes, pageCount),
+          pageCount: pageCount,
+        );
     if (spans == null) return false;
     if (!mounted || !_tabs.contains(tab) || tab.session != controller) {
       return true;

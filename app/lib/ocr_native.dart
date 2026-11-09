@@ -153,6 +153,10 @@ class OnDeviceOcr {
         // Il testo letto resta in memoria: alla prossima apertura dello
         // stesso file non si rifà la scansione.
         await cache.saveQuietly(job.sourceHash, job.pageCount, recognized);
+        final stable = job.stableKey;
+        if (stable != null) {
+          await cache.saveQuietly(stable, job.pageCount, recognized);
+        }
         onRecognized(recognized);
         // Keep the established live-session revision guard. A completed live
         // callback consumes this job; an interrupted job recovers as a copy.
@@ -162,6 +166,10 @@ class OnDeviceOcr {
         if (result == null) return;
         final recognized = await _jobs.recognized(job);
         await cache.saveQuietly(job.sourceHash, job.pageCount, recognized);
+        final stable = job.stableKey;
+        if (stable != null) {
+          await cache.saveQuietly(stable, job.pageCount, recognized);
+        }
         final spans = recognized.values.fold<int>(0, (n, s) => n + s.length);
         onComplete?.call(result);
         onToast(l10n.ocrResult(spans));
