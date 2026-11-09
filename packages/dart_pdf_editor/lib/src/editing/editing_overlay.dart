@@ -8324,7 +8324,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     livePath: vertexPreview,
                     // while cropping, the crop overlay's frame is the only
                     // chrome: no selection box, tint, handles or rotate knob
-                    selectionRect: cropping
+                    selectionRect: cropping || _textEditRect != null
                         ? null
                         : _resizeHandle != null
                             ? _resizeRect
@@ -8389,12 +8389,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     afterPath: _afterPath,
                     showHandles: selected != null &&
                         !cropping &&
+                        _textEditRect == null &&
                         _controller.canResizeSelected &&
                         !_selectedLineFamily &&
                         _moveStart == null,
                     selectionOutline: !_selectedCalloutNodesOnly,
                     showRotateHandle: selected != null &&
                         !cropping &&
+                        _textEditRect == null &&
                         !_selectedNodesOnly &&
                         !_selectedCalloutNodesOnly &&
                         _controller.canRotateSelected &&
