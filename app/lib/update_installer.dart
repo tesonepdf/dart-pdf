@@ -177,7 +177,33 @@ class UpdateInstaller {
     }
   }
 
+  /// Scarica con nuovi tentativi: GitHub risponde ogni tanto 5xx (es. 504)
+  /// per un attimo e poi di nuovo 200. Si riprova solo per errori temporanei
+  /// del server o di rete, mai per un annullamento o un errore 4xx.
   Future<Uint8List> _download(
+    String url, {
+    int? expectedSize,
+    void Function(int received, int? total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    const attempts = 5;
+    for (var attempt = 1;; attempt++) {
+      try {
+        return await _downloadOnce(url,
+            expectedSize: expectedSize,
+            onProgress: onProgress,
+            isCancelled: isCancelled);
+      } on _TransientDownloadException catch (e) {
+        if (attempt >= attempts) throw UpdateInstallException(e.message);
+        await Future<void>.delayed(Duration(seconds: 2 * attempt));
+        if (isCancelled?.call() ?? false) {
+          throw const UpdateCancelledException();
+        }
+      }
+    }
+  }
+
+  Future<Uint8List> _downloadOnce(
     String url, {
     int? expectedSize,
     void Function(int received, int? total)? onProgress,
@@ -186,6 +212,10 @@ class UpdateInstaller {
     final client = _clientFactory();
     try {
       final response = await client.send(http.Request('GET', Uri.parse(url)));
+      if (response.statusCode >= 500) {
+        throw _TransientDownloadException(
+            'Download failed (HTTP ${response.statusCode})');
+      }
       if (response.statusCode != 200) {
         throw UpdateInstallException('Download failed (HTTP '
             '${response.statusCode})');
@@ -215,10 +245,18 @@ class UpdateInstaller {
       rethrow;
     } on UpdateInstallException {
       rethrow;
+    } on _TransientDownloadException {
+      rethrow;
     } catch (e) {
-      throw UpdateInstallException('Download failed: $e');
+      throw _TransientDownloadException('Download failed: $e');
     } finally {
       client.close();
     }
   }
+}
+
+/// Errore temporaneo di download (server 5xx o rete): si riprova.
+class _TransientDownloadException implements Exception {
+  _TransientDownloadException(this.message);
+  final String message;
 }
