@@ -4098,7 +4098,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   List<String> _nudgeGuideKeys = const [];
 
   void _clearNudgeGuides() {
-    _clearNudgeGuides();
+    _nudgeGuides = const [];
     _nudgeGuideKeys = const [];
   }
 
