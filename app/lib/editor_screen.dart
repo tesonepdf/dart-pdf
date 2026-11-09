@@ -368,11 +368,12 @@ class _EditorScreenState extends State<EditorScreen>
   /// Mirrors dirty documents to durable storage (a private directory on
   /// native, IndexedDB on the web) so a crash never costs unsaved work, and
   /// hands back whatever a previous run lost. See autosave.dart.
-  // Salvataggio automatico disattivato: nessuna copia dei documenti modificati
-  // viene scritta o riaperta da sola. Si salva solo quando lo chiede l'utente.
-  // Resta acceso solo se chi crea la schermata passa un archivio (i test).
-  late final AutosaveController _autosave =
-      AutosaveController(store: widget.unsavedChangesStore);
+  // Salvataggio provvisorio sempre attivo: le modifiche non salvate vanno in
+  // una cartella permanente dell'app (non nella cache) e si riaprono a ogni
+  // chiusura/riapertura. Sopravvive a "cancella cache"; solo "cancella dati"
+  // la svuota.
+  late final AutosaveController _autosave = AutosaveController(
+      store: widget.unsavedChangesStore ?? openUnsavedChangesStore());
 
   final _incoming = IncomingFileService();
   late final OnDeviceOcr _ocr = widget.ocr ?? OnDeviceOcr();
