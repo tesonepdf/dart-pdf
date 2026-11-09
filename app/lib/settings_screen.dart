@@ -454,6 +454,74 @@ class _ArrowStepsSection extends StatelessWidget {
           value: prefs.lineArrowStepY,
           onChanged: (v) => prefs.lineArrowStepY = v.roundToDouble(),
         ),
+        const SizedBox(height: 12),
+        Text('Allineamento con le altre caselle',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Con le frecce, quando la casella e\' a meno di un tocco da un '
+          'allineamento compaiono le righe rosse e il tocco successivo '
+          'allinea. Scegli i bordi che si allineano.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        ListenableBuilder(
+          listenable: prefs,
+          builder: (context, _) => Column(
+            children: [
+              for (final (label, key, get, set) in <(
+                String,
+                String,
+                bool Function(),
+                void Function(bool)
+              )>[
+                (
+                  'Bordo sinistro',
+                  'left',
+                  () => prefs.nudgeAlignLeft,
+                  (v) => prefs.nudgeAlignLeft = v
+                ),
+                (
+                  'Bordo destro',
+                  'right',
+                  () => prefs.nudgeAlignRight,
+                  (v) => prefs.nudgeAlignRight = v
+                ),
+                (
+                  'Centro orizzontale',
+                  'center-x',
+                  () => prefs.nudgeAlignCenterX,
+                  (v) => prefs.nudgeAlignCenterX = v
+                ),
+                (
+                  'Bordo inferiore',
+                  'bottom',
+                  () => prefs.nudgeAlignBottom,
+                  (v) => prefs.nudgeAlignBottom = v
+                ),
+                (
+                  'Bordo superiore',
+                  'top',
+                  () => prefs.nudgeAlignTop,
+                  (v) => prefs.nudgeAlignTop = v
+                ),
+                (
+                  'Centro verticale',
+                  'center-y',
+                  () => prefs.nudgeAlignCenterY,
+                  (v) => prefs.nudgeAlignCenterY = v
+                ),
+              ])
+                SwitchListTile(
+                  key: ValueKey('settings-nudge-align-$key'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(label),
+                  value: get(),
+                  onChanged: set,
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
