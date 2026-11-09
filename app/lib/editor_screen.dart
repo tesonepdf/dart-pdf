@@ -385,7 +385,8 @@ class _EditorScreenState extends State<EditorScreen>
     _autosave.syncTracking(_tabs);
     if (!_sessionLoaded) return;
     _applyPendingPages();
-    final activeKey = _tabs.isEmpty ? null : _sessionKey(_active);
+    final activeTab = _active;
+    final activeKey = activeTab == null ? null : _sessionKey(activeTab);
     if (activeKey != _lastActiveKey) {
       _lastActiveKey = activeKey;
       unawaited(_persistSession());
