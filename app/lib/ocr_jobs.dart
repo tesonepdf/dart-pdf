@@ -68,6 +68,16 @@ class OcrResultDelivery {
   void dispose() => unawaited(releaseUnacknowledged());
 }
 
+/// Identità del documento che resta uguale dopo le tue modifiche: i salvataggi
+/// aggiungono solo in coda al file, quindi l'inizio dei byte non cambia.
+/// Impronta dei primi 1 MiB più il numero di pagine. Serve a ritrovare il
+/// lavoro OCR e il testo già letto anche se il PDF è stato modificato.
+String ocrStableKey(Uint8List bytes, int pageCount) {
+  const prefix = 1024 * 1024;
+  final head = bytes.length > prefix ? bytes.sublist(0, prefix) : bytes;
+  return '${sha256.convert(head)}_$pageCount';
+}
+
 class OcrSavedJob {
   OcrSavedJob({
     required this.id,
@@ -79,9 +89,11 @@ class OcrSavedJob {
     this.state = OcrJobState.pending,
     this.error,
     this.workPhase = OcrPhase.preparing,
+    this.stableKey,
   });
 
   final String id;
+  final String? stableKey;
   final String title;
   final String sourceHash;
   final int pageCount;
@@ -102,6 +114,7 @@ class OcrSavedJob {
         'state': state.name,
         'error': error,
         'workPhase': workPhase.name,
+        if (stableKey != null) 'stableKey': stableKey,
       })));
 
   static OcrSavedJob decode(Uint8List bytes) {
@@ -126,6 +139,7 @@ class OcrSavedJob {
       error: map['error'] as String?,
       workPhase:
           OcrPhase.values.byName(map['workPhase'] as String? ?? 'preparing'),
+      stableKey: map['stableKey'] as String?,
     );
   }
 }
@@ -164,21 +178,40 @@ class OcrJobs {
   Future<OcrSavedJob> create(Uint8List source, String title,
       {required bool automatic}) async {
     // Repeating a failed/interrupted request for the same snapshot resumes it.
+    // Stesso documento anche se nel frattempo e' stato modificato: si riprende
+    // dalla pagina dove era arrivato, senza ricominciare da capo.
     final hash = sha256.convert(source).toString();
-    for (final job in await list()) {
-      if (job.sourceHash == hash &&
+    final pageCount = PdfDocument.open(source).pageCount;
+    final stable = ocrStableKey(source, pageCount);
+    final existing = await list();
+    for (final job in existing) {
+      if ((job.sourceHash == hash || job.stableKey == stable) &&
           job.automatic == automatic &&
           job.state != OcrJobState.cancelled &&
           job.state != OcrJobState.complete) {
         return job;
       }
     }
+    // Lavori automatici in sospeso di una versione vecchia dello stesso
+    // documento (stesso titolo e pagine): si eliminano, altrimenti restano a
+    // consumare spazio e batteria riprendendo a ogni avvio.
+    if (automatic) {
+      for (final job in existing) {
+        if (job.automatic &&
+            job.title == title &&
+            job.pageCount == pageCount &&
+            job.state != OcrJobState.complete) {
+          await delete(job.id);
+        }
+      }
+    }
     final job = OcrSavedJob(
       id: '${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(0x7fffffff)}',
       title: title,
       sourceHash: hash,
-      pageCount: PdfDocument.open(source).pageCount,
+      pageCount: pageCount,
       automatic: automatic,
+      stableKey: stable,
     );
     // Manifest last: a crash while staging a large source cannot publish a
     // runnable job with incomplete bytes. Storage failures are NOT swallowed.
