@@ -2881,6 +2881,27 @@ class PdfEditingController extends ChangeNotifier {
   /// scale times the viewer's zoom), kept up to date by the page overlay so
   /// the style panel's preview draws the text at the size the page shows it.
   final ValueNotifier<double> editingTextScale = ValueNotifier<double>(1);
+
+  final Set<VoidCallback> _textCommitters = <VoidCallback>{};
+
+  /// Registered by each page overlay so the app can ask for the text still
+  /// open in an inline editor to be committed into the document (it is not
+  /// part of the document, and so not autosaved, until then).
+  void addTextCommitter(VoidCallback committer) =>
+      _textCommitters.add(committer);
+
+  void removeTextCommitter(VoidCallback committer) =>
+      _textCommitters.remove(committer);
+
+  /// Commits the text of any open inline text editor into the document, as
+  /// if the user had tapped away. Called when the app goes to the background
+  /// so the text survives the app being closed. Does nothing when no editor
+  /// is open.
+  void commitPendingTextEdit() {
+    for (final committer in _textCommitters.toList()) {
+      committer();
+    }
+  }
   TextSelection? _editingTextSelection;
   int _editingTextStyleRevision = 0;
   ({

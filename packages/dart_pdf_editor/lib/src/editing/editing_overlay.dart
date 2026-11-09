@@ -1491,6 +1491,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _adoptHost();
     _observedTool = _tool;
     _controller.addListener(_onControllerChanged);
+    _controller.addTextCommitter(_commitTextEdit);
   }
 
   @override
@@ -3362,6 +3363,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _hideLens();
     _lineCursorRepeatTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
+    _controller.removeTextCommitter(_commitTextEdit);
     if (_textEditRect != null) _controller.setEditingText(false);
     // if THIS overlay was mid-move, drop the shared cross-page preview
     // before disposing [_ghost] so a neighbour page can't paint freed

@@ -1011,6 +1011,15 @@ class _EditorScreenState extends State<EditorScreen>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
+      // Il testo ancora aperto in una casella non e' nel documento: lo si
+      // conferma prima, cosi' finisce nel file provvisorio e sopravvive alla
+      // chiusura dell'app (anche forzata o dalle app recenti).
+      if (state == AppLifecycleState.hidden ||
+          state == AppLifecycleState.paused) {
+        for (final tab in _tabs) {
+          tab.session?.commitPendingTextEdit();
+        }
+      }
       unawaited(_autosave.flushPending());
       unawaited(_refreshSnapshots());
     }
