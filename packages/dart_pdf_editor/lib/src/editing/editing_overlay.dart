@@ -5726,8 +5726,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _reportElementMovePreview();
     } else if (_moveStart != null) {
       _moveCurrentGlobal = _autoScrollGlobal;
-      setState(() => _moveCurrent =
-          _snapMovePosition(_moveStart!, position, _selectedViewRect));
+      // una casella di testo trascinata resta dove la lasci: niente aggancio
+      // agli allineamenti delle altre annotazioni (faceva muovere a scatti)
+      final freeTextMove =
+          _controller.selectedAnnotation?.subtype == 'FreeText';
+      setState(() => _moveCurrent = _snapMovePosition(
+          _moveStart!, position, _selectedViewRect,
+          alignAnnotations: !freeTextMove));
       // float the artwork above every page so a move dragged onto the
       // page below isn't clipped behind it (this overlay can't paint
       // over a sibling list item)
