@@ -809,7 +809,9 @@ class _EditorScreenState extends State<EditorScreen>
       builder: (dialogContext) => AlertDialog(
         key: const ValueKey('update-available-dialog'),
         icon: const Icon(Icons.system_update_alt),
-        content: Text(l10n.editorUpdateAvailable(release.displayVersion)),
+        // Versione nuova e versione installata, cosi' si vede da dove si parte.
+        content: Text(l10n.settingsUpdateAvailable(
+            release.displayVersion, AppInfo.displayVersion)),
         actions: [
           TextButton(
             key: const ValueKey('update-dialog-later'),
