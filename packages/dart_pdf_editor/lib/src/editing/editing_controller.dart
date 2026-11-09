@@ -2439,6 +2439,7 @@ class PdfEditingController extends ChangeNotifier {
         _activeSavedAnnotationId == null) {
       return;
     }
+    _textToolFromSelection = false;
     preferences.snapshotActiveStyleScope(lockedFields: _lockedStyleFields);
     // leaving an ink-like tool commits the drawing, like lifting the pen.
     //
@@ -2481,6 +2482,31 @@ class PdfEditingController extends ChangeNotifier {
     );
     notifyListeners();
     if (deferInkCommit) Timer.run(finishInk);
+  }
+
+  /// Vero quando lo strumento Casella di testo e' stato armato solo perche' si
+  /// sta modificando una casella selezionata: la selezione resta (serve a
+  /// salvare il testo) e alla chiusura si torna a Seleziona.
+  bool _textToolFromSelection = false;
+  bool get textToolFromSelection => _textToolFromSelection;
+
+  /// Esce da Seleziona ed entra in Casella di testo senza perdere la
+  /// selezione, mentre la casella selezionata e' aperta in modifica.
+  void armTextToolForSelectionEdit() {
+    if (_tool == PdfEditTool.freeText || _selected.isEmpty) return;
+    _tool = PdfEditTool.freeText;
+    _textToolFromSelection = true;
+    notifyListeners();
+  }
+
+  /// Chiusa la modifica (X): si torna a Seleziona.
+  void leaveTextToolForSelection() {
+    if (!_textToolFromSelection) return;
+    _textToolFromSelection = false;
+    if (_tool == PdfEditTool.freeText) {
+      _tool = PdfEditTool.select;
+      notifyListeners();
+    }
   }
 
   /// Whether the viewer is in explicit Hand mode.

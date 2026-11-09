@@ -3368,7 +3368,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _lineCursorRepeatTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
     _controller.removeTextCommitter(_commitTextEdit);
-    if (_textEditRect != null) _controller.setEditingText(false);
+    if (_textEditRect != null) {
+      _controller.setEditingText(false);
+      final controller = _controller;
+      scheduleMicrotask(() {
+        try {
+          controller.leaveTextToolForSelection();
+        } catch (_) {}
+      });
+    }
     // if THIS overlay was mid-move, drop the shared cross-page preview
     // before disposing [_ghost] so a neighbour page can't paint freed
     // pixels. Guarded by _moveStart so disposing some other (off-screen)
@@ -4065,6 +4073,26 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     ];
   }
 
+  /// La sola casella di testo piu' vicina a [rect] (distanza tra i bordi dei
+  /// rettangoli): e' con quella, e non con una lontana, che ci si allinea.
+  List<(int, PdfRect)> _nearestTextBox(PdfRect rect) {
+    (int, PdfRect)? best;
+    var bestDistance = double.infinity;
+    for (final other in _otherTextBoxRects()) {
+      final o = other.$2;
+      final gapX =
+          math.max(0.0, math.max(o.left - rect.right, rect.left - o.right));
+      final gapY =
+          math.max(0.0, math.max(o.bottom - rect.top, rect.bottom - o.top));
+      final distance = gapX * gapX + gapY * gapY;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = other;
+      }
+    }
+    return best == null ? const [] : [best];
+  }
+
   /// The edges (L/R/CX across, B/T/CY up and down) turned on in Settings.
   List<String> _nudgeEdges({required bool across}) {
     final prefs = _controller.preferences;
@@ -4108,7 +4136,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// tap lands exactly on the alignment.
   (double, double) _alignNudge(PdfRect rect, double dx, double dy) {
     const eps = 0.01;
-    final others = _otherTextBoxRects();
+    final others = _nearestTextBox(rect);
     double? shorten(double move, bool across) {
       double? best;
       for (final edge in _nudgeEdges(across: across)) {
@@ -4138,7 +4166,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// step or more away from it.
   void _refreshNudgeGuides(PdfRect rect) {
     final prefs = _controller.preferences;
-    final others = _otherTextBoxRects();
+    final others = _nearestTextBox(rect);
     final guides = <_AlignmentGuide>[];
     final keys = <String>[];
     const margin = 6.0;
@@ -4655,6 +4683,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // it now, inside the gesture (a no-op off the web)
     if (PdfEditorScope.platformOf(context) == TargetPlatform.iOS) {
       debugPdfPrimeSoftKeyboard();
+    }
+    // modifica di una casella selezionata: si esce da Seleziona ed entra
+    // Casella di testo (icona in alto compresa), fino alla X
+    if (existing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _textEditRect != null && _textEditExisting) {
+          _controller.armTextToolForSelectionEdit();
+        }
+      });
     }
     final style = existing ? _controller.selectedTextStyle : null;
     // /DA carries the text color; /C is the box background for free text
@@ -5339,6 +5376,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _textEditAnnotationSlot = null;
     }
     _controller.setEditingText(false);
+    _controller.leaveTextToolForSelection();
     // hand the keyboard back so the viewer's shortcuts work again right away
     // (Escape → back out the tool, V/P/R tool keys, delete): the removed
     // field's focus node otherwise leaves focus in limbo and the next key
