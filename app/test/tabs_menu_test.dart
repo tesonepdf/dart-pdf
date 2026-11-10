@@ -618,6 +618,8 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('menu-save-as')));
     await tester.pumpAndSettle();
     expect(tabTitle('copy.pdf'), findsOneWidget);
