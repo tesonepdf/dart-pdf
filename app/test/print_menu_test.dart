@@ -370,6 +370,9 @@ void main() {
       ..addFreeText(0, const PdfRect(100, 600, 400, 650), 'Original')
       ..selectAnnotation(0, 0);
     await tester.pump();
+    // dal #286 la modifica di una casella selezionata passa a Casella di
+    // testo e, alla chiusura, si torna allo strumento di prima
+    final activeTool = session.tool;
     expect(session.requestEditSelectedTextInline(), isTrue);
     await tester.pump();
     await tester.pump();
@@ -378,7 +381,6 @@ void main() {
     await tester.enterText(editor, 'Ready for print');
     expect(session.isEditingText, isTrue);
     expect(session.document.page(0).annotations.single.contents, 'Original');
-    final activeTool = session.tool;
 
     await printShortcut(tester);
 
