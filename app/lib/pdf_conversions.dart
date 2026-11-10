@@ -348,7 +348,11 @@ class _Piece {
 /// di testo della stessa riga stanno nella stessa cella se la distanza è meno
 /// di un'altezza di carattere, altrimenti sono celle diverse. Dentro un pezzo
 /// di testo, due o più spazi di fila (o una tabulazione) separano le celle.
-List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs) {
+///
+/// Con [zone] (nello spazio della pagina) restano solo i pezzi di testo il cui
+/// centro cade dentro la zona.
+List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs,
+    {PdfRect? zone}) {
   final pieces = <_Piece>[];
   final separator = RegExp(r' {2,}|\t+');
   for (final run in runs) {
@@ -362,8 +366,13 @@ List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs) {
       if (trimmed.isEmpty) return;
       final s = from + (seg.length - seg.trimLeft().length);
       final e = s + trimmed.length;
-      pieces.add(_Piece(b.left + b.width * s / len, b.left + b.width * e / len,
-          b.top, b.bottom, trimmed));
+      final pieceLeft = b.left + b.width * s / len;
+      final pieceRight = b.left + b.width * e / len;
+      if (zone != null &&
+          !zone.contains((pieceLeft + pieceRight) / 2, (b.top + b.bottom) / 2)) {
+        return;
+      }
+      pieces.add(_Piece(pieceLeft, pieceRight, b.top, b.bottom, trimmed));
     }
 
     var start = 0;
@@ -446,9 +455,10 @@ List<({double left, double right})> columnSpans(List<List<PageCell>> rows) {
 }
 
 /// La griglia di testo di una pagina: righe per colonne, con `''` dove la
-/// cella è vuota. Vuota se nella pagina non c'è testo.
-List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs) {
-  final rows = pageCellRows(runs);
+/// cella è vuota. Vuota se nella pagina non c'è testo. Con [zone] conta solo
+/// il testo dentro la zona (vedi [pageCellRows]).
+List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs, {PdfRect? zone}) {
+  final rows = pageCellRows(runs, zone: zone);
   if (rows.isEmpty) return const [];
   final spans = columnSpans(rows);
 
@@ -724,5 +734,37 @@ Future<XlsxResult> pdfToXlsx(
     cells: cells,
     numbers: numbers,
     failedPages: failed,
+  );
+}
+
+/// Il nome proposto per il file Excel di una zona della pagina [page] (da 0):
+/// `Titolo (pagina 2).xlsx`.
+String xlsxZoneFileName(String title, int page) {
+  final base = xlsxExportFileName(title);
+  return '${base.substring(0, base.length - 5)} (pagina ${page + 1}).xlsx';
+}
+
+/// Come [pdfToXlsx] ma per una sola zona [zone] (nello spazio della pagina)
+/// della pagina [pageIndex] (da 0): una scheda sola, "Zona". È molto più
+/// precisa del documento intero perché righe e colonne si cercano solo nella
+/// zona. Se nella zona non c'è testo `cells` è 0 e `bytes` è vuoto.
+XlsxResult pdfZoneToXlsx(PdfDocument document, int pageIndex, PdfRect zone) {
+  final grid = pageGrid(PdfTextExtractor.extract(document, pageIndex).runs,
+      zone: zone);
+  var cells = 0;
+  var numbers = 0;
+  for (final row in grid) {
+    for (final text in row) {
+      if (text.trim().isEmpty) continue;
+      cells++;
+      if (parseSpreadsheetNumber(text) != null) numbers++;
+    }
+  }
+  return (
+    bytes: grid.isEmpty ? Uint8List(0) : buildXlsx([XlsxSheet('Zona', grid)]),
+    sheets: grid.isEmpty ? 0 : 1,
+    cells: cells,
+    numbers: numbers,
+    failedPages: const [],
   );
 }

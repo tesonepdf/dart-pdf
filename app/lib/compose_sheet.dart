@@ -635,6 +635,31 @@ class _ComposeSheetScreenState extends State<ComposeSheetScreen> {
   }
 }
 
+/// Fa scegliere una zona di una pagina di [document] (la pagina [initialPage],
+/// da 0, e si può cambiare): si disegna il rettangolo, oppure si prende la
+/// pagina intera. Restituisce la zona (`region` è nello spazio della pagina,
+/// `page` la pagina, da 0), o null se si torna indietro senza sceglierla.
+Future<SheetCrop?> pickPageZone(
+  BuildContext context, {
+  required String name,
+  required Uint8List bytes,
+  required PdfDocument document,
+  int initialPage = 0,
+}) {
+  return Navigator.of(context).push<SheetCrop>(
+    MaterialPageRoute<SheetCrop>(
+      builder: (_) => _CropPickerScreen(
+        name: name,
+        bytes: bytes,
+        document: document,
+        initialPage: initialPage,
+        pickOnce: true,
+        onAdd: (_) {},
+      ),
+    ),
+  );
+}
+
 /// Mostra una pagina del PDF e fa disegnare il rettangolo da ritagliare.
 class _CropPickerScreen extends StatefulWidget {
   const _CropPickerScreen({
@@ -643,12 +668,17 @@ class _CropPickerScreen extends StatefulWidget {
     required this.document,
     required this.onAdd,
     this.initialPage = 0,
+    this.pickOnce = false,
   });
 
   final String name;
   final Uint8List bytes;
   final PdfDocument document;
   final void Function(SheetCrop crop) onAdd;
+
+  /// Vero quando serve una sola zona (per esempio da esportare in Excel): la
+  /// schermata si chiude con la zona scelta invece di raccogliere più ritagli.
+  final bool pickOnce;
 
   /// La pagina da cui partire, da 0.
   final int initialPage;
@@ -935,7 +965,7 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
     final box = page.cropBox;
     final rotation = page.rotation;
     final region = whole ? box : regionFromSelection(_sel!, box, rotation);
-    widget.onAdd(SheetCrop(
+    final crop = SheetCrop(
       name: widget.name,
       source: widget.document,
       page: _page,
@@ -945,7 +975,12 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       pageSize: pdfRegionDisplaySize(box, rotation),
       fraction: whole ? const Rect.fromLTWH(0, 0, 1, 1) : _sel!,
       preview: _png,
-    ));
+    );
+    widget.onAdd(crop);
+    if (widget.pickOnce) {
+      Navigator.of(context).pop(crop);
+      return;
+    }
     setState(() {
       _added++;
       _sel = null;
@@ -1017,8 +1052,11 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'Trascina per scegliere la parte. Con due dita ingrandisci; '
-              'trascina i bordi per correggerla.',
+              widget.pickOnce
+                  ? 'Trascina per scegliere la zona da portare in Excel. Con '
+                      'due dita ingrandisci; trascina i bordi per correggerla.'
+                  : 'Trascina per scegliere la parte. Con due dita ingrandisci; '
+                      'trascina i bordi per correggerla.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -1097,7 +1135,8 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
                       Expanded(
                         child: FilledButton(
                           onPressed: _selOk ? () => _add(whole: false) : null,
-                          child: const Text('Aggiungi ritaglio'),
+                          child: Text(
+                              widget.pickOnce ? 'Usa la zona' : 'Aggiungi ritaglio'),
                         ),
                       ),
                     ],
