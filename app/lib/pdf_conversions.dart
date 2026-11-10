@@ -147,17 +147,33 @@ Future<PhotosPdfResult> photosToPdfAsync(
 
 // --- PDF in Word (.docx) -----------------------------------------------------
 //
-// Prima versione: i paragrafi si ricostruiscono dalle righe di testo (lo stesso
-// ordine di lettura della vista "Lettura"), e il file Word si scrive a mano
-// con la libreria zip già presente (`archive`). L'impaginazione non è identica
+// I paragrafi si ricostruiscono dalle righe di testo (lo stesso ordine di
+// lettura della vista "Lettura"), e il file Word si scrive a mano con la
+// libreria zip già presente (`archive`). L'impaginazione non è identica
 // all'originale, le tabelle diventano testo e le immagini non vengono portate.
+// Grassetto, corsivo e colore si portano per paragrafo (per maggioranza di
+// caratteri), non per singola parola.
 
 /// Un paragrafo del file Word.
 class DocxParagraph {
   const DocxParagraph(this.text,
-      {this.fontSize = 11, this.isListItem = false, this.pageBreakBefore = false});
+      {this.fontSize = 11,
+      this.isListItem = false,
+      this.pageBreakBefore = false,
+      this.bold = false,
+      this.italic = false,
+      this.color = 0});
 
   final String text;
+
+  /// Vero se il paragrafo è in grassetto.
+  final bool bold;
+
+  /// Vero se il paragrafo è in corsivo.
+  final bool italic;
+
+  /// Colore del testo come 0xRRGGBB; 0 (nero) non scrive nessun colore.
+  final int color;
 
   /// Corpo in punti.
   final double fontSize;
@@ -227,7 +243,17 @@ String docxParagraphXml(DocxParagraph p) {
       .split('\n')
       .map((line) => '<w:t xml:space="preserve">$line</w:t>')
       .join('<w:br/>');
-  return '<w:p>$pPr<w:r><w:rPr><w:sz w:val="$size"/></w:rPr>$runs</w:r></w:p>';
+  // L'ordine dentro `<w:rPr>` è quello dello schema di Word: b, i, color, sz.
+  final rPr = StringBuffer();
+  if (p.bold) rPr.write('<w:b/>');
+  if (p.italic) rPr.write('<w:i/>');
+  final rgb = p.color & 0xFFFFFF;
+  if (rgb != 0) {
+    final hex = rgb.toRadixString(16).padLeft(6, '0').toUpperCase();
+    rPr.write('<w:color w:val="$hex"/>');
+  }
+  rPr.write('<w:sz w:val="$size"/>');
+  return '<w:p>$pPr<w:r><w:rPr>$rPr</w:rPr>$runs</w:r></w:p>';
 }
 
 /// Scrive il file Word (.docx) dei [paragraphs]. Un .docx è un file zip con
@@ -291,7 +317,10 @@ Future<DocxResult> pdfToDocx(
         paragraphs.add(DocxParagraph(b.text.trim(),
             fontSize: b.fontSize,
             isListItem: b.isListItem,
-            pageBreakBefore: first && i > 0));
+            pageBreakBefore: first && i > 0,
+            bold: b.bold,
+            italic: b.italic,
+            color: b.color));
         first = false;
       }
       // Una pagina senza testo tiene comunque il suo posto nel file Word.

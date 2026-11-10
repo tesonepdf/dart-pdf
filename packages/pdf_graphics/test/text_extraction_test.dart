@@ -767,6 +767,55 @@ void main() {
       expect(run.ascent, 0.75);
     });
   });
+
+  group('stili del testo (grassetto, corsivo, colore)', () {
+    test('il nome del font dice grassetto e corsivo, senza il prefisso', () {
+      expect(pdfFontNameIsBold('Helvetica-Bold'), isTrue);
+      expect(pdfFontNameIsBold('ABCDEF+Arial-BoldMT'), isTrue);
+      expect(pdfFontNameIsBold('Roboto-Black'), isTrue);
+      expect(pdfFontNameIsBold('Heavy-Sans'), isTrue);
+      expect(pdfFontNameIsBold('Helvetica'), isFalse);
+      expect(pdfFontNameIsBold(null), isFalse);
+      expect(pdfFontNameIsItalic('Helvetica-Oblique'), isTrue);
+      expect(pdfFontNameIsItalic('ABCDEF+Times-Italic'), isTrue);
+      expect(pdfFontNameIsItalic('Times-Roman'), isFalse);
+      expect(pdfFontNameIsItalic(null), isFalse);
+      // Il prefisso del sottoinsieme non conta: "Bold" nel prefisso no.
+      expect(pdfFontNameIsBold('BOLDXX+Regular'), isFalse);
+    });
+
+    test('un blocco in grassetto rosso porta grassetto e colore', () {
+      final doc = PdfDocument.open(_buildTextPdf(
+        ['1 0 0 rg', _textAt(72, 700, 'Titolo importante')],
+        font: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+      ));
+      final block = PdfTextExtractor.reflowPage(doc, 0).blocks.single;
+      expect(block.bold, isTrue);
+      expect(block.italic, isFalse);
+      expect(block.color, 0xFF0000);
+      expect(block.lines.single.bold, isTrue);
+      expect(block.lines.single.color, 0xFF0000);
+    });
+
+    test('un blocco in corsivo porta il corsivo', () {
+      final doc = PdfDocument.open(_buildTextPdf(
+        [_textAt(72, 700, 'Una nota')],
+        font: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique >>',
+      ));
+      final block = PdfTextExtractor.reflowPage(doc, 0).blocks.single;
+      expect(block.italic, isTrue);
+      expect(block.bold, isFalse);
+      expect(block.color, 0);
+    });
+
+    test('un blocco normale resta normale e nero', () {
+      final doc = PdfDocument.open(buildClassicPdf());
+      final block = PdfTextExtractor.reflowPage(doc, 0).blocks.single;
+      expect(block.bold, isFalse);
+      expect(block.italic, isFalse);
+      expect(block.color, 0);
+    });
+  });
 }
 
 /// Page text for hand-built [runs], through the recorded-text entry point

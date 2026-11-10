@@ -32,9 +32,18 @@ class PdfExtractedRun {
     this.charOffsets,
     this.isRightToLeft = false,
     this.mcid,
+    this.fontName,
+    this.color = 0,
   });
 
   final String text;
+
+  /// The font's name as the page wrote it (possibly with a subset prefix such
+  /// as `ABCDEF+`), or null when unknown. Bold and italic are read from it.
+  final String? fontName;
+
+  /// The fill colour as 0xRRGGBB (0 = black).
+  final int color;
 
   /// Offset of [text] inside the owning [PdfPageText.text].
   final int startIndex;
@@ -397,11 +406,67 @@ class PdfReflowLine {
     required this.text,
     required this.bounds,
     required this.fontSize,
+    this.bold = false,
+    this.italic = false,
+    this.color = 0,
   });
 
   final String text;
   final PdfRect bounds;
   final double fontSize;
+
+  /// Whether most of the line's characters are in a bold font.
+  final bool bold;
+
+  /// Whether most of the line's characters are in an italic/oblique font.
+  final bool italic;
+
+  /// The fill colour most of the line's characters share, as 0xRRGGBB.
+  final int color;
+}
+
+/// Whether [fontName] names a bold face (Bold, Black, Heavy), ignoring a
+/// subset prefix such as `ABCDEF+`.
+bool pdfFontNameIsBold(String? fontName) {
+  final name = _plainFontName(fontName);
+  return name.contains('bold') ||
+      name.contains('black') ||
+      name.contains('heavy');
+}
+
+/// Whether [fontName] names an italic face (Italic, Oblique), ignoring a
+/// subset prefix such as `ABCDEF+`.
+bool pdfFontNameIsItalic(String? fontName) {
+  final name = _plainFontName(fontName);
+  return name.contains('italic') || name.contains('oblique');
+}
+
+String _plainFontName(String? fontName) {
+  if (fontName == null) return '';
+  final plus = fontName.indexOf('+');
+  final plain = plus == 6 ? fontName.substring(7) : fontName;
+  return plain.toLowerCase();
+}
+
+/// [PdfColor] as 0xRRGGBB.
+int _rgbOf(PdfColor c) {
+  int channel(double v) =>
+      v.isFinite ? (v.clamp(0.0, 1.0) * 255).round() : 0;
+  return (channel(c.red) << 16) | (channel(c.green) << 8) | channel(c.blue);
+}
+
+/// The colour that carries the most weight in [weights] (colour → characters);
+/// ties go to the one met first. Black when empty.
+int _majorityColor(Map<int, int> weights) {
+  var best = 0;
+  var bestWeight = -1;
+  weights.forEach((color, weight) {
+    if (weight > bestWeight) {
+      best = color;
+      bestWeight = weight;
+    }
+  });
+  return best;
 }
 
 /// One item in a reflowed page, placed in inferred reading order: either a
@@ -421,7 +486,19 @@ class PdfReflowBlock extends PdfReflowItem {
     required this.lines,
     required this.fontSize,
     this.isListItem = false,
+    this.bold = false,
+    this.italic = false,
+    this.color = 0,
   });
+
+  /// Whether most of the block's characters are in a bold font.
+  final bool bold;
+
+  /// Whether most of the block's characters are in an italic/oblique font.
+  final bool italic;
+
+  /// The fill colour most of the block's characters share, as 0xRRGGBB.
+  final int color;
 
   /// Text with line breaks removed and soft hyphens repaired.
   final String text;
@@ -838,6 +915,8 @@ class PdfTextExtractor {
       charOffsets: offsets,
       isRightToLeft: rightToLeft,
       mcid: source.mcid,
+      fontName: source.fontName,
+      color: _rgbOf(source.color),
     ));
   }
 
@@ -1210,10 +1289,22 @@ class PdfTextReflower {
       buffer.write(piece.text.trim());
       previous = piece;
     }
+    var total = 0, boldChars = 0, italicChars = 0;
+    final colors = <int, int>{};
+    for (final piece in pieces) {
+      final weight = math.max(1, piece.text.trim().length);
+      total += weight;
+      if (piece.bold) boldChars += weight;
+      if (piece.italic) italicChars += weight;
+      colors[piece.color] = (colors[piece.color] ?? 0) + weight;
+    }
     return PdfReflowLine(
       text: _normalizeSpaces(buffer.toString()),
       bounds: _union(pieces.map((p) => p.bounds)),
       fontSize: _median(pieces.map((p) => p.fontSize)),
+      bold: boldChars * 2 > total,
+      italic: italicChars * 2 > total,
+      color: _majorityColor(colors),
     );
   }
 
@@ -1346,12 +1437,24 @@ class PdfTextReflower {
           ..write(line.text);
       }
     }
+    var total = 0, boldChars = 0, italicChars = 0;
+    final colors = <int, int>{};
+    for (final line in lines) {
+      final weight = math.max(1, line.text.length);
+      total += weight;
+      if (line.bold) boldChars += weight;
+      if (line.italic) italicChars += weight;
+      colors[line.color] = (colors[line.color] ?? 0) + weight;
+    }
     return PdfReflowBlock(
       text: _normalizeSpaces(buffer.toString()),
       bounds: _union(lines.map((line) => line.bounds)),
       lines: List.unmodifiable(lines),
       fontSize: _median(lines.map((line) => line.fontSize)),
       isListItem: lines.isNotEmpty && _startsListItem(lines.first.text),
+      bold: boldChars * 2 > total,
+      italic: italicChars * 2 > total,
+      color: _majorityColor(colors),
     );
   }
 }
@@ -1363,6 +1466,9 @@ class _LinePiece {
     required this.fontSize,
     required this.startIndex,
     required this.isRightToLeft,
+    this.bold = false,
+    this.italic = false,
+    this.color = 0,
   });
 
   factory _LinePiece.fromRun(PdfExtractedRun run) => _LinePiece(
@@ -1371,6 +1477,9 @@ class _LinePiece {
         fontSize: math.max(1.0, run.transform.scaleFactor),
         startIndex: run.startIndex,
         isRightToLeft: run.isRightToLeft,
+        bold: pdfFontNameIsBold(run.fontName),
+        italic: pdfFontNameIsItalic(run.fontName),
+        color: run.color,
       );
 
   final String text;
@@ -1378,6 +1487,9 @@ class _LinePiece {
   final double fontSize;
   final int startIndex;
   final bool isRightToLeft;
+  final bool bold;
+  final bool italic;
+  final int color;
 
   double get centerY => (bounds.bottom + bounds.top) / 2;
 }
