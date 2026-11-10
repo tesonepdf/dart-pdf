@@ -1,6 +1,6 @@
 name: dart_pdf_editor_assets
 description: >-
-  Optional bundled assets for dart_pdf_editor - the six editor fonts, the
+  Optional bundled assets for dart_pdf_editor - the fifteen editor fonts, the
   metric-compatible faces the renderer substitutes into unembedded text (TeX
   Gyre for the standard 14, Carlito for Calibri), and the prebuilt web render
   worker. Depend on it (and call registerBundledEditorAssets) for the
@@ -46,7 +46,8 @@ flutter:
   # Fonts offered by the editor font menu, plus the families the renderer
   # substitutes for unembedded text: TeX Gyre for the standard 14, Carlito for
   # Calibri. DejaVu is a permissive Bitstream Vera / Arev licence; Fira Sans,
-  # Spectral, Lobster and Carlito are SIL Open Font Licence; the TeX Gyre
+  # Spectral, Lobster, Carlito, Arimo, Tinos, Cousine, Caladea, Gelasio, Open
+  # Sans, Comic Neue and EB Garamond are SIL Open Font Licence; the TeX Gyre
   # families use the GUST Font License - see the *-LICENSE.txt files in
   # assets/fonts/.
   assets:
@@ -57,6 +58,14 @@ flutter:
     - assets/fonts/FiraSans-Regular.ttf
     - assets/fonts/Spectral-Regular.ttf
     - assets/fonts/Lobster-Regular.ttf
+    - assets/fonts/Arimo-Regular.ttf
+    - assets/fonts/Tinos-Regular.ttf
+    - assets/fonts/Cousine-Regular.ttf
+    - assets/fonts/Caladea-Regular.ttf
+    - assets/fonts/Gelasio-Regular.ttf
+    - assets/fonts/OpenSans-Regular.ttf
+    - assets/fonts/ComicNeue-Regular.ttf
+    - assets/fonts/EBGaramond-Regular.ttf
     - assets/fonts/TeXGyreHeros-Regular.otf
     - assets/fonts/TeXGyreHeros-Bold.otf
     - assets/fonts/TeXGyreHeros-Italic.otf

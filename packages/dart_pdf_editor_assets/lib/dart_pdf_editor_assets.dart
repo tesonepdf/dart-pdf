@@ -38,16 +38,47 @@ import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 /// The asset-bundle package name Flutter serves this package's assets under.
 const String _package = 'dart_pdf_editor_assets';
 
-/// The editor fonts bundled with this package - the DejaVu trio (sans, serif
-/// and monospace covering Latin, Cyrillic, Greek and more) plus Fira Sans
-/// (humanist sans), Spectral (a refined serif) and Lobster (a display script).
+/// The editor fonts bundled with this package - ten free stand-ins for the most
+/// used document fonts (the imitated font is named in brackets), the DejaVu
+/// serif and monospace faces, Fira Sans, Spectral and Lobster.
 ///
 /// Assigned to [pdfBundledFonts] by [registerBundledEditorAssets] so they show
 /// up in every [showPdfFontMenu]; the DejaVu trio also backs [loadFallbackFonts]
 /// for composite (/Type0) text editing.
 const List<PdfBundledFont> bundledEditorFonts = <PdfBundledFont>[
+  // I dieci font piu' usati nei documenti: sostituti liberi, solo versione
+  // normale (il grassetto e' simulato). Tra parentesi il font che imitano.
+  // Calibri, Arial, Times New Roman, Courier New, Cambria e Georgia hanno le
+  // stesse larghezze dell'originale; gli altri sono simili.
+  PdfBundledFont('Carlito (Calibri)',
+      'packages/$_package/assets/fonts/Carlito-Regular.ttf',
+      package: _package),
   PdfBundledFont(
-      'DejaVu Sans', 'packages/$_package/assets/fonts/DejaVuSans.ttf',
+      'Arimo (Arial)', 'packages/$_package/assets/fonts/Arimo-Regular.ttf',
+      package: _package),
+  PdfBundledFont('Tinos (Times New Roman)',
+      'packages/$_package/assets/fonts/Tinos-Regular.ttf',
+      package: _package),
+  PdfBundledFont('Cousine (Courier New)',
+      'packages/$_package/assets/fonts/Cousine-Regular.ttf',
+      package: _package),
+  PdfBundledFont('Caladea (Cambria)',
+      'packages/$_package/assets/fonts/Caladea-Regular.ttf',
+      package: _package),
+  PdfBundledFont('Gelasio (Georgia)',
+      'packages/$_package/assets/fonts/Gelasio-Regular.ttf',
+      package: _package),
+  PdfBundledFont('DejaVu Sans (Verdana)',
+      'packages/$_package/assets/fonts/DejaVuSans.ttf',
+      package: _package),
+  PdfBundledFont('Open Sans (Segoe UI)',
+      'packages/$_package/assets/fonts/OpenSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont('Comic Neue (Comic Sans)',
+      'packages/$_package/assets/fonts/ComicNeue-Regular.ttf',
+      package: _package),
+  PdfBundledFont('EB Garamond (Garamond)',
+      'packages/$_package/assets/fonts/EBGaramond-Regular.ttf',
       package: _package),
   PdfBundledFont(
       'DejaVu Serif', 'packages/$_package/assets/fonts/DejaVuSerif.ttf',
