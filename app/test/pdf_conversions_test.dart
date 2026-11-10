@@ -161,6 +161,29 @@ void main() {
           contains('<w:sz w:val="12"/>'));
     });
 
+    test('docxParagraphXml: grassetto, corsivo e colore, nell\'ordine di Word',
+        () {
+      final xml = docxParagraphXml(const DocxParagraph('Titolo',
+          fontSize: 14, bold: true, italic: true, color: 0xC00000));
+      expect(
+          xml,
+          contains('<w:rPr><w:b/><w:i/><w:color w:val="C00000"/>'
+              '<w:sz w:val="28"/></w:rPr>'));
+      // Un colore con zeri davanti resta di sei cifre.
+      expect(docxParagraphXml(const DocxParagraph('a', color: 0x0000FF)),
+          contains('<w:color w:val="0000FF"/>'));
+      expect(docxParagraphXml(const DocxParagraph('a', color: 0x001000)),
+          contains('<w:color w:val="001000"/>'));
+    });
+
+    test('docxParagraphXml: un paragrafo normale e nero non scrive stili', () {
+      final xml = docxParagraphXml(const DocxParagraph('a'));
+      expect(xml, isNot(contains('<w:b/>')));
+      expect(xml, isNot(contains('<w:i/>')));
+      expect(xml, isNot(contains('<w:color')));
+      expect(xml, contains('<w:rPr><w:sz w:val="22"/></w:rPr>'));
+    });
+
     test('buildDocx: le tre parti, con il testo scappato bene', () {
       final docx = buildDocx(const [
         DocxParagraph('Tom & Jerry <3'),
