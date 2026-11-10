@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,7 @@ import 'pdf_cache.dart';
 import 'recents.dart';
 import 'signature_trust.dart';
 import 'update.dart';
+import 'user_fonts.dart';
 import 'update_install_flow.dart';
 import 'update_installer.dart';
 import 'web_channel.dart';
@@ -276,6 +278,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     const Divider(height: 32),
                     _ArrowStepsSection(prefs: widget.prefs),
                     const Divider(height: 32),
+                    const _UserFontsSection(),
+                    const Divider(height: 32),
                     MeasureScaleSettingsSection(prefs: widget.prefs),
                   ],
                 ),
@@ -390,6 +394,113 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               onPressed: () => Navigator.of(context).pop(),
               child: Text(appL10n(context).close),
             )),
+      ],
+    );
+  }
+}
+
+/// Settings block for the fonts the person imports from the phone: one file
+/// per family, normal face only. They show up in the editor's font menu.
+class _UserFontsSection extends StatefulWidget {
+  const _UserFontsSection();
+
+  @override
+  State<_UserFontsSection> createState() => _UserFontsSectionState();
+}
+
+class _UserFontsSectionState extends State<_UserFontsSection> {
+  String? _message;
+  bool _busy = false;
+
+  Future<void> _import() async {
+    setState(() => _busy = true);
+    try {
+      // Android has no reliable MIME type for fonts, so it shows every file;
+      // whatever is not a font is skipped by the import.
+      final files = await openFiles(
+        acceptedTypeGroups: defaultTargetPlatform == TargetPlatform.android
+            ? const <XTypeGroup>[]
+            : const [
+                XTypeGroup(
+                  label: 'Font',
+                  extensions: ['ttf', 'otf'],
+                  mimeTypes: ['font/ttf', 'font/otf'],
+                  uniformTypeIdentifiers: [
+                    'public.truetype-ttf-font',
+                    'public.opentype-font',
+                  ],
+                ),
+              ],
+      );
+      if (files.isEmpty) {
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+      final sources = [
+        for (final file in files)
+          UserFontSource(file.name, await file.readAsBytes()),
+      ];
+      final result = await UserFonts.instance.import(sources);
+      if (!mounted) return;
+      setState(() {
+        _message = result.summary;
+        _busy = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = 'Importazione non riuscita.';
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fonts = UserFonts.instance;
+    if (!fonts.supported) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Font personali', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Importa i file .ttf o .otf dal telefono: più file in una volta, un '
+          'file per famiglia, solo la versione normale (i corsivi vengono '
+          'saltati). Compaiono nel menu dei font e si incorporano nel PDF.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          key: const ValueKey('settings-import-fonts'),
+          onPressed: _busy ? null : _import,
+          child: const Text('Importa font…'),
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: 6),
+          Text(_message!,
+              key: const ValueKey('settings-import-fonts-message'),
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
+        ListenableBuilder(
+          listenable: fonts,
+          builder: (context, _) => Column(
+            children: [
+              for (var i = 0; i < fonts.imported.length; i++)
+                ListTile(
+                  key: ValueKey('settings-font-$i'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(fonts.imported[i].family),
+                  trailing: IconButton(
+                    key: ValueKey('settings-font-remove-$i'),
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => fonts.remove(fonts.imported[i]),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
