@@ -1615,20 +1615,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// Whether this gesture should currently use the persisted page grid.
   /// Alt is the conventional temporary bypass: it lets a user make one
   /// off-grid adjustment without visiting the settings popup.
-  bool get _gridSnapping {
-    final preferences = _controller.preferences;
-    return preferences.snapToGrid &&
-        !HardwareKeyboard.instance.isAltPressed &&
-        preferences.gridSpacing.isFinite &&
-        preferences.gridSpacing > 0;
-  }
+  bool get _gridSnapping => false; // agganci automatici tolti: movimento libero
 
-  /// Smart alignment uses the same temporary Alt bypass as the grid. Its
-  /// tolerance is converted from screen pixels to this overlay's view space,
-  /// so it feels equally magnetic at every transform zoom.
-  bool get _smartAlignmentSnapping =>
-      _controller.preferences.smartAlignmentGuides &&
-      !HardwareKeyboard.instance.isAltPressed;
+  /// Smart alignment is switched off: moving and resizing are free.
+  bool get _smartAlignmentSnapping => false;
 
   static const double _alignmentTolerance = 6;
 
@@ -4132,16 +4122,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// The edges (L/R/CX across, B/T/CY up and down) turned on in Settings.
   List<String> _nudgeEdges({required bool across}) {
     final prefs = _controller.preferences;
+    if (!prefs.nudgeAlignEnabled) return const [];
     return across
         ? [
             if (prefs.nudgeAlignLeft) 'L',
             if (prefs.nudgeAlignRight) 'R',
-            if (prefs.nudgeAlignCenterX) 'CX',
           ]
         : [
             if (prefs.nudgeAlignBottom) 'B',
             if (prefs.nudgeAlignTop) 'T',
-            if (prefs.nudgeAlignCenterY) 'CY',
           ];
   }
 

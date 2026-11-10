@@ -175,69 +175,45 @@ void main() {
     );
   });
 
-  testWidgets('grid snaps creation, movement, and resizing in page points',
+  testWidgets('creation, movement and resizing are free: no grid, no guides',
       (tester) async {
     final editing = await pumpEditor(tester);
+    // even with the old preferences switched on, nothing snaps any more
     editing.preferences
       ..gridSpacing = 25
-      ..snapToGrid = true;
+      ..snapToGrid = true
+      ..smartAlignmentGuides = true;
     editing.tool = PdfEditTool.rectangle;
     await tester.pump();
 
     await dragMouse(tester, view(103, 703), view(247, 612));
     var rect = editing.document.page(0).annotations.single.rect;
-    expect(rect.left, closeTo(100, 0.01));
-    expect(rect.bottom, closeTo(600, 0.01));
-    expect(rect.right, closeTo(250, 0.01));
-    expect(rect.top, closeTo(700, 0.01));
+    expect(rect.left, closeTo(103, 0.5));
+    expect(rect.bottom, closeTo(612, 0.5));
+    expect(rect.right, closeTo(247, 0.5));
+    expect(rect.top, closeTo(703, 0.5));
 
     editing
       ..tool = PdfEditTool.select
       ..selectAnnotation(0, 0);
     await tester.pump();
 
-    // A raw +13/-17pt move snaps the primary box's left/top corner from
-    // (100,700) to (125,675), independent of the center grab position.
     await dragMouse(tester, view(175, 650), view(188, 633));
     rect = editing.document.page(0).annotations.single.rect;
-    expect(rect.left, closeTo(125, 0.01));
-    expect(rect.bottom, closeTo(575, 0.01));
-    expect(rect.right, closeTo(275, 0.01));
-    expect(rect.top, closeTo(675, 0.01));
+    expect(rect.left, closeTo(116, 0.5));
+    expect(rect.bottom, closeTo(595, 0.5));
 
-    // The bottom-right handle lands at the nearest grid intersection.
-    await dragMouse(tester, view(275, 575), view(292, 541));
+    await dragMouse(tester, view(263, 595), view(280, 561));
     rect = editing.document.page(0).annotations.single.rect;
-    expect(rect.left, closeTo(125, 0.01));
-    expect(rect.bottom, closeTo(550, 0.01));
-    expect(rect.right, closeTo(300, 0.01));
-    expect(rect.top, closeTo(675, 0.01));
+    expect(rect.right, closeTo(280, 0.5));
+    expect(rect.bottom, closeTo(561, 0.5));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
   });
 
-  testWidgets('Alt temporarily bypasses grid snapping', (tester) async {
-    final editing = await pumpEditor(tester);
-    editing.preferences
-      ..gridSpacing = 25
-      ..snapToGrid = true;
-    editing.tool = PdfEditTool.rectangle;
-    await tester.pump();
-
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-    await dragMouse(tester, view(103, 703), view(247, 612));
-
-    final rect = editing.document.page(0).annotations.single.rect;
-    expect(rect.left, closeTo(103, 0.5));
-    expect(rect.bottom, closeTo(612, 0.5));
-    expect(rect.right, closeTo(247, 0.5));
-    expect(rect.top, closeTo(703, 0.5));
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
-    await tester.pumpAndSettle(const Duration(milliseconds: 400));
-  });
-
-  testWidgets('smart guides snap annotation edges and centres while moving',
+  testWidgets('moving next to another annotation does not snap to it',
       (tester) async {
     final editing = await pumpEditor(tester);
+    editing.preferences.smartAlignmentGuides = true;
     editing
       ..addRectangle(0, const PdfRect(100, 650, 200, 750))
       ..addRectangle(0, const PdfRect(300, 500, 400, 600))
@@ -247,39 +223,20 @@ void main() {
 
     final gesture = await tester.startGesture(view(150, 700),
         kind: PointerDeviceKind.mouse);
-    // Raw placement is two points shy on x; y is already aligned. The smart
-    // guide should magnetize both axes to the second annotation.
+    // two points shy of the other box on x: it stays where it is dropped
     await gesture.moveTo(view(348, 550));
     await tester.pump();
-
-    expect(find.byKey(const ValueKey('pdf-alignment-guides')), findsOneWidget);
-    final painter = alignmentPainter(tester);
-    final guides = List<dynamic>.from(painter.guides as Iterable);
-    expect(guides.length, 2);
-    expect(
-        guides.any((g) =>
-            g.axis == Axis.vertical &&
-            (g.position - view(350, 0).dx).abs() < 0.1),
-        isTrue,
-        reason: guides.toString());
-    expect(
-        guides.any((g) =>
-            g.axis == Axis.horizontal &&
-            (g.position - view(0, 550).dy).abs() < 0.1),
-        isTrue);
+    expect(find.byKey(const ValueKey('pdf-alignment-guides')), findsNothing);
 
     await gesture.up();
     await tester.pump();
     final moved = editing.document.page(0).annotations[0].rect;
-    expect(moved.left, closeTo(300, 0.01));
-    expect(moved.bottom, closeTo(500, 0.01));
-    expect(moved.right, closeTo(400, 0.01));
-    expect(moved.top, closeTo(600, 0.01));
-    expect(find.byKey(const ValueKey('pdf-alignment-guides')), findsNothing);
+    expect(moved.left, closeTo(298, 0.5));
+    expect(moved.bottom, closeTo(500, 0.5));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
   });
 
-  testWidgets('smart guides snap resize axes and Alt bypasses them',
+  testWidgets('resizing next to another annotation does not snap to it',
       (tester) async {
     final editing = await pumpEditor(tester);
     editing
@@ -289,28 +246,8 @@ void main() {
       ..selectAnnotation(0, 0);
     await tester.pump();
 
-    // Bottom-right is (200, 600) in page space. Land both dragged edges two
-    // points from the reference box; they should snap exactly onto it.
     await dragMouse(tester, view(200, 600), view(298, 502));
-    var resized = editing.document.page(0).annotations[0].rect;
-    expect(resized.right, closeTo(300, 0.01));
-    expect(resized.bottom, closeTo(500, 0.01),
-        reason: 'target=${editing.document.page(0).annotations[1].rect}');
-
-    // Undo, then make the same drag with Alt down: the raw off-guide values
-    // survive and no alignment line is mounted.
-    editing.undo();
-    await tester.pump();
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-    final gesture = await tester.startGesture(view(200, 600),
-        kind: PointerDeviceKind.mouse);
-    await gesture.moveTo(view(298, 502));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('pdf-alignment-guides')), findsNothing);
-    await gesture.up();
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
-    await tester.pump();
-    resized = editing.document.page(0).annotations[0].rect;
+    final resized = editing.document.page(0).annotations[0].rect;
     expect(resized.right, closeTo(298, 0.5));
     expect(resized.bottom, closeTo(502, 0.5));
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
@@ -402,17 +339,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pdf-shell-editing-guides')),
         kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('pdf-smart-alignment-guides')));
+    expect(find.byKey(const ValueKey('pdf-smart-alignment-guides')), findsNothing);
+    expect(find.byKey(const ValueKey('pdf-grid-snap')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('pdf-page-rulers')));
     await tester.tap(find.byKey(const ValueKey('pdf-cursor-guide-vertical')));
-    await tester.tap(find.byKey(const ValueKey('pdf-grid-snap')));
     await tester.tap(find.byKey(const ValueKey('pdf-grid-visible')));
     await tester.pump();
 
-    expect(preferences.smartAlignmentGuides, isFalse);
     expect(preferences.showPageRulers, isTrue);
     expect(preferences.showVerticalCursorGuide, isTrue);
-    expect(preferences.snapToGrid, isTrue);
     expect(preferences.showSnapGrid, isTrue);
 
     await tester.tap(find.byKey(const ValueKey('pdf-guides-done')));

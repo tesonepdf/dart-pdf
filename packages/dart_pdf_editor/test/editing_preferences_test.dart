@@ -467,4 +467,26 @@ void main() {
       expect(b.menuHoldMs, 600);
     });
   });
+
+  group('nudge alignment sides', () {
+    test('only left and bottom are on by default, master switch persists',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final a = PdfEditingPreferences();
+      await a.ready;
+      expect(a.nudgeAlignEnabled, isTrue);
+      expect(a.nudgeAlignLeft, isTrue);
+      expect(a.nudgeAlignBottom, isTrue);
+      expect(a.nudgeAlignRight, isFalse);
+      expect(a.nudgeAlignTop, isFalse);
+      a.nudgeAlignEnabled = false;
+      a.nudgeAlignRight = true;
+      await Future<void>.delayed(Duration.zero);
+      final b = PdfEditingPreferences();
+      await b.ready;
+      expect(b.nudgeAlignEnabled, isFalse);
+      expect(b.nudgeAlignRight, isTrue);
+      expect(b.nudgeAlignLeft, isTrue);
+    });
+  });
 }

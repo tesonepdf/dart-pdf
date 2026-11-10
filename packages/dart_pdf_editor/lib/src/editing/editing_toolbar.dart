@@ -84,15 +84,6 @@ Future<void> showPdfEditingGuidesDialog(
               mainAxisSize: MainAxisSize.min,
               children: [
                 SwitchListTile(
-                  key: const ValueKey('pdf-smart-alignment-guides'),
-                  secondary: const Icon(Icons.align_horizontal_center),
-                  title: Text(pdfL10n(context).guidesSmartAlignment),
-                  subtitle: Text(pdfL10n(context).guidesSnapHint),
-                  value: preferences.smartAlignmentGuides,
-                  onChanged: (value) =>
-                      preferences.smartAlignmentGuides = value,
-                ),
-                SwitchListTile(
                   key: const ValueKey('pdf-page-rulers'),
                   secondary: const Icon(Icons.straighten),
                   title: Text(pdfL10n(context).guidesPageRulers),
@@ -118,16 +109,6 @@ Future<void> showPdfEditingGuidesDialog(
                       preferences.showHorizontalCursorGuide = value,
                 ),
                 const Divider(height: 1),
-                SwitchListTile(
-                  key: const ValueKey('pdf-grid-snap'),
-                  secondary: const Icon(Icons.grid_4x4),
-                  title: Text(pdfL10n(context).guidesSnapToGrid),
-                  subtitle: PdfKeyboardAvailability.of(context)
-                      ? Text(pdfL10n(context).guidesSnapToGridHint)
-                      : null,
-                  value: preferences.snapToGrid,
-                  onChanged: (value) => preferences.snapToGrid = value,
-                ),
                 SwitchListTile(
                   key: const ValueKey('pdf-grid-visible'),
                   secondary: const Icon(Icons.grid_on_outlined),
