@@ -1779,6 +1779,7 @@ class PdfStamp {
 
   /// Draws [text] at ([x], [y]) (baseline origin) in Helvetica.
   /// [color] is 0xRRGGBB. [angleDegrees] rotates around the origin.
+  /// [italic] uses the oblique face (same glyph widths as the upright one).
   /// [opacity] (0 to 1) makes the text translucent with a constant-alpha
   /// graphics state; 1 draws it opaque.
   void text(
@@ -1788,10 +1789,11 @@ class PdfStamp {
     double size = 12,
     int color = 0x000000,
     bool bold = false,
+    bool italic = false,
     double angleDegrees = 0,
     double opacity = 1,
   }) {
-    final font = _helveticaResource(bold: bold);
+    final font = _helveticaResource(bold: bold, italic: italic);
     String? alphaState;
     if (opacity < 1) {
       final alpha = opacity.isNaN ? 1.0 : opacity.clamp(0.0, 1.0);
@@ -1920,9 +1922,14 @@ class PdfStamp {
     return copy;
   }
 
-  String _helveticaResource({required bool bold}) {
+  String _helveticaResource({required bool bold, bool italic = false}) {
     final fonts = _subDictionary('Font');
-    final base = bold ? 'Helvetica-Bold' : 'Helvetica';
+    final base = switch ((bold, italic)) {
+      (true, true) => 'Helvetica-BoldOblique',
+      (true, false) => 'Helvetica-Bold',
+      (false, true) => 'Helvetica-Oblique',
+      (false, false) => 'Helvetica',
+    };
     // reuse a matching font this stamp already added
     for (final entry in fonts.entries.entries) {
       final font = _editor.document.cos.resolve(entry.value);
