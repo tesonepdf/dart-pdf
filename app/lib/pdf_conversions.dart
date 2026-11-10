@@ -1,16 +1,17 @@
 import 'dart:convert' show utf8;
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart'
-    show PdfReflowBlock, PdfTextExtractor;
+    show PdfExtractedRun, PdfReflowBlock, PdfTextExtractor;
 
 import 'image_to_pdf.dart';
 
 // Conversioni da e verso il PDF (punto 1: testo semplice e foto in PDF;
-// punto 2: PDF in Word).
+// punto 2: PDF in Word; punto 3: PDF in Excel).
 // Solo logica, senza interfaccia: le finestre stanno in
 // `photos_to_pdf_dialog.dart` e il collegamento al menu in `editor_screen.dart`.
 
@@ -306,6 +307,422 @@ Future<DocxResult> pdfToDocx(
   return (
     bytes: buildDocx(paragraphs),
     paragraphs: paragraphs.where((p) => p.text.isNotEmpty).length,
+    failedPages: failed,
+  );
+}
+
+// --- PDF in Excel (.xlsx) ----------------------------------------------------
+//
+// Prima versione, documento intero: le righe si trovano dalla posizione
+// verticale del testo, le colonne dagli spazi larghi tra le parole, e i numeri
+// diventano numeri veri nelle celle. Una scheda (foglio) per ogni pagina che
+// ha del testo. Funziona bene sulle tabelle, male sui PDF che non lo sono.
+// Limiti: una cella che si estende su più colonne (un titolo largo dentro una
+// riga di più celle) può unire le colonne; niente formati, colori o bordi.
+
+/// Una cella trovata sulla pagina, prima di sapere in che colonna va. [left] e
+/// [right] sono in punti della pagina.
+class PageCell {
+  const PageCell(this.left, this.right, this.text);
+
+  final double left;
+  final double right;
+  final String text;
+}
+
+class _Piece {
+  const _Piece(this.left, this.right, this.top, this.bottom, this.text);
+
+  final double left;
+  final double right;
+  final double top;
+  final double bottom;
+  final String text;
+
+  double get center => (top + bottom) / 2;
+  double get height => top - bottom;
+}
+
+/// Le righe di celle di una pagina, dall'alto in basso e da sinistra a
+/// destra. Una riga è fatta dal testo che sta alla stessa altezza; due pezzi
+/// di testo della stessa riga stanno nella stessa cella se la distanza è meno
+/// di un'altezza di carattere, altrimenti sono celle diverse. Dentro un pezzo
+/// di testo, due o più spazi di fila (o una tabulazione) separano le celle.
+List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs) {
+  final pieces = <_Piece>[];
+  final separator = RegExp(r' {2,}|\t+');
+  for (final run in runs) {
+    final text = run.text;
+    final b = run.bounds;
+    if (text.trim().isEmpty || !(b.width > 0) || !(b.height > 0)) continue;
+    final len = text.length;
+    void add(int from, int to) {
+      final seg = text.substring(from, to);
+      final trimmed = seg.trim();
+      if (trimmed.isEmpty) return;
+      final s = from + (seg.length - seg.trimLeft().length);
+      final e = s + trimmed.length;
+      pieces.add(_Piece(b.left + b.width * s / len, b.left + b.width * e / len,
+          b.top, b.bottom, trimmed));
+    }
+
+    var start = 0;
+    for (final m in separator.allMatches(text)) {
+      add(start, m.start);
+      start = m.end;
+    }
+    add(start, len);
+  }
+
+  // Dall'alto in basso (la y della pagina cresce verso l'alto).
+  pieces.sort((a, b) => b.center.compareTo(a.center));
+  final rows = <List<_Piece>>[];
+  var rowCenter = 0.0;
+  var rowHeight = 0.0;
+  for (final p in pieces) {
+    if (rows.isNotEmpty &&
+        (p.center - rowCenter).abs() <= 0.5 * math.min(rowHeight, p.height)) {
+      rows.last.add(p);
+    } else {
+      rows.add([p]);
+      rowCenter = p.center;
+      rowHeight = p.height;
+    }
+  }
+
+  final out = <List<PageCell>>[];
+  for (final row in rows) {
+    row.sort((a, b) => a.left.compareTo(b.left));
+    final cells = <PageCell>[];
+    var text = row.first.text;
+    var left = row.first.left;
+    var right = row.first.right;
+    var height = row.first.height;
+    for (final p in row.skip(1)) {
+      final gap = p.left - right;
+      final em = math.min(height, p.height);
+      if (gap > em) {
+        cells.add(PageCell(left, right, text));
+        text = p.text;
+        left = p.left;
+        right = p.right;
+        height = p.height;
+      } else {
+        text = gap > 0.15 * em ? '$text ${p.text}' : '$text${p.text}';
+        right = math.max(right, p.right);
+        height = p.height;
+      }
+    }
+    cells.add(PageCell(left, right, text));
+    out.add(cells);
+  }
+  return out;
+}
+
+/// Le colonne della pagina: gli intervalli (da sinistra a destra) in cui
+/// cadono le celle delle righe con almeno due celle. Le celle che si
+/// sovrappongono (a sinistra, a destra o al centro) sono la stessa colonna,
+/// quindi funziona anche per i numeri allineati a destra. Se nessuna riga ha
+/// due celle, contano tutte.
+List<({double left, double right})> columnSpans(List<List<PageCell>> rows) {
+  var source = <PageCell>[
+    for (final r in rows)
+      if (r.length >= 2) ...r,
+  ];
+  if (source.isEmpty) source = [for (final r in rows) ...r];
+  source.sort((a, b) => a.left.compareTo(b.left));
+  final spans = <({double left, double right})>[];
+  for (final c in source) {
+    if (spans.isNotEmpty && c.left <= spans.last.right) {
+      spans[spans.length - 1] = (
+        left: spans.last.left,
+        right: math.max(spans.last.right, c.right),
+      );
+    } else {
+      spans.add((left: c.left, right: c.right));
+    }
+  }
+  return spans;
+}
+
+/// La griglia di testo di una pagina: righe per colonne, con `''` dove la
+/// cella è vuota. Vuota se nella pagina non c'è testo.
+List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs) {
+  final rows = pageCellRows(runs);
+  if (rows.isEmpty) return const [];
+  final spans = columnSpans(rows);
+
+  // La colonna che comincia più a destra senza superare l'inizio della cella.
+  int byLeftEdge(PageCell c) {
+    var index = 0;
+    for (var i = 0; i < spans.length; i++) {
+      if (spans[i].left <= c.left + 1) index = i;
+    }
+    return index;
+  }
+
+  int byOverlap(PageCell c) {
+    var best = -1;
+    var bestOverlap = 0.0;
+    for (var i = 0; i < spans.length; i++) {
+      final overlap =
+          math.min(spans[i].right, c.right) - math.max(spans[i].left, c.left);
+      if (overlap > bestOverlap) {
+        best = i;
+        bestOverlap = overlap;
+      }
+    }
+    return best >= 0 ? best : byLeftEdge(c);
+  }
+
+  final grid = <List<String>>[];
+  for (final row in rows) {
+    final line = List<String>.filled(spans.length, '');
+    for (final c in row) {
+      // Una cella sola nella riga (un titolo) va dove comincia, non dove
+      // copre più colonne.
+      final i = row.length == 1 ? byLeftEdge(c) : byOverlap(c);
+      line[i] = line[i].isEmpty ? c.text : '${line[i]} ${c.text}';
+    }
+    grid.add(line);
+  }
+  return grid;
+}
+
+/// Il numero scritto in [raw], oppure null se è testo. Capisce il formato
+/// italiano (`1.234,56`) e quello inglese (`1,234.56`); un solo `,` è il
+/// decimale, un solo `.` è il decimale tranne per `1.234` (migliaia). Un
+/// segno meno, le parentesi (negativo), `€`, `$` e `£` all'inizio o alla fine
+/// vanno bene. Restano testo i codici con lo zero davanti (`007`), i numeri
+/// con più di 15 cifre (telefoni, IBAN), le date (`10.11.2026`) e le
+/// percentuali.
+num? parseSpreadsheetNumber(String raw) {
+  var t = raw.trim().replaceAll('\u2212', '-');
+  var negative = false;
+  if (t.length > 2 && t.startsWith('(') && t.endsWith(')')) {
+    negative = true;
+    t = t.substring(1, t.length - 1).trim();
+  }
+  t = t.replaceFirst(RegExp(r'^[€$£]\s*'), '');
+  t = t.replaceFirst(RegExp(r'\s*[€$£]$'), '');
+  if (t.startsWith('-')) {
+    negative = !negative;
+    t = t.substring(1).trim();
+  } else if (t.startsWith('+')) {
+    t = t.substring(1).trim();
+  }
+  if (!RegExp(r'^\d[\d.,]*$').hasMatch(t)) return null;
+  final digits = t.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length > 15) return null;
+  if (RegExp(r'^\d+$').hasMatch(t) && t.length > 1 && t.startsWith('0')) {
+    return null;
+  }
+
+  final dots = '.'.allMatches(t).length;
+  final commas = ','.allMatches(t).length;
+  String normalized;
+  if (dots > 0 && commas > 0) {
+    // Il separatore che sta per ultimo è il decimale, l'altro le migliaia.
+    final decimal = t.lastIndexOf('.') > t.lastIndexOf(',') ? '.' : ',';
+    final thousands = decimal == '.' ? ',' : '.';
+    if (decimal.allMatches(t).length != 1) return null;
+    final at = t.lastIndexOf(decimal);
+    final whole = t.substring(0, at);
+    final fraction = t.substring(at + 1);
+    if (fraction.isEmpty || !RegExp(r'^\d+$').hasMatch(fraction)) return null;
+    final grouped =
+        RegExp('^\\d{1,3}(${RegExp.escape(thousands)}\\d{3})+\$');
+    if (!grouped.hasMatch(whole)) return null;
+    normalized = '${whole.replaceAll(thousands, '')}.$fraction';
+  } else if (commas > 0) {
+    if (commas > 1) {
+      if (!RegExp(r'^\d{1,3}(,\d{3})+$').hasMatch(t)) return null;
+      normalized = t.replaceAll(',', '');
+    } else {
+      if (!RegExp(r'^\d+,\d+$').hasMatch(t)) return null;
+      normalized = t.replaceAll(',', '.');
+    }
+  } else if (dots > 0) {
+    if (dots > 1) {
+      if (!RegExp(r'^\d{1,3}(\.\d{3})+$').hasMatch(t)) return null;
+      normalized = t.replaceAll('.', '');
+    } else if (RegExp(r'^[1-9]\d{0,2}\.\d{3}$').hasMatch(t)) {
+      normalized = t.replaceAll('.', '');
+    } else {
+      if (!RegExp(r'^\d+\.\d+$').hasMatch(t)) return null;
+      normalized = t;
+    }
+  } else {
+    normalized = t;
+  }
+
+  final value =
+      normalized.contains('.') ? double.parse(normalized) : int.parse(normalized);
+  return negative ? -value : value;
+}
+
+/// Una scheda del file Excel: il [name] e le [rows] di testo (celle vuote
+/// `''`). I numeri si riconoscono quando si scrive il file.
+class XlsxSheet {
+  const XlsxSheet(this.name, this.rows);
+
+  final String name;
+  final List<List<String>> rows;
+}
+
+/// Il nome della colonna `index` (da 0): A, B, ... Z, AA, AB...
+String xlsxColumnName(int index) {
+  var n = index + 1;
+  final letters = <int>[];
+  while (n > 0) {
+    final r = (n - 1) % 26;
+    letters.add(0x41 + r);
+    n = (n - 1) ~/ 26;
+  }
+  return String.fromCharCodes(letters.reversed);
+}
+
+/// Il foglio come XML di Excel: testo in celle di testo, numeri in celle
+/// numeriche, larghezza di colonna secondo il contenuto.
+String xlsxSheetXml(XlsxSheet sheet) {
+  final columns = sheet.rows.fold<int>(0, (m, r) => math.max(m, r.length));
+  final widths = List<int>.filled(columns, 0);
+  final body = StringBuffer();
+  var rowNumber = 0;
+  for (final row in sheet.rows) {
+    rowNumber++;
+    final cells = StringBuffer();
+    for (var c = 0; c < row.length; c++) {
+      var text = row[c];
+      if (text.trim().isEmpty) continue;
+      if (text.length > 32767) text = text.substring(0, 32767);
+      widths[c] = math.max(widths[c], text.length);
+      final ref = '${xlsxColumnName(c)}$rowNumber';
+      final number = parseSpreadsheetNumber(text);
+      if (number == null) {
+        cells.write('<c r="$ref" t="inlineStr"><is>'
+            '<t xml:space="preserve">${xmlSafeText(text)}</t></is></c>');
+      } else {
+        cells.write('<c r="$ref"><v>$number</v></c>');
+      }
+    }
+    body.write('<row r="$rowNumber">$cells</row>');
+  }
+  final cols = StringBuffer();
+  for (var c = 0; c < columns; c++) {
+    final width = (widths[c] + 2).clamp(8, 60);
+    cols.write('<col min="${c + 1}" max="${c + 1}" width="$width" '
+        'customWidth="1"/>');
+  }
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '${columns == 0 ? '' : '<cols>$cols</cols>'}'
+      '<sheetData>$body</sheetData></worksheet>';
+}
+
+/// Scrive il file Excel (.xlsx) delle [sheets] (almeno una). Un .xlsx è un
+/// file zip: i tipi, il collegamento al libro, il libro con l'elenco delle
+/// schede, i suoi collegamenti e un file per scheda.
+Uint8List buildXlsx(List<XlsxSheet> sheets) {
+  if (sheets.isEmpty) throw ArgumentError('serve almeno una scheda');
+  const header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const relType =
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  final overrides = StringBuffer();
+  final sheetList = StringBuffer();
+  final sheetRels = StringBuffer();
+  for (var i = 0; i < sheets.length; i++) {
+    final n = i + 1;
+    overrides.write('<Override PartName="/xl/worksheets/sheet$n.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>');
+    sheetList.write('<sheet name="${xmlSafeText(sheets[i].name)}" '
+        'sheetId="$n" r:id="rId$n"/>');
+    sheetRels.write('<Relationship Id="rId$n" Type="$relType/worksheet" '
+        'Target="worksheets/sheet$n.xml"/>');
+  }
+  final contentTypes =
+      '$header<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      '<Default Extension="xml" ContentType="application/xml"/>'
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      '$overrides</Types>';
+  final rels =
+      '$header<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '<Relationship Id="rId1" Type="$relType/officeDocument" Target="xl/workbook.xml"/>'
+      '</Relationships>';
+  final workbook =
+      '$header<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:r="$relType"><sheets>$sheetList</sheets></workbook>';
+  final workbookRels =
+      '$header<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '$sheetRels</Relationships>';
+  final archive = Archive()
+    ..addFile(_zipEntry('[Content_Types].xml', contentTypes))
+    ..addFile(_zipEntry('_rels/.rels', rels))
+    ..addFile(_zipEntry('xl/workbook.xml', workbook))
+    ..addFile(_zipEntry('xl/_rels/workbook.xml.rels', workbookRels));
+  for (var i = 0; i < sheets.length; i++) {
+    archive.addFile(
+        _zipEntry('xl/worksheets/sheet${i + 1}.xml', xlsxSheetXml(sheets[i])));
+  }
+  return ZipEncoder().encodeBytes(archive);
+}
+
+/// Il nome proposto per il file Excel: il titolo senza `.pdf`, più `.xlsx`.
+String xlsxExportFileName(String title) {
+  final txt = textExportFileName(title);
+  return '${txt.substring(0, txt.length - 4)}.xlsx';
+}
+
+/// Il risultato di [pdfToXlsx]: il file (vuoto se nessuna pagina ha testo),
+/// le schede, le celle con del contenuto, quelle che sono numeri veri e le
+/// pagine (da 0) che non si sono riuscite a leggere.
+typedef XlsxResult = ({
+  Uint8List bytes,
+  int sheets,
+  int cells,
+  int numbers,
+  List<int> failedPages,
+});
+
+/// Legge ogni pagina di [document] con il motore ([PdfTextExtractor]), ne
+/// ricava righe e colonne ([pageGrid]) e fa un file Excel con una scheda per
+/// pagina che ha del testo (le altre non hanno scheda). Una pagina che non si
+/// legge viene saltata e riportata in `failedPages`. [onPage] riceve la
+/// pagina che sta per essere letta (da 0) e il numero di pagine.
+Future<XlsxResult> pdfToXlsx(
+  PdfDocument document, {
+  void Function(int page, int pageCount)? onPage,
+}) async {
+  final count = document.pageCount;
+  final sheets = <XlsxSheet>[];
+  final failed = <int>[];
+  var cells = 0;
+  var numbers = 0;
+  for (var i = 0; i < count; i++) {
+    onPage?.call(i, count);
+    try {
+      final grid = pageGrid(PdfTextExtractor.extract(document, i).runs);
+      if (grid.isNotEmpty) {
+        sheets.add(XlsxSheet('Pagina ${i + 1}', grid));
+        for (final row in grid) {
+          for (final text in row) {
+            if (text.trim().isEmpty) continue;
+            cells++;
+            if (parseSpreadsheetNumber(text) != null) numbers++;
+          }
+        }
+      }
+    } catch (_) {
+      failed.add(i);
+    }
+    await Future<void>.delayed(Duration.zero);
+  }
+  return (
+    bytes: sheets.isEmpty ? Uint8List(0) : buildXlsx(sheets),
+    sheets: sheets.length,
+    cells: cells,
+    numbers: numbers,
     failedPages: failed,
   );
 }

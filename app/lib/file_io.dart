@@ -917,6 +917,17 @@ Future<SaveResult> saveTextAs(
   }
 }
 
+/// Excel files (`.xlsx`), for "Export as Excel".
+XTypeGroup excelTypeGroup(String label) => XTypeGroup(
+      label: label,
+      extensions: const ['xlsx'],
+      mimeTypes: const [_xlsxMime],
+      uniformTypeIdentifiers: const ['org.openxmlformats.spreadsheetml.sheet'],
+    );
+
+const _xlsxMime =
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 /// Save-as for a Word file ([bytes] of a `.docx`), with the same platform
 /// behaviour as [saveBytesAs]: a save dialog on desktop, a browser download on
 /// the web, the share sheet on phones. [name] should carry `.docx`.
@@ -925,8 +936,34 @@ Future<SaveResult> saveDocxAs(
   Uint8List bytes,
   String name, {
   required String typeLabel,
+}) =>
+    _saveOfficeFileAs(context, bytes, name,
+        mimeType: _docxMime,
+        extension: '.docx',
+        typeGroup: wordTypeGroup(typeLabel));
+
+/// Save-as for an Excel file ([bytes] of an `.xlsx`), with the same platform
+/// behaviour as [saveDocxAs]. [name] should carry `.xlsx`.
+Future<SaveResult> saveXlsxAs(
+  BuildContext context,
+  Uint8List bytes,
+  String name, {
+  required String typeLabel,
+}) =>
+    _saveOfficeFileAs(context, bytes, name,
+        mimeType: _xlsxMime,
+        extension: '.xlsx',
+        typeGroup: excelTypeGroup(typeLabel));
+
+Future<SaveResult> _saveOfficeFileAs(
+  BuildContext context,
+  Uint8List bytes,
+  String name, {
+  required String mimeType,
+  required String extension,
+  required XTypeGroup typeGroup,
 }) async {
-  final file = XFile.fromData(bytes, mimeType: _docxMime, name: name);
+  final file = XFile.fromData(bytes, mimeType: mimeType, name: name);
 
   if (kIsWeb) {
     await file.saveTo(name);
@@ -948,12 +985,12 @@ Future<SaveResult> saveDocxAs(
     default:
       final location = await getSaveLocation(
         suggestedName: name,
-        acceptedTypeGroups: [wordTypeGroup(typeLabel)],
+        acceptedTypeGroups: [typeGroup],
       );
       if (location == null) return SaveResult.cancelled;
-      final path = location.path.toLowerCase().endsWith('.docx')
+      final path = location.path.toLowerCase().endsWith(extension)
           ? location.path
-          : '${location.path}.docx';
+          : '${location.path}$extension';
       try {
         await file.saveTo(path);
         return SaveResult.saved(path);

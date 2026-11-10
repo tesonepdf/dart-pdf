@@ -4798,6 +4798,39 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Salva il documento come file Excel (`.xlsx`), una scheda per ogni pagina
+  /// con del testo: righe dalla posizione verticale del testo, colonne dagli
+  /// spazi larghi, numeri veri nelle celle. Prima versione, documento intero.
+  /// Se nel PDF non c'è testo (una scansione) propone prima l'OCR.
+  Future<void> _exportExcel(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      _toast('Preparo il file Excel…', duration: const Duration(seconds: 4));
+      final result = await pdfToXlsx(session.document);
+      if (!mounted) return;
+      if (result.cells == 0) {
+        await _offerOcrBeforeText();
+        return;
+      }
+      final saved = await saveXlsxAs(
+          context, result.bytes, xlsxExportFileName(tab.title),
+          typeLabel: 'Foglio Excel');
+      if (!mounted) return;
+      final unread = result.failedPages.isEmpty
+          ? ''
+          : 'Pagine non lette: ${result.failedPages.map((i) => i + 1).join(', ')}.';
+      final message = [if (saved.message != null) saved.message!, unread]
+          .where((m) => m.isNotEmpty)
+          .join('\n');
+      if (message.isNotEmpty) _toast(message);
+    } catch (e) {
+      AppDevTools.instance.addLog('excel export failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
   /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
   /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
   /// cui si può esportare di nuovo.
@@ -5454,6 +5487,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_exportWord(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'export-excel',
+        requiresDocument: true,
+        icon: Icons.table_chart_outlined,
+        title: 'Esporta come Excel (.xlsx)…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_exportExcel(tab));
         },
       ),
       _MenuAction(
@@ -6510,7 +6553,8 @@ class _EditorScreenState extends State<EditorScreen>
         'print' ||
         'export-image' ||
         'export-text' ||
-        'export-word' =>
+        'export-word' ||
+        'export-excel' =>
           'save',
         'digital-signature' ||
         'ocr' ||
