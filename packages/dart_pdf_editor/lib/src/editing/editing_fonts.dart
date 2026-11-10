@@ -124,7 +124,10 @@ Future<List<PdfEmbeddedFont>> loadFallbackFonts() async {
     'DejaVu Serif',
     'DejaVu Sans Mono'
   ]) {
-    final bundled = pdfBundledFonts.where((f) => f.label == label).firstOrNull;
+    // la voce puo' avere il font imitato tra parentesi: "DejaVu Sans (Verdana)"
+    final bundled = pdfBundledFonts
+        .where((f) => f.label == label || f.label.startsWith('$label ('))
+        .firstOrNull;
     if (bundled == null) continue;
     try {
       fonts.add(PdfEmbeddedFont.parse(await loadBundledFont(bundled)));
