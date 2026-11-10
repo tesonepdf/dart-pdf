@@ -202,12 +202,18 @@ class PdfFontMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A box written in a non-embedded office font (Times New Roman, Arial...)
+    // is edited in its base-14 equivalent: show both names.
+    final original = currentFont is PdfStandardFont
+        ? controller.selectedTextOriginalFontName
+        : null;
+    final label = _fontLabel(currentFont) ?? controller.activeFontLabel;
     return OutlinedButton.icon(
       key: buttonKey ?? const ValueKey('pdf-font-menu'),
       icon: const Icon(Icons.font_download_outlined, size: 18),
       label: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 120),
-        child: Text(_fontLabel(currentFont) ?? controller.activeFontLabel,
+        constraints: BoxConstraints(maxWidth: original == null ? 120 : 200),
+        child: Text(original == null ? label : '$original \u2192 $label',
             overflow: TextOverflow.ellipsis, maxLines: 1),
       ),
       style: OutlinedButton.styleFrom(
@@ -277,6 +283,35 @@ class PdfDocumentFontChoice extends PdfFontChoice {
 class PdfLoadFontChoice extends PdfFontChoice {
   /// The load action.
   const PdfLoadFontChoice();
+}
+
+/// The common office font a /BaseFont (or /DA resource) name stands for -
+/// "Times New Roman" for `TimesNewRomanPSMT`, "Arial" for `Arial-BoldMT` -
+/// or null for any other name. Subset prefixes (`ABCDEF+`), spaces and
+/// dashes are ignored. These fonts can't be embedded here; the base-14
+/// family with the same metrics stands in for them.
+String? pdfCommonFontName(String baseFont) {
+  final key = baseFont
+      .replaceFirst(RegExp(r'^[A-Z]{6}\+'), '')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s_-]'), '');
+  const known = {
+    'timesnewroman': 'Times New Roman',
+    'arial': 'Arial',
+    'couriernew': 'Courier New',
+    'calibri': 'Calibri',
+    'cambria': 'Cambria',
+    'georgia': 'Georgia',
+    'verdana': 'Verdana',
+    'tahoma': 'Tahoma',
+    'segoeui': 'Segoe UI',
+    'comicsans': 'Comic Sans MS',
+    'garamond': 'Garamond',
+  };
+  for (final entry in known.entries) {
+    if (key.startsWith(entry.key)) return entry.value;
+  }
+  return null;
 }
 
 String? _fontLabel(PdfTextFont? font) {

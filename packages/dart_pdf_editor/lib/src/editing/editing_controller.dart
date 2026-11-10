@@ -19,6 +19,7 @@ import 'digital_signature.dart';
 import 'editing_annotation_clipboard.dart';
 import 'editing_mode.dart';
 import 'editing_page_clipboard.dart';
+import 'editing_fonts.dart' show pdfCommonFontName;
 import 'editing_preferences.dart';
 import 'editing_snapshot_clipboard.dart';
 import 'editing_tool_behavior.dart';
@@ -9910,6 +9911,37 @@ class PdfEditingController extends ChangeNotifier {
     final annotation = _selectedFreeTextAnnotation;
     if (annotation == null) return null;
     return _freeTextFontOf(annotation).font;
+  }
+
+  /// The original name of the font the selected free-text box names in its
+  /// /DA when that font is not embedded and is one of the common office
+  /// fonts (e.g. "Times New Roman" for /TimesNewRomanPSMT), else null. The
+  /// box is edited in the base-14 equivalent ([selectedTextFont]); the font
+  /// menu shows both so the substitution is visible.
+  String? get selectedTextOriginalFontName {
+    final annotation = _selectedFreeTextAnnotation;
+    if (annotation == null) return null;
+    final tf = RegExp(r'/(\S+)\s+\d+(?:\.\d+)?\s+Tf')
+        .firstMatch(annotation.defaultAppearance ?? '');
+    if (tf == null) return null;
+    final name = tf.group(1)!;
+    final cos = _document.cos;
+    final sources = <CosObject?>[
+      cos.resolve(annotation.normalAppearance?.dictionary['Resources']),
+    ];
+    final acroForm = cos.resolve(_document.catalog['AcroForm']);
+    if (acroForm is CosDictionary) sources.add(cos.resolve(acroForm['DR']));
+    for (final resources in sources) {
+      if (resources is! CosDictionary) continue;
+      final fonts = cos.resolve(resources['Font']);
+      if (fonts is! CosDictionary) continue;
+      final font = cos.resolve(fonts[name]);
+      if (font is! CosDictionary) continue;
+      if (PdfEmbeddedFont.fromFreeText(annotation) != null) return null;
+      final base = cos.resolve(font['BaseFont']);
+      return base is CosName ? pdfCommonFontName(base.value) : null;
+    }
+    return pdfCommonFontName(name);
   }
 
   /// The selected free-text box's full parsed style (spacing, underline,
