@@ -304,6 +304,113 @@ void main() {
       expect(elements.single, isA<DocxTable>());
     });
 
+    test('docxImageXml: misura in EMU, ridotta alla larghezza del testo', () {
+      // 100 x 50 punti = 1270000 x 635000 EMU, senza riduzione.
+      final small = docxImageXml(
+          DocxImage(Uint8List(0), 'jpeg', 100, 50),
+          number: 1);
+      expect(small, contains('<wp:extent cx="1270000" cy="635000"/>'));
+      expect(small, contains('r:embed="rId1"'));
+      expect(small, contains('<w:drawing>'));
+      expect(small, contains('name="image1.jpeg"'));
+      // Più largo del testo (9638 ventesimi di punto): si riduce, stesse
+      // proporzioni.
+      final wide = docxImageXml(
+          DocxImage(Uint8List(0), 'png', 1000, 500),
+          number: 2);
+      expect(wide, contains('<wp:extent cx="6120130" cy="3060065"/>'));
+      expect(wide, contains('r:embed="rId2"'));
+    });
+
+    test('buildDocx: le immagini finiscono in word/media con i collegamenti',
+        () {
+      final jpeg = Uint8List.fromList([1, 2, 3]);
+      final pngBytes = png(2, 2);
+      final docx = buildDocx([
+        const DocxParagraph('Testo'),
+        DocxImage(jpeg, 'jpeg', 100, 50),
+        DocxImage(pngBytes, 'png', 30, 30),
+      ]);
+      final archive = ZipDecoder().decodeBytes(docx);
+      expect(archive.findFile('word/media/image1.jpeg')!.content,
+          orderedEquals(jpeg));
+      expect(archive.findFile('word/media/image2.png')!.content,
+          orderedEquals(pngBytes));
+      final rels = partOf(docx, 'word/_rels/document.xml.rels');
+      expect(rels, contains('Id="rId1"'));
+      expect(rels, contains('Target="media/image1.jpeg"'));
+      expect(rels, contains('Id="rId2"'));
+      expect(rels, contains('Target="media/image2.png"'));
+      final types = partOf(docx, '[Content_Types].xml');
+      expect(types, contains('Extension="jpeg" ContentType="image/jpeg"'));
+      expect(types, contains('Extension="png" ContentType="image/png"'));
+      final document = partOf(docx, 'word/document.xml');
+      expect(document, contains('r:embed="rId1"'));
+      expect(document, contains('r:embed="rId2"'));
+      expect(document, contains('xmlns:r='));
+      expect(document, contains('xmlns:wp='));
+    });
+
+    test('buildDocx senza immagini non scrive word/media né i collegamenti',
+        () {
+      final docx = buildDocx(const [DocxParagraph('Solo testo')]);
+      final names = ZipDecoder().decodeBytes(docx).files.map((f) => f.name);
+      expect(names, isNot(contains('word/_rels/document.xml.rels')));
+      expect(names.where((n) => n.startsWith('word/media')), isEmpty);
+      expect(partOf(docx, '[Content_Types].xml'),
+          isNot(contains('image/')));
+    });
+
+    test('jpegInfo: dimensioni e canali di un JPEG, null per il resto', () {
+      final jpeg = Uint8List.fromList(img.encodeJpg(img.Image(width: 8, height: 5)));
+      final info = jpegInfo(jpeg);
+      expect(info, isNotNull);
+      expect(info!.width, 8);
+      expect(info.height, 5);
+      expect(info.components, 3);
+      expect(jpegInfo(png(4, 4)), isNull);
+      expect(jpegInfo(Uint8List.fromList([0xFF, 0xD8])), isNull);
+      expect(jpegInfo(Uint8List(0)), isNull);
+    });
+
+    test('docxPageElements: un\'immagine va tra i blocchi, al suo posto', () {
+      PdfReflowBlock block(String text, PdfRect bounds) => PdfReflowBlock(
+          text: text, bounds: bounds, lines: const [], fontSize: 10);
+      final image = DocxImage(Uint8List(0), 'jpeg', 100, 100);
+      final elements = docxPageElements([
+        block('Sopra', const PdfRect(50, 740, 200, 750)),
+        block('Sotto', const PdfRect(50, 500, 200, 510)),
+      ], const [], images: [
+        (bounds: const PdfRect(50, 600, 150, 700), image: image),
+      ]);
+      expect(elements, hasLength(3));
+      expect((elements[0] as DocxParagraph).text, 'Sopra');
+      expect(elements[1], same(image));
+      expect((elements[2] as DocxParagraph).text, 'Sotto');
+    });
+
+    test('docxPageElements: un\'immagine in cima a una pagina nuova', () {
+      final image = DocxImage(Uint8List(0), 'jpeg', 100, 100);
+      final elements = docxPageElements(const [], const [], images: [
+        (bounds: const PdfRect(0, 0, 10, 10), image: image),
+      ], pageBreak: true);
+      expect(elements, hasLength(2));
+      expect((elements[0] as DocxParagraph).pageBreakBefore, isTrue);
+      expect(elements[1], same(image));
+    });
+
+    test('una scansione (solo immagine) resta senza immagini nel Word',
+        () async {
+      final scan = PdfImageDocument.fromImageBytes([png(40, 30)]);
+      final result = await pdfToDocx(PdfDocument.open(scan));
+      expect(result.paragraphs, 0);
+      expect(result.failedPages, isEmpty);
+      final names = ZipDecoder().decodeBytes(result.bytes).files.map((f) => f.name);
+      expect(names.where((n) => n.startsWith('word/media')), isEmpty);
+      expect(partOf(result.bytes, 'word/document.xml'),
+          isNot(contains('<w:drawing>')));
+    });
+
     test('un PDF senza testo (una scansione) non ha paragrafi', () async {
       final blank = PdfBlankDocument.create(pageCount: 2);
       final result = await pdfToDocx(PdfDocument.open(blank));
