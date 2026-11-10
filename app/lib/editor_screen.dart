@@ -4577,7 +4577,7 @@ class _EditorScreenState extends State<EditorScreen>
         await injected(bytes: bytes, title: tab.title);
       } else {
         await printPdfWithProgress(context,
-            bytes: bytes,
+            bytes: await _asSeenOnScreen(bytes),
             title: tab.title,
             useDocumentPageSize: true,
             destination: job.destination);
@@ -4589,6 +4589,29 @@ class _EditorScreenState extends State<EditorScreen>
           'print failed: ${tab.title} - ${_describePrintError(error)}\n$stack',
           level: DevLogLevel.error);
       if (mounted) _toast(appL10n(context).editorCouldNotPrint(tab.title));
+    }
+  }
+
+  /// I fogli da stampare come li vede l'utente: ogni foglio diventa
+  /// un'immagine disegnata dallo stesso motore dello schermo (300 dpi).
+  /// Il modulo usa caratteri non incorporati (Times New Roman): la stampante
+  /// li sostituisce con un suo font e le righe fatte di \"_____\" cadono in
+  /// un punto un po' diverso da quello dello schermo, cosi' la scritta
+  /// finisce a cavallo della riga. Stampando l'immagine, quello che si vede
+  /// a video e' quello che esce. Se la trasformazione non riesce si stampa
+  /// il PDF com'e'.
+  Future<Uint8List> _asSeenOnScreen(Uint8List sheets) async {
+    try {
+      final raster = await rasterizePdfForPrinting(
+        PdfDocument.open(sheets),
+        dpi: 300,
+        jpegQuality: 92,
+      );
+      AppLog.instance.ok('Stampa', 'Fogli stampati come a schermo (300 dpi)');
+      return raster;
+    } catch (error, stack) {
+      AppLog.instance.error('Stampa', 'Immagine non riuscita: $error', stack);
+      return sheets;
     }
   }
 
