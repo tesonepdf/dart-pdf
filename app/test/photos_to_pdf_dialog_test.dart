@@ -26,6 +26,11 @@ void main() {
   Future<void> open(WidgetTester tester) async {
     result = null;
     closed = false;
+    // schermo alto: la finestra con la lista e la scelta della pagina sta tutta
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(

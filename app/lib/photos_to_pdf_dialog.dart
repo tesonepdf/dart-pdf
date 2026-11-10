@@ -41,8 +41,6 @@ Future<({List<PhotoItem> photos, PhotoPdfPage page})?> showPhotosToPdfDialog(
 
         return AlertDialog(
           key: const ValueKey('photos-pdf-dialog'),
-          // con molte foto o uno schermo piccolo la finestra scorre
-          scrollable: true,
           title: Text('Foto in PDF (${order.length})'),
           content: SizedBox(
             width: 400,
