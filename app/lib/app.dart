@@ -19,6 +19,7 @@ import 'oidc_signin.dart';
 import 'platform_fonts.dart';
 import 'tab_drag.dart';
 import 'trackpad_signature.dart';
+import 'user_fonts.dart';
 import 'web_safe_area.dart';
 import 'window_support.dart';
 
@@ -119,6 +120,8 @@ class _DartPdfEditorAppState extends State<DartPdfEditorApp> {
     // empty result (web, or a locked-down platform) just leaves the base-14,
     // bundled and "Load font…" choices.
     unawaited(_loadPlatformFonts());
+    // The fonts the person imported from the phone head the system ones.
+    if (!runningUnderFlutterTest) unawaited(UserFonts.instance.load());
   }
 
   Future<void> _startMemoryBudget() async {
@@ -132,7 +135,7 @@ class _DartPdfEditorAppState extends State<DartPdfEditorApp> {
     // on an isolate whose result can land in a later test.
     if (runningUnderFlutterTest) return;
     try {
-      pdfPlatformFonts = await loadPlatformFonts();
+      UserFonts.instance.setSystemFonts(await loadPlatformFonts());
     } catch (e) {
       // Font discovery is best-effort; the menu degrades to its other choices.
       AppDevTools.instance.addLog('platform font discovery failed: $e',
