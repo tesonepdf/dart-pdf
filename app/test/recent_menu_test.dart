@@ -33,6 +33,8 @@ void main() {
 
   Future<void> openRecentsSubmenu(WidgetTester tester) async {
     await openAppMenu(tester);
+    // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
+    await tester.ensureVisible(find.text('Open Recent'));
     await tester.tap(find.text('Open Recent'));
     await tester.pumpAndSettle();
   }
@@ -93,6 +95,8 @@ void main() {
         lessThan(kMinInteractiveDimension),
       );
 
+      // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
+      await tester.ensureVisible(find.text('Open Recent'));
       await tester.tap(find.text('Open Recent'));
       await tester.pumpAndSettle();
       final recentItemFinder = find.ancestor(
@@ -148,6 +152,8 @@ void main() {
     expect(find.text(shortcut('O')), findsOneWidget);
     expect(find.text(shortcut('O', shift: true)), findsOneWidget);
 
+    // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
+    await tester.ensureVisible(find.text('Open Recent'));
     await tester.tap(find.text('Open Recent'));
     await tester.pumpAndSettle();
 
