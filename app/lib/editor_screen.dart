@@ -4765,6 +4765,39 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Salva il documento come file Word (`.docx`): i paragrafi si ricostruiscono
+  /// dalle righe di testo. Prima versione: l'impaginazione non è identica,
+  /// le tabelle diventano testo e le immagini non vengono portate. Se nel PDF
+  /// non c'è testo (una scansione) propone prima l'OCR.
+  Future<void> _exportWord(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      _toast('Preparo il file Word…', duration: const Duration(seconds: 4));
+      final result = await pdfToDocx(session.document);
+      if (!mounted) return;
+      if (result.paragraphs == 0) {
+        await _offerOcrBeforeText();
+        return;
+      }
+      final saved = await saveDocxAs(
+          context, result.bytes, docxExportFileName(tab.title),
+          typeLabel: 'Documento Word');
+      if (!mounted) return;
+      final unread = result.failedPages.isEmpty
+          ? ''
+          : 'Pagine non lette: ${result.failedPages.map((i) => i + 1).join(', ')}.';
+      final message = [if (saved.message != null) saved.message!, unread]
+          .where((m) => m.isNotEmpty)
+          .join('\n');
+      if (message.isNotEmpty) _toast(message);
+    } catch (e) {
+      AppDevTools.instance.addLog('word export failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
   /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
   /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
   /// cui si può esportare di nuovo.
@@ -5411,6 +5444,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_exportText(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'export-word',
+        requiresDocument: true,
+        icon: Icons.article_outlined,
+        title: 'Esporta come Word (.docx)…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_exportWord(tab));
         },
       ),
       _MenuAction(
@@ -6466,7 +6509,8 @@ class _EditorScreenState extends State<EditorScreen>
         'reduce-file-size' ||
         'print' ||
         'export-image' ||
-        'export-text' =>
+        'export-text' ||
+        'export-word' =>
           'save',
         'digital-signature' ||
         'ocr' ||

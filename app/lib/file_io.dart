@@ -53,6 +53,17 @@ XTypeGroup textTypeGroup(String label) => XTypeGroup(
       uniformTypeIdentifiers: const ['public.plain-text'],
     );
 
+/// Word files (`.docx`), for "Export as Word".
+XTypeGroup wordTypeGroup(String label) => XTypeGroup(
+      label: label,
+      extensions: const ['docx'],
+      mimeTypes: const [_docxMime],
+      uniformTypeIdentifiers: const ['org.openxmlformats.wordprocessingml.document'],
+    );
+
+const _docxMime =
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 /// PDFs and every common photo/bitmap format, for the "open" picker.
 XTypeGroup documentTypeGroup(String label) => XTypeGroup(
       label: label,
@@ -897,6 +908,52 @@ Future<SaveResult> saveTextAs(
       final path = location.path.toLowerCase().endsWith('.txt')
           ? location.path
           : '${location.path}.txt';
+      try {
+        await file.saveTo(path);
+        return SaveResult.saved(path);
+      } catch (e) {
+        return SaveResult.failed(e);
+      }
+  }
+}
+
+/// Save-as for a Word file ([bytes] of a `.docx`), with the same platform
+/// behaviour as [saveBytesAs]: a save dialog on desktop, a browser download on
+/// the web, the share sheet on phones. [name] should carry `.docx`.
+Future<SaveResult> saveDocxAs(
+  BuildContext context,
+  Uint8List bytes,
+  String name, {
+  required String typeLabel,
+}) async {
+  final file = XFile.fromData(bytes, mimeType: _docxMime, name: name);
+
+  if (kIsWeb) {
+    await file.saveTo(name);
+    return SaveResult.downloaded(name);
+  }
+
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android || TargetPlatform.iOS:
+      final box = context.findRenderObject() as RenderBox?;
+      final origin =
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+      final result = await SharePlus.instance.share(ShareParams(
+        files: [file],
+        fileNameOverrides: [name],
+        title: name,
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      ));
+      return _saveResultFromShare(result);
+    default:
+      final location = await getSaveLocation(
+        suggestedName: name,
+        acceptedTypeGroups: [wordTypeGroup(typeLabel)],
+      );
+      if (location == null) return SaveResult.cancelled;
+      final path = location.path.toLowerCase().endsWith('.docx')
+          ? location.path
+          : '${location.path}.docx';
       try {
         await file.saveTo(path);
         return SaveResult.saved(path);

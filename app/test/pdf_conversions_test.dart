@@ -1,7 +1,10 @@
 // Conversioni del punto 1 (pdf_conversions.dart): PDF in testo semplice e più
-// foto in un PDF, una pagina per foto. Solo logica, senza interfaccia.
+// foto in un PDF, una pagina per foto, e del punto 2: PDF in Word (.docx).
+// Solo logica, senza interfaccia.
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf_document/pdf_document.dart';
@@ -114,6 +117,100 @@ void main() {
         throwsFormatException,
       );
       expect(() => photosToPdf(const [], PhotoPdfPage.a4), throwsFormatException);
+    });
+  });
+
+  group('PDF in Word (.docx)', () {
+    String partOf(Uint8List docx, String name) {
+      final archive = ZipDecoder().decodeBytes(docx);
+      final file = archive.findFile(name);
+      expect(file, isNotNull, reason: 'manca $name');
+      return utf8.decode(file!.content as List<int>);
+    }
+
+    test('docxExportFileName toglie .pdf e mette .docx', () {
+      expect(docxExportFileName('Report.pdf'), 'Report.docx');
+      expect(docxExportFileName('foto'), 'foto.docx');
+      expect(docxExportFileName('   '), 'documento.docx');
+    });
+
+    test('xmlSafeText: & < > in forma XML, controlli e surrogati spaiati via',
+        () {
+      expect(xmlSafeText('a & b < c > d'), 'a &amp; b &lt; c &gt; d');
+      expect(xmlSafeText('a\u0000b\u0008c\u000Bd'), 'abcd');
+      expect(xmlSafeText('x\tY\nZ'), 'x\tY\nZ');
+      expect(xmlSafeText('a\uD800b'), 'ab');
+      expect(xmlSafeText('a\uDC00b'), 'ab');
+      expect(xmlSafeText('\u{1F600}'), '\u{1F600}');
+    });
+
+    test('docxParagraphXml: corpo in mezzi punti, elenco rientrato, a capo', () {
+      final xml = docxParagraphXml(
+          const DocxParagraph('Uno\nDue', fontSize: 12, isListItem: true));
+      expect(xml, contains('<w:sz w:val="24"/>'));
+      expect(xml, contains('<w:ind w:left="360"/>'));
+      expect(xml, contains('<w:br/>'));
+      expect(xml, contains('>Uno</w:t>'));
+      expect(xml, contains('>Due</w:t>'));
+      // Corpo fuori misura: tenuto tra 6 e 72 punti.
+      expect(docxParagraphXml(const DocxParagraph('a', fontSize: 500)),
+          contains('<w:sz w:val="144"/>'));
+      expect(docxParagraphXml(const DocxParagraph('a', fontSize: 1)),
+          contains('<w:sz w:val="12"/>'));
+    });
+
+    test('buildDocx: le tre parti, con il testo scappato bene', () {
+      final docx = buildDocx(const [
+        DocxParagraph('Tom & Jerry <3'),
+        DocxParagraph('Pagina due', pageBreakBefore: true),
+      ]);
+      // Un .docx è uno zip che comincia con "PK".
+      expect(docx[0], 0x50);
+      expect(docx[1], 0x4B);
+      final names = ZipDecoder().decodeBytes(docx).files.map((f) => f.name);
+      expect(names,
+          containsAll(['[Content_Types].xml', '_rels/.rels', 'word/document.xml']));
+      final document = partOf(docx, 'word/document.xml');
+      expect(document, contains('Tom &amp; Jerry &lt;3'));
+      expect(document, contains('<w:pageBreakBefore/>'));
+      expect(partOf(docx, '_rels/.rels'), contains('word/document.xml'));
+      expect(partOf(docx, '[Content_Types].xml'),
+          contains('wordprocessingml.document.main+xml'));
+    });
+
+    test('buildDocx senza paragrafi è comunque un documento valido', () {
+      final document = partOf(buildDocx(const []), 'word/document.xml');
+      expect(document, contains('<w:body><w:p/>'));
+    });
+
+    test('pdfToDocx porta il testo di una pagina', () async {
+      final pages = <int>[];
+      final result = await pdfToDocx(
+        PdfDocument.open(buildClassicPdf()),
+        onPage: (page, count) => pages.add(page * 10 + count),
+      );
+      expect(result.paragraphs, greaterThan(0));
+      expect(result.failedPages, isEmpty);
+      expect(pages, [1]);
+      final document = partOf(result.bytes, 'word/document.xml');
+      expect(document, contains('Hello, world!'));
+      expect(document, isNot(contains('<w:pageBreakBefore/>')));
+    });
+
+    test('pdfToDocx: ogni pagina dopo la prima comincia su una pagina nuova',
+        () async {
+      final two = PdfMerger.merge([buildClassicPdf(), buildClassicPdf()]);
+      final result = await pdfToDocx(PdfDocument.open(two));
+      final document = partOf(result.bytes, 'word/document.xml');
+      expect('Hello, world!'.allMatches(document).length, 2);
+      expect('<w:pageBreakBefore/>'.allMatches(document).length, 1);
+    });
+
+    test('un PDF senza testo (una scansione) non ha paragrafi', () async {
+      final blank = PdfBlankDocument.create(pageCount: 2);
+      final result = await pdfToDocx(PdfDocument.open(blank));
+      expect(result.paragraphs, 0);
+      expect(result.failedPages, isEmpty);
     });
   });
 }

@@ -41,6 +41,9 @@ dependencies:
   # without leaving the device (native platforms only).
   pdf_ocr_ondevice: ^13.0.0
 
+  # Zip del file Word (.docx), già nel progetto tramite il motore.
+  archive: ^4.3.0
+
   # Cross-platform file I/O and OS integration.
   file_selector: ^1.0.3
   # Depended on directly, not just through file_selector: DartPDF swaps in its
