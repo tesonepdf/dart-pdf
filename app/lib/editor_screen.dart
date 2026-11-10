@@ -69,6 +69,7 @@ import 'update_install_flow.dart';
 import 'save_folder.dart';
 import 'page_choice.dart';
 import 'page_numbers.dart';
+import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
 import 'whatsapp_send.dart';
@@ -4890,6 +4891,25 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Mette la filigrana su ogni pagina (o dalla pagina scelta in poi), come una
+  /// sola modifica che si può annullare.
+  Future<void> _addWatermark(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      final options = await showWatermarkDialog(context,
+          pageCount: session.document.pageCount);
+      if (options == null || !mounted) return;
+      session.finishInk();
+      final changed = session.apply((e) => applyWatermark(e, options));
+      _toast(changed ? 'Filigrana aggiunta.' : 'Nessuna pagina da marcare.');
+    } catch (e) {
+      AppDevTools.instance.addLog('watermark failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast('Filigrana non aggiunta: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
   /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
   /// cui si può esportare di nuovo.
@@ -5576,6 +5596,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_numberPages(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'watermark',
+        requiresDocument: true,
+        icon: Icons.water_drop_outlined,
+        title: 'Filigrana…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_addWatermark(tab));
         },
       ),
       _MenuAction(
@@ -6644,7 +6674,8 @@ class _EditorScreenState extends State<EditorScreen>
         'compare' ||
         'insert-document' ||
         'insert-scan' ||
-        'number-pages' =>
+        'number-pages' ||
+        'watermark' =>
           'pages',
         'import-form-data' => 'forms',
         _ => null,

@@ -47,6 +47,8 @@ void main() {
     expect(find.text('Esporta una zona come Excel (.xlsx)…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-number-pages')), findsOneWidget);
     expect(find.text('Numera le pagine…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-watermark')), findsOneWidget);
+    expect(find.text('Filigrana…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
   });
 
@@ -61,6 +63,7 @@ void main() {
     expect(find.byKey(const ValueKey('menu-export-excel')), findsNothing);
     expect(find.byKey(const ValueKey('menu-export-excel-zone')), findsNothing);
     expect(find.byKey(const ValueKey('menu-number-pages')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-watermark')), findsNothing);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.text('Foto in PDF (una per pagina)…'), findsOneWidget);
   });
