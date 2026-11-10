@@ -1779,6 +1779,8 @@ class PdfStamp {
 
   /// Draws [text] at ([x], [y]) (baseline origin) in Helvetica.
   /// [color] is 0xRRGGBB. [angleDegrees] rotates around the origin.
+  /// [opacity] (0 to 1) makes the text translucent with a constant-alpha
+  /// graphics state; 1 draws it opaque.
   void text(
     String text, {
     required double x,
@@ -1787,9 +1789,24 @@ class PdfStamp {
     int color = 0x000000,
     bool bold = false,
     double angleDegrees = 0,
+    double opacity = 1,
   }) {
     final font = _helveticaResource(bold: bold);
+    String? alphaState;
+    if (opacity < 1) {
+      final alpha = opacity.isNaN ? 1.0 : opacity.clamp(0.0, 1.0);
+      final states = _subDictionary('ExtGState');
+      alphaState = _freeName(states, 'StGs');
+      states[alphaState] = _editor._updater.addObject(
+        CosDictionary({
+          'Type': const CosName('ExtGState'),
+          'CA': CosReal(alpha),
+          'ca': CosReal(alpha),
+        }),
+      );
+    }
     content.save();
+    if (alphaState != null) content.raw('/$alphaState gs');
     if (angleDegrees != 0) {
       final r = angleDegrees * math.pi / 180;
       content.concatMatrix(
