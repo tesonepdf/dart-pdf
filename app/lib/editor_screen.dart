@@ -4599,8 +4599,14 @@ class _EditorScreenState extends State<EditorScreen>
   /// un punto un po' diverso da quello dello schermo, cosi' la scritta
   /// finisce a cavallo della riga. Stampando l'immagine, quello che si vede
   /// a video e' quello che esce. Se la trasformazione non riesce si stampa
-  /// il PDF com'e'.
+  /// il PDF com'e'. Solo Android e iOS.
   Future<Uint8List> _asSeenOnScreen(Uint8List sheets) async {
+    // solo telefoni e tablet: li' la stampa passa dal renderer del sistema;
+    // il desktop ha il suo percorso (pagine vettoriali verso la coda)
+    final mobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    if (!mobile) return sheets;
     try {
       final raster = await rasterizePdfForPrinting(
         PdfDocument.open(sheets),
