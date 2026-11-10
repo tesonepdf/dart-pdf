@@ -687,7 +687,9 @@ Uint8List _pngOfPixels(PdfDecodedPixels pixels) {
 // testo ([pageSheetRows]) va in una colonna sola, con le eventuali tabelle
 // al loro posto. Limiti: una cella che si estende su più colonne (un titolo
 // largo dentro una riga di più celle) può unire le colonne; niente colori o
-// bordi.
+// bordi. I numeri hanno il formato giusto ([parseSpreadsheetValue]):
+// percentuali, valute (€, $, £) e date (gg/mm/aaaa, aaaa-mm-gg) diventano
+// numeri veri, con lo stile in `xl/styles.xml`.
 
 /// Una cella trovata sulla pagina, prima di sapere in che colonna va. [left] e
 /// [right] sono in punti della pagina.
@@ -1045,6 +1047,160 @@ num? parseSpreadsheetNumber(String raw) {
   return negative ? -value : value;
 }
 
+/// Come si mostra una cella numerica nel file Excel.
+enum SheetFormat {
+  /// Numero normale (nessuno stile).
+  general,
+
+  /// Percentuale intera: `12%`.
+  percent,
+
+  /// Percentuale con decimali: `12,50%`.
+  percentDecimals,
+
+  /// Valuta in euro.
+  euro,
+
+  /// Valuta in dollari.
+  dollar,
+
+  /// Valuta in sterline.
+  pound,
+
+  /// Data breve, nel formato dell'Excel di chi apre il file (gg/mm/aaaa).
+  dateShort,
+
+  /// Data aaaa-mm-gg.
+  dateIso,
+}
+
+/// Il valore di una cella numerica e il suo [SheetFormat].
+typedef SheetValue = ({num value, SheetFormat format});
+
+/// Il numero seriale di Excel di una data, o null se non esiste (31 febbraio)
+/// o è prima del 1° marzo 1900 (l'Excel di quegli anni conta un 29 febbraio
+/// 1900 che non c'è).
+int? _excelSerial(int year, int month, int day) {
+  if (month < 1 || month > 12 || day < 1 || year < 1900 || year > 9999) {
+    return null;
+  }
+  final date = DateTime.utc(year, month, day);
+  if (date.year != year || date.month != month || date.day != day) return null;
+  final serial = date.difference(DateTime.utc(1899, 12, 30)).inDays;
+  return serial >= 61 ? serial : null;
+}
+
+/// Ciò che c'è scritto in [raw] come valore di una cella, con il formato, o
+/// null se è testo. Oltre ai numeri di [parseSpreadsheetNumber] capisce:
+///  * le percentuali (`12%`, `12,5 %`): il valore è la frazione (0,125);
+///  * le valute (`€ 12,50`, `12,50 €`, `$9.99`, `£3`): il formato mostra il
+///    simbolo;
+///  * le date `gg/mm/aaaa` e `aaaa-mm-gg`: il valore è il numero seriale di
+///    Excel. Una data che non esiste resta testo.
+/// Gli zeri iniziali (`007`, i CAP, i telefoni) restano testo.
+SheetValue? parseSpreadsheetValue(String raw) {
+  final t = raw.trim();
+  final slash = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})$').firstMatch(t);
+  if (slash != null) {
+    final serial = _excelSerial(
+        int.parse(slash[3]!), int.parse(slash[2]!), int.parse(slash[1]!));
+    return serial == null
+        ? null
+        : (value: serial, format: SheetFormat.dateShort);
+  }
+  final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(t);
+  if (iso != null) {
+    final serial = _excelSerial(
+        int.parse(iso[1]!), int.parse(iso[2]!), int.parse(iso[3]!));
+    return serial == null
+        ? null
+        : (value: serial, format: SheetFormat.dateIso);
+  }
+  final percent = RegExp(r'^(.*\S)\s*%$').firstMatch(t);
+  if (percent != null) {
+    final inner = parseSpreadsheetNumber(percent[1]!);
+    if (inner == null) return null;
+    return (
+      // Arrotondato, perché 33,3 / 100 non diventi 0,33299999999999996.
+      value: double.parse((inner / 100).toStringAsFixed(12)),
+      format: inner == inner.truncate()
+          ? SheetFormat.percent
+          : SheetFormat.percentDecimals,
+    );
+  }
+  final number = parseSpreadsheetNumber(t);
+  if (number == null) return null;
+  final format = t.contains('€')
+      ? SheetFormat.euro
+      : t.contains(r'$')
+          ? SheetFormat.dollar
+          : t.contains('£')
+              ? SheetFormat.pound
+              : SheetFormat.general;
+  return (value: number, format: format);
+}
+
+/// Il codice di formato di Excel di [format] e il suo numero (i primi 163
+/// sono di Excel: 9 è `0%`, 10 è `0.00%`, 14 è la data breve), o null per
+/// [SheetFormat.general].
+({int id, String? code})? _xlsxNumberFormat(SheetFormat format) =>
+    switch (format) {
+      SheetFormat.general => null,
+      SheetFormat.percent => (id: 9, code: null),
+      SheetFormat.percentDecimals => (id: 10, code: null),
+      SheetFormat.dateShort => (id: 14, code: null),
+      SheetFormat.euro => (id: 164, code: '#,##0.00 "€"'),
+      SheetFormat.dollar => (id: 165, code: '"\$"#,##0.00'),
+      SheetFormat.pound => (id: 166, code: '"£"#,##0.00'),
+      SheetFormat.dateIso => (id: 167, code: r'yyyy\-mm\-dd'),
+    };
+
+/// Gli stili delle celle di un file Excel (`xl/styles.xml`). Lo stile 0 è
+/// quello normale; ogni formato usato ne prende uno, nell'ordine in cui
+/// compare ([styleFor]).
+class XlsxStyles {
+  final List<SheetFormat> _formats = [SheetFormat.general];
+
+  /// Il numero di stile (`s="N"`) per [format]; 0 per [SheetFormat.general].
+  int styleFor(SheetFormat format) {
+    final at = _formats.indexOf(format);
+    if (at >= 0) return at;
+    _formats.add(format);
+    return _formats.length - 1;
+  }
+
+  /// `xl/styles.xml`.
+  String toXml() {
+    final codes = StringBuffer();
+    var codeCount = 0;
+    final xfs = StringBuffer();
+    for (final format in _formats) {
+      final f = _xlsxNumberFormat(format);
+      if (f == null) {
+        xfs.write('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
+        continue;
+      }
+      final code = f.code;
+      if (code != null) {
+        codeCount++;
+        codes.write('<numFmt numFmtId="${f.id}" formatCode="${xmlSafeText(code).replaceAll('"', '&quot;')}"/>');
+      }
+      xfs.write('<xf numFmtId="${f.id}" fontId="0" fillId="0" borderId="0" '
+          'xfId="0" applyNumberFormat="1"/>');
+    }
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '${codeCount == 0 ? '' : '<numFmts count="$codeCount">$codes</numFmts>'}'
+        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="${_formats.length}">$xfs</cellXfs>'
+        '</styleSheet>';
+  }
+}
+
 /// Una scheda del file Excel: il [name] e le [rows] di testo (celle vuote
 /// `''`). I numeri si riconoscono quando si scrive il file.
 class XlsxSheet {
@@ -1067,8 +1223,10 @@ String xlsxColumnName(int index) {
 }
 
 /// Il foglio come XML di Excel: testo in celle di testo, numeri in celle
-/// numeriche, larghezza di colonna secondo il contenuto.
-String xlsxSheetXml(XlsxSheet sheet) {
+/// numeriche (con lo stile di [styles] se hanno un formato: percentuale,
+/// valuta, data), larghezza di colonna secondo il contenuto.
+String xlsxSheetXml(XlsxSheet sheet, {XlsxStyles? styles}) {
+  styles ??= XlsxStyles();
   final columns = sheet.rows.fold<int>(0, (m, r) => math.max(m, r.length));
   final widths = List<int>.filled(columns, 0);
   final body = StringBuffer();
@@ -1082,12 +1240,14 @@ String xlsxSheetXml(XlsxSheet sheet) {
       if (text.length > 32767) text = text.substring(0, 32767);
       widths[c] = math.max(widths[c], text.length);
       final ref = '${xlsxColumnName(c)}$rowNumber';
-      final number = parseSpreadsheetNumber(text);
+      final number = parseSpreadsheetValue(text);
       if (number == null) {
         cells.write('<c r="$ref" t="inlineStr"><is>'
             '<t xml:space="preserve">${xmlSafeText(text)}</t></is></c>');
       } else {
-        cells.write('<c r="$ref"><v>$number</v></c>');
+        final style = styles.styleFor(number.format);
+        final attr = style == 0 ? '' : ' s="$style"';
+        cells.write('<c r="$ref"$attr><v>${number.value}</v></c>');
       }
     }
     body.write('<row r="$rowNumber">$cells</row>');
@@ -1115,6 +1275,7 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
   final overrides = StringBuffer();
   final sheetList = StringBuffer();
   final sheetRels = StringBuffer();
+  final styles = XlsxStyles();
   for (var i = 0; i < sheets.length; i++) {
     final n = i + 1;
     overrides.write('<Override PartName="/xl/worksheets/sheet$n.xml" '
@@ -1124,11 +1285,14 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     sheetRels.write('<Relationship Id="rId$n" Type="$relType/worksheet" '
         'Target="worksheets/sheet$n.xml"/>');
   }
+  sheetRels.write('<Relationship Id="rId${sheets.length + 1}" '
+      'Type="$relType/styles" Target="styles.xml"/>');
   final contentTypes =
       '$header<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
       '<Default Extension="xml" ContentType="application/xml"/>'
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
       '$overrides</Types>';
   final rels =
       '$header<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -1146,9 +1310,11 @@ Uint8List buildXlsx(List<XlsxSheet> sheets) {
     ..addFile(_zipEntry('xl/workbook.xml', workbook))
     ..addFile(_zipEntry('xl/_rels/workbook.xml.rels', workbookRels));
   for (var i = 0; i < sheets.length; i++) {
-    archive.addFile(
-        _zipEntry('xl/worksheets/sheet${i + 1}.xml', xlsxSheetXml(sheets[i])));
+    archive.addFile(_zipEntry('xl/worksheets/sheet${i + 1}.xml',
+        xlsxSheetXml(sheets[i], styles: styles)));
   }
+  // Gli stili si scrivono per ultimi: sono quelli che i fogli hanno usato.
+  archive.addFile(_zipEntry('xl/styles.xml', styles.toXml()));
   return ZipEncoder().encodeBytes(archive);
 }
 
@@ -1193,7 +1359,7 @@ Future<XlsxResult> pdfToXlsx(
           for (final text in row) {
             if (text.trim().isEmpty) continue;
             cells++;
-            if (parseSpreadsheetNumber(text) != null) numbers++;
+            if (parseSpreadsheetValue(text) != null) numbers++;
           }
         }
       }
@@ -1231,7 +1397,7 @@ XlsxResult pdfZoneToXlsx(PdfDocument document, int pageIndex, PdfRect zone) {
     for (final text in row) {
       if (text.trim().isEmpty) continue;
       cells++;
-      if (parseSpreadsheetNumber(text) != null) numbers++;
+      if (parseSpreadsheetValue(text) != null) numbers++;
     }
   }
   return (

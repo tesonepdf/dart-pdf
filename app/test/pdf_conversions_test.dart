@@ -591,6 +591,115 @@ void main() {
       }
     });
 
+    test('parseSpreadsheetValue: i numeri di prima, senza formato', () {
+      expect(parseSpreadsheetValue('1.234,56'),
+          (value: 1234.56, format: SheetFormat.general));
+      expect(parseSpreadsheetValue('2026'),
+          (value: 2026, format: SheetFormat.general));
+      expect(parseSpreadsheetValue('(45)'),
+          (value: -45, format: SheetFormat.general));
+    });
+
+    test('parseSpreadsheetValue: percentuali', () {
+      expect(parseSpreadsheetValue('12%'),
+          (value: 0.12, format: SheetFormat.percent));
+      expect(parseSpreadsheetValue('12,5 %'),
+          (value: 0.125, format: SheetFormat.percentDecimals));
+      expect(parseSpreadsheetValue('-5%'),
+          (value: -0.05, format: SheetFormat.percent));
+      expect(parseSpreadsheetValue('33,3%')!.value, 0.333);
+      expect(parseSpreadsheetValue('Totale 12%'), isNull);
+      expect(parseSpreadsheetValue('%'), isNull);
+      expect(parseSpreadsheetValue('007%'), isNull);
+    });
+
+    test('parseSpreadsheetValue: valute', () {
+      expect(parseSpreadsheetValue('€ 12,50'),
+          (value: 12.5, format: SheetFormat.euro));
+      expect(parseSpreadsheetValue('12,50 €'),
+          (value: 12.5, format: SheetFormat.euro));
+      expect(parseSpreadsheetValue(r'$9.99'),
+          (value: 9.99, format: SheetFormat.dollar));
+      expect(parseSpreadsheetValue('£3'),
+          (value: 3, format: SheetFormat.pound));
+      expect(parseSpreadsheetValue('(€ 20)'),
+          (value: -20, format: SheetFormat.euro));
+    });
+
+    test('parseSpreadsheetValue: date gg/mm/aaaa e aaaa-mm-gg', () {
+      // Numeri seriali di Excel (1 gennaio 2000 = 36526).
+      expect(parseSpreadsheetValue('01/01/2000'),
+          (value: 36526, format: SheetFormat.dateShort));
+      expect(parseSpreadsheetValue('1/3/1900'),
+          (value: 61, format: SheetFormat.dateShort));
+      expect(parseSpreadsheetValue('10/11/2026'),
+          (value: 46336, format: SheetFormat.dateShort));
+      expect(parseSpreadsheetValue('2026-11-10'),
+          (value: 46336, format: SheetFormat.dateIso));
+      // Una data che non esiste, o troppo vecchia per Excel, resta testo.
+      expect(parseSpreadsheetValue('31/02/2026'), isNull);
+      expect(parseSpreadsheetValue('2026-13-01'), isNull);
+      expect(parseSpreadsheetValue('28/02/1900'), isNull);
+      expect(parseSpreadsheetValue('10.11.2026'), isNull);
+    });
+
+    test('parseSpreadsheetValue: gli zeri iniziali restano testo', () {
+      for (final text in ['007', '00100', '0612345678', 'abc', '', '12 345']) {
+        expect(parseSpreadsheetValue(text), isNull, reason: text);
+      }
+    });
+
+    test('xlsxSheetXml: percentuali, valute e date con il loro stile', () {
+      final styles = XlsxStyles();
+      final xml = xlsxSheetXml(
+          const XlsxSheet('Pagina 1', [
+            ['12%', '€ 3,50', '01/01/2000', '7'],
+            ['5,5%', '2026-11-10', '', 'x'],
+          ]),
+          styles: styles);
+      // Gli stili si numerano nell'ordine in cui compaiono.
+      expect(xml, contains('<c r="A1" s="1"><v>0.12</v></c>'));
+      expect(xml, contains('<c r="B1" s="2"><v>3.5</v></c>'));
+      expect(xml, contains('<c r="C1" s="3"><v>36526</v></c>'));
+      // Un numero senza formato non ha stile.
+      expect(xml, contains('<c r="D1"><v>7</v></c>'));
+      expect(xml, contains('<c r="A2" s="4"><v>0.055</v></c>'));
+      expect(xml, contains('<c r="B2" s="5"><v>46336</v></c>'));
+      expect(xml, contains('<c r="D2" t="inlineStr">'));
+    });
+
+    test('XlsxStyles: formati e codici in xl/styles.xml', () {
+      final styles = XlsxStyles();
+      expect(styles.styleFor(SheetFormat.general), 0);
+      expect(styles.styleFor(SheetFormat.percent), 1);
+      expect(styles.styleFor(SheetFormat.euro), 2);
+      // Lo stesso formato ha lo stesso stile.
+      expect(styles.styleFor(SheetFormat.percent), 1);
+      final xml = styles.toXml();
+      expect(xml, contains('<cellXfs count="3">'));
+      expect(xml, contains('<xf numFmtId="9" '));
+      expect(xml, contains('numFmtId="164" formatCode="#,##0.00 &quot;€&quot;"'));
+      expect(xml, contains('<numFmts count="1">'));
+      // Senza formati con un codice proprio non c'è l'elenco.
+      expect((XlsxStyles()..styleFor(SheetFormat.dateShort)).toXml(),
+          isNot(contains('<numFmts')));
+    });
+
+    test('buildXlsx: xl/styles.xml con collegamento e tipo', () {
+      final xlsx = buildXlsx(const [
+        XlsxSheet('Pagina 1', [
+          ['10%', '€ 1,00'],
+        ]),
+      ]);
+      final styles = partOf(xlsx, 'xl/styles.xml');
+      expect(styles, contains('<cellXfs count="3">'));
+      expect(partOf(xlsx, '[Content_Types].xml'),
+          contains('/xl/styles.xml'));
+      expect(partOf(xlsx, 'xl/_rels/workbook.xml.rels'),
+          contains('Target="styles.xml"'));
+      expect(partOf(xlsx, 'xl/worksheets/sheet1.xml'), contains('s="1"'));
+    });
+
     test('xlsxColumnName: A, Z, AA, ZZ, AAA', () {
       expect(xlsxColumnName(0), 'A');
       expect(xlsxColumnName(25), 'Z');
