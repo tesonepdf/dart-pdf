@@ -150,12 +150,34 @@ Future<PhotosPdfResult> photosToPdfAsync(
 // I paragrafi si ricostruiscono dalle righe di testo (lo stesso ordine di
 // lettura della vista "Lettura"), e il file Word si scrive a mano con la
 // libreria zip già presente (`archive`). L'impaginazione non è identica
-// all'originale, le tabelle diventano testo e le immagini non vengono portate.
-// Grassetto, corsivo e colore si portano per paragrafo (per maggioranza di
-// caratteri), non per singola parola.
+// all'originale e le immagini non vengono portate. Grassetto, corsivo e
+// colore si portano per paragrafo (per maggioranza di caratteri), non per
+// singola parola. Le tabelle si riconoscono ([findPageTables]) e diventano
+// tabelle vere di Word, a colonne di larghezza uguale.
+
+/// Un elemento del corpo del file Word: un paragrafo o una tabella.
+sealed class DocxElement {
+  const DocxElement();
+}
+
+/// Una tabella del file Word: righe di celle di testo. Le righe più corte
+/// vengono completate con celle vuote.
+class DocxTable extends DocxElement {
+  const DocxTable(this.rows,
+      {this.fontSize = 10, this.pageBreakBefore = false});
+
+  final List<List<String>> rows;
+
+  /// Corpo del testo delle celle, in punti.
+  final double fontSize;
+
+  /// Vero se la tabella è il primo elemento di una pagina del PDF che non è
+  /// la prima.
+  final bool pageBreakBefore;
+}
 
 /// Un paragrafo del file Word.
-class DocxParagraph {
+class DocxParagraph extends DocxElement {
   const DocxParagraph(this.text,
       {this.fontSize = 11,
       this.isListItem = false,
@@ -256,15 +278,62 @@ String docxParagraphXml(DocxParagraph p) {
   return '<w:p>$pPr<w:r><w:rPr>$rPr</w:rPr>$runs</w:r></w:p>';
 }
 
-/// Scrive il file Word (.docx) dei [paragraphs]. Un .docx è un file zip con
-/// tre parti obbligatorie: i tipi, il collegamento al documento e il
-/// documento stesso.
-Uint8List buildDocx(List<DocxParagraph> paragraphs) {
+/// Larghezza del testo di una pagina A4 con i margini di [buildDocx], in
+/// ventesimi di punto.
+const int _docxTextWidth = 11906 - 2 * 1134;
+
+/// La tabella come XML di Word (`<w:tbl>`): colonne di larghezza uguale e
+/// bordi semplici. Dopo la tabella c'è un paragrafo vuoto, perché Word non
+/// vuole una tabella come ultima cosa del corpo. Vuota se non ci sono celle.
+String docxTableXml(DocxTable table) {
+  final columns = table.rows.fold<int>(0, (m, r) => math.max(m, r.length));
+  if (columns == 0) return '';
+  final width = _docxTextWidth ~/ columns;
+  const line = 'w:val="single" w:sz="4" w:space="0" w:color="808080"';
+  final out = StringBuffer();
+  // La pagina nuova sta in un paragrafo vuoto prima della tabella: dentro la
+  // prima cella Word non la rispetta sempre.
+  if (table.pageBreakBefore) {
+    out.write('<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p>');
+  }
+  out.write('<w:tbl><w:tblPr><w:tblW w:w="${width * columns}" w:type="dxa"/>'
+      '<w:tblBorders>');
+  const sides = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
+  for (final side in sides) {
+    out.write('<w:$side $line/>');
+  }
+  out.write('</w:tblBorders></w:tblPr><w:tblGrid>');
+  for (var c = 0; c < columns; c++) {
+    out.write('<w:gridCol w:w="$width"/>');
+  }
+  out.write('</w:tblGrid>');
+  for (final row in table.rows) {
+    out.write('<w:tr>');
+    for (var c = 0; c < columns; c++) {
+      final text = c < row.length ? row[c] : '';
+      out.write('<w:tc><w:tcPr><w:tcW w:w="$width" w:type="dxa"/></w:tcPr>'
+          '${docxParagraphXml(DocxParagraph(text, fontSize: table.fontSize))}'
+          '</w:tc>');
+    }
+    out.write('</w:tr>');
+  }
+  out.write('</w:tbl><w:p/>');
+  return out.toString();
+}
+
+/// L'elemento come XML di Word.
+String docxElementXml(DocxElement element) => switch (element) {
+      DocxParagraph p => docxParagraphXml(p),
+      DocxTable t => docxTableXml(t),
+    };
+
+/// Scrive il file Word (.docx) degli [elements] (paragrafi e tabelle). Un
+/// .docx è un file zip con tre parti obbligatorie: i tipi, il collegamento al
+/// documento e il documento stesso.
+Uint8List buildDocx(List<DocxElement> elements) {
   const ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   const header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-  final body = paragraphs.isEmpty
-      ? '<w:p/>'
-      : paragraphs.map(docxParagraphXml).join();
+  final body = elements.isEmpty ? '<w:p/>' : elements.map(docxElementXml).join();
   final document = '$header<w:document $ns><w:body>$body'
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
       '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" '
@@ -303,41 +372,97 @@ Future<DocxResult> pdfToDocx(
   void Function(int page, int pageCount)? onPage,
 }) async {
   final count = document.pageCount;
-  final paragraphs = <DocxParagraph>[];
+  final elements = <DocxElement>[];
   final failed = <int>[];
+  var withText = 0;
   for (var i = 0; i < count; i++) {
     onPage?.call(i, count);
     try {
-      final blocks = <PdfReflowBlock>[
-        for (final b in PdfTextExtractor.reflowPage(document, i).blocks)
-          if (b.text.trim().isNotEmpty) b,
-      ];
-      var first = true;
-      for (final b in blocks) {
-        paragraphs.add(DocxParagraph(b.text.trim(),
-            fontSize: b.fontSize,
-            isListItem: b.isListItem,
-            pageBreakBefore: first && i > 0,
-            bold: b.bold,
-            italic: b.italic,
-            color: b.color));
-        first = false;
+      final blocks = PdfTextExtractor.reflowPage(document, i).blocks;
+      var tables = const <PageTable>[];
+      try {
+        tables = findPageTables(PdfTextExtractor.extract(document, i).runs);
+      } catch (_) {
+        // Senza tabelle il testo si porta lo stesso, come paragrafi.
+      }
+      final page = docxPageElements(blocks, tables, pageBreak: i > 0);
+      elements.addAll(page);
+      for (final e in page) {
+        if (e is DocxTable || (e is DocxParagraph && e.text.isNotEmpty)) {
+          withText++;
+        }
       }
       // Una pagina senza testo tiene comunque il suo posto nel file Word.
-      if (blocks.isEmpty && i > 0) {
-        paragraphs.add(const DocxParagraph('', pageBreakBefore: true));
+      if (page.isEmpty && i > 0) {
+        elements.add(const DocxParagraph('', pageBreakBefore: true));
       }
     } catch (_) {
       failed.add(i);
-      if (i > 0) paragraphs.add(const DocxParagraph('', pageBreakBefore: true));
+      if (i > 0) elements.add(const DocxParagraph('', pageBreakBefore: true));
     }
     await Future<void>.delayed(Duration.zero);
   }
   return (
-    bytes: buildDocx(paragraphs),
-    paragraphs: paragraphs.where((p) => p.text.isNotEmpty).length,
+    bytes: buildDocx(elements),
+    paragraphs: withText,
     failedPages: failed,
   );
+}
+
+/// Gli elementi Word di una pagina: i paragrafi dei [blocks] (in ordine di
+/// lettura) e le [tables]. I blocchi di testo dentro una tabella si tolgono
+/// (il loro testo sta già nelle celle). Ogni tabella va prima del primo
+/// blocco rimasto che sta sotto di lei e si sovrappone in orizzontale, o in
+/// fondo se non c'è. Con [pageBreak] il primo elemento comincia su una pagina
+/// nuova.
+List<DocxElement> docxPageElements(
+  List<PdfReflowBlock> blocks,
+  List<PageTable> tables, {
+  bool pageBreak = false,
+}) {
+  bool inside(PdfRect b, PdfRect zone) =>
+      zone.contains((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+  final text = <PdfReflowBlock>[
+    for (final b in blocks)
+      if (b.text.trim().isNotEmpty &&
+          !tables.any((t) => inside(b.bounds, t.zone)))
+        b,
+  ];
+  final ordered = [...tables]..sort((a, b) => b.zone.top.compareTo(a.zone.top));
+  final before = <int, List<PageTable>>{};
+  for (final t in ordered) {
+    var at = text.length;
+    for (var k = 0; k < text.length; k++) {
+      final b = text[k].bounds;
+      final overlap =
+          math.min(b.right, t.zone.right) - math.max(b.left, t.zone.left);
+      if (b.top <= t.zone.top && overlap > 0) {
+        at = k;
+        break;
+      }
+    }
+    (before[at] ??= []).add(t);
+  }
+  final out = <DocxElement>[];
+  void addTables(int at) {
+    for (final t in before[at] ?? const <PageTable>[]) {
+      out.add(DocxTable(t.grid, pageBreakBefore: pageBreak && out.isEmpty));
+    }
+  }
+
+  for (var k = 0; k < text.length; k++) {
+    addTables(k);
+    final b = text[k];
+    out.add(DocxParagraph(b.text.trim(),
+        fontSize: b.fontSize,
+        isListItem: b.isListItem,
+        pageBreakBefore: pageBreak && out.isEmpty,
+        bold: b.bold,
+        italic: b.italic,
+        color: b.color));
+  }
+  addTables(text.length);
+  return out;
 }
 
 // --- PDF in Excel (.xlsx) ----------------------------------------------------
@@ -352,11 +477,17 @@ Future<DocxResult> pdfToDocx(
 /// Una cella trovata sulla pagina, prima di sapere in che colonna va. [left] e
 /// [right] sono in punti della pagina.
 class PageCell {
-  const PageCell(this.left, this.right, this.text);
+  const PageCell(this.left, this.right, this.text,
+      {this.top = 0, this.bottom = 0});
 
   final double left;
   final double right;
   final String text;
+
+  /// Bordo alto e basso della cella, in punti della pagina (la y cresce verso
+  /// l'alto). 0 se non si conosce.
+  final double top;
+  final double bottom;
 }
 
 class _Piece {
@@ -436,22 +567,28 @@ List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs,
     var left = row.first.left;
     var right = row.first.right;
     var height = row.first.height;
+    var top = row.first.top;
+    var bottom = row.first.bottom;
     for (final p in row.skip(1)) {
       final gap = p.left - right;
       final em = math.min(height, p.height);
       if (gap > em) {
-        cells.add(PageCell(left, right, text));
+        cells.add(PageCell(left, right, text, top: top, bottom: bottom));
         text = p.text;
         left = p.left;
         right = p.right;
         height = p.height;
+        top = p.top;
+        bottom = p.bottom;
       } else {
         text = gap > 0.15 * em ? '$text ${p.text}' : '$text${p.text}';
         right = math.max(right, p.right);
         height = p.height;
+        top = math.max(top, p.top);
+        bottom = math.min(bottom, p.bottom);
       }
     }
-    cells.add(PageCell(left, right, text));
+    cells.add(PageCell(left, right, text, top: top, bottom: bottom));
     out.add(cells);
   }
   return out;
@@ -526,6 +663,60 @@ List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs, {PdfRect? zone}) {
     grid.add(line);
   }
   return grid;
+}
+
+/// Una tabella trovata sulla pagina: la [zone] che occupa (nello spazio della
+/// pagina) e la [grid] di testo, righe per colonne.
+class PageTable {
+  const PageTable(this.zone, this.grid);
+
+  final PdfRect zone;
+  final List<List<String>> grid;
+}
+
+/// Le tabelle di una pagina. Una tabella è un gruppo di almeno due righe di
+/// fila con almeno due celle ciascuna, dove le colonne sono coerenti (non più
+/// intervalli delle celle della riga più larga, più uno) e il testo delle
+/// celle è breve (in media al massimo 40 caratteri: due colonne di prosa non
+/// sono una tabella). Le righe con una cella sola chiudono il gruppo.
+List<PageTable> findPageTables(Iterable<PdfExtractedRun> runs) {
+  final all = runs.toList();
+  final tables = <PageTable>[];
+  var group = <List<PageCell>>[];
+  void flush() {
+    if (group.length >= 2) {
+      final table = _tableOf(all, group);
+      if (table != null) tables.add(table);
+    }
+    group = <List<PageCell>>[];
+  }
+
+  for (final row in pageCellRows(all)) {
+    if (row.length >= 2) {
+      group.add(row);
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return tables;
+}
+
+PageTable? _tableOf(List<PdfExtractedRun> runs, List<List<PageCell>> rows) {
+  final cells = [for (final r in rows) ...r];
+  final widest = rows.fold<int>(0, (m, r) => math.max(m, r.length));
+  if (columnSpans(rows).length > widest + 1) return null;
+  final characters = cells.fold<int>(0, (sum, c) => sum + c.text.length);
+  if (characters / cells.length > 40) return null;
+  final zone = PdfRect(
+    cells.map((c) => c.left).reduce(math.min) - 0.5,
+    cells.map((c) => c.bottom).reduce(math.min) - 0.5,
+    cells.map((c) => c.right).reduce(math.max) + 0.5,
+    cells.map((c) => c.top).reduce(math.max) + 0.5,
+  );
+  final grid = pageGrid(runs, zone: zone);
+  if (grid.length < 2) return null;
+  return PageTable(zone, grid);
 }
 
 /// Il numero scritto in [raw], oppure null se è testo. Capisce il formato

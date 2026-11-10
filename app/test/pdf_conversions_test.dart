@@ -8,7 +8,8 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf_cos/pdf_cos.dart' show PdfMatrix;
-import 'package:pdf_graphics/pdf_graphics.dart' show PdfExtractedRun;
+import 'package:pdf_graphics/pdf_graphics.dart'
+    show PdfExtractedRun, PdfReflowBlock;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 
@@ -231,6 +232,78 @@ void main() {
       expect('<w:pageBreakBefore/>'.allMatches(document).length, 1);
     });
 
+    test('docxTableXml: griglia, bordi, celle vuote e paragrafo dopo', () {
+      final xml = docxTableXml(const DocxTable([
+        ['Nome', 'Qta', 'Prezzo'],
+        ['Mela', '3'],
+      ]));
+      expect(xml, startsWith('<w:tbl>'));
+      expect(xml, endsWith('</w:tbl><w:p/>'));
+      expect('<w:gridCol '.allMatches(xml).length, 3);
+      expect('<w:tr>'.allMatches(xml).length, 2);
+      // La riga corta è completata: 3 celle per riga.
+      expect('<w:tc>'.allMatches(xml).length, 6);
+      expect(xml, contains('<w:insideV '));
+      expect(xml, contains('>Prezzo</w:t>'));
+      expect(xml, isNot(contains('<w:pageBreakBefore/>')));
+    });
+
+    test('docxTableXml: pagina nuova in un paragrafo prima della tabella', () {
+      final xml = docxTableXml(const DocxTable([
+        ['a', 'b'],
+      ], pageBreakBefore: true));
+      expect(xml,
+          startsWith('<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p><w:tbl>'));
+      expect(docxTableXml(const DocxTable([])), '');
+    });
+
+    test('buildDocx porta le tabelle tra i paragrafi', () {
+      final document = partOf(
+          buildDocx(const [
+            DocxParagraph('Prima'),
+            DocxTable([
+              ['x', 'y'],
+            ]),
+            DocxParagraph('Dopo'),
+          ]),
+          'word/document.xml');
+      expect(document, contains('<w:tbl>'));
+      expect(document.indexOf('Prima') < document.indexOf('<w:tbl>'), isTrue);
+      expect(document.indexOf('<w:tbl>') < document.indexOf('Dopo'), isTrue);
+    });
+
+    test('docxPageElements: la tabella va al suo posto e il suo testo non si ripete',
+        () {
+      PdfReflowBlock block(String text, PdfRect bounds) => PdfReflowBlock(
+          text: text, bounds: bounds, lines: const [], fontSize: 10);
+      final tables = [
+        PageTable(const PdfRect(49.5, 669.5, 300.5, 710.5), const [
+          ['Nome', 'Qta'],
+          ['Mela', '3'],
+        ]),
+      ];
+      final elements = docxPageElements([
+        block('Listino', const PdfRect(50, 730, 200, 742)),
+        block('Nome Qta', const PdfRect(50, 700, 300, 710)),
+        block('Fine', const PdfRect(50, 640, 100, 650)),
+      ], tables, pageBreak: true);
+      expect(elements, hasLength(3));
+      expect((elements[0] as DocxParagraph).text, 'Listino');
+      expect((elements[0] as DocxParagraph).pageBreakBefore, isTrue);
+      expect(elements[1], isA<DocxTable>());
+      expect((elements[1] as DocxTable).pageBreakBefore, isFalse);
+      expect((elements[2] as DocxParagraph).text, 'Fine');
+    });
+
+    test('docxPageElements: senza blocchi sotto, la tabella va in fondo', () {
+      final elements = docxPageElements(const [], [
+        PageTable(const PdfRect(0, 0, 10, 10), const [
+          ['a', 'b'],
+        ]),
+      ]);
+      expect(elements.single, isA<DocxTable>());
+    });
+
     test('un PDF senza testo (una scansione) non ha paragrafi', () async {
       final blank = PdfBlankDocument.create(pageCount: 2);
       final result = await pdfToDocx(PdfDocument.open(blank));
@@ -255,6 +328,60 @@ void main() {
       expect(file, isNotNull, reason: 'manca $name');
       return utf8.decode(file!.content as List<int>);
     }
+
+    test('findPageTables: una tabella con titolo e riga di testo attorno', () {
+      final runs = [
+        run('Listino', 50, 120, 730),
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+        run('Prezzo', 250, 300, 700),
+        run('Mela', 50, 90, 685),
+        run('3', 170, 180, 685),
+        run('1,50', 270, 300, 685),
+        run('Pera', 50, 90, 670),
+        run('5', 170, 180, 670),
+        run('2,00', 270, 300, 670),
+        run('Fine del listino', 50, 150, 640),
+      ];
+      final tables = findPageTables(runs);
+      expect(tables, hasLength(1));
+      expect(tables.single.grid, [
+        ['Nome', 'Qta', 'Prezzo'],
+        ['Mela', '3', '1,50'],
+        ['Pera', '5', '2,00'],
+      ]);
+      final zone = tables.single.zone;
+      expect(zone.contains(70, 705), isTrue);
+      expect(zone.contains(70, 735), isFalse);
+      expect(zone.contains(70, 645), isFalse);
+    });
+
+    test('findPageTables: una riga sola o testo lungo non sono tabelle', () {
+      expect(
+          findPageTables([
+            run('Nome', 50, 90, 700),
+            run('Qta', 150, 180, 700),
+          ]),
+          isEmpty);
+      final long = 'parola ' * 12;
+      expect(
+          findPageTables([
+            run(long, 50, 250, 700),
+            run(long, 300, 500, 700),
+            run(long, 50, 250, 685),
+            run(long, 300, 500, 685),
+          ]),
+          isEmpty);
+    });
+
+    test('pageCellRows: le celle conoscono il bordo alto e basso', () {
+      final rows = pageCellRows([
+        run('A', 50, 60, 700),
+        run('B', 150, 160, 700),
+      ]);
+      expect(rows.single.first.top, 710);
+      expect(rows.single.first.bottom, 700);
+    });
 
     test('parseSpreadsheetNumber: formato italiano e inglese', () {
       expect(parseSpreadsheetNumber('1.234,56'), 1234.56);
