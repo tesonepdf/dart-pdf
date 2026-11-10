@@ -68,6 +68,7 @@ import 'update.dart';
 import 'update_install_flow.dart';
 import 'save_folder.dart';
 import 'page_choice.dart';
+import 'page_numbers.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
 import 'whatsapp_send.dart';
@@ -4868,6 +4869,27 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Scrive il numero su ogni pagina (o dalla pagina scelta in poi), come una
+  /// sola modifica che si può annullare.
+  Future<void> _numberPages(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      final options = await showPageNumbersDialog(context,
+          pageCount: session.document.pageCount);
+      if (options == null || !mounted) return;
+      session.finishInk();
+      final changed = session.apply((e) => applyPageNumbers(e, options));
+      _toast(changed
+          ? 'Numeri di pagina aggiunti.'
+          : 'Nessuna pagina da numerare.');
+    } catch (e) {
+      AppDevTools.instance.addLog('page numbers failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast('Numeri di pagina non aggiunti: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
   /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
   /// cui si può esportare di nuovo.
@@ -5544,6 +5566,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_exportExcelZone(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'number-pages',
+        requiresDocument: true,
+        icon: Icons.format_list_numbered,
+        title: 'Numera le pagine…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_numberPages(tab));
         },
       ),
       _MenuAction(
@@ -6609,7 +6641,11 @@ class _EditorScreenState extends State<EditorScreen>
         'open-without-ocr' ||
         'read-aloud' =>
           'sign',
-        'compare' || 'insert-document' || 'insert-scan' => 'pages',
+        'compare' ||
+        'insert-document' ||
+        'insert-scan' ||
+        'number-pages' =>
+          'pages',
         'import-form-data' => 'forms',
         _ => null,
       };

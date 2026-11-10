@@ -1,4 +1,4 @@
-// "Esporta come testo semplice (.txt)…", "Esporta come Word (.docx)…", "Esporta come Excel (.xlsx)…", "Esporta una zona come Excel…" e "Foto in PDF (una per pagina)…" sono
+// "Esporta come testo semplice (.txt)…", "Esporta come Word (.docx)…", "Esporta come Excel (.xlsx)…", "Esporta una zona come Excel…", "Numera le pagine…" e "Foto in PDF (una per pagina)…" sono
 // collegate al menu di DartPDF. La lettura del testo e il salvataggio usano
 // il motore e i canali della piattaforma, quindi qui si prova solo il
 // collegamento (le parti di logica sono in pdf_conversions_test.dart).
@@ -45,6 +45,8 @@ void main() {
     expect(
         find.byKey(const ValueKey('menu-export-excel-zone')), findsOneWidget);
     expect(find.text('Esporta una zona come Excel (.xlsx)…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-number-pages')), findsOneWidget);
+    expect(find.text('Numera le pagine…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
   });
 
@@ -58,6 +60,7 @@ void main() {
     expect(find.byKey(const ValueKey('menu-export-word')), findsNothing);
     expect(find.byKey(const ValueKey('menu-export-excel')), findsNothing);
     expect(find.byKey(const ValueKey('menu-export-excel-zone')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-number-pages')), findsNothing);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.text('Foto in PDF (una per pagina)…'), findsOneWidget);
   });
