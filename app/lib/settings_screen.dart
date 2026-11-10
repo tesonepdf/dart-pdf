@@ -530,11 +530,9 @@ class _ArrowStepsSection extends StatelessWidget {
 String appUpdatesPlusTitle(BuildContext context) =>
     '${appL10n(context).settingsUpdates}+';
 
-Widget _appInformationSection(BuildContext context) {
+List<Widget> _appInformationChildren(BuildContext context) {
   final theme = Theme.of(context);
-  return _SettingsSection(
-    title: 'Informazioni',
-    children: [
+  return [
       Text(
         '${AppInfo.displayName} ${AppInfo.displayVersion}',
         style: theme.textTheme.bodyMedium,
@@ -589,8 +587,7 @@ Widget _appInformationSection(BuildContext context) {
           applicationVersion: AppInfo.displayVersion,
         ),
       ),
-    ],
-  );
+  ];
 }
 
 /// Opens the Updates screen (menu: next to Settings). Two drop-downs - this
@@ -662,6 +659,8 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
         children: [
           _OwnUpdatePanel(
               updates: widget.updates, installer: widget.installer),
+          const Divider(height: 24),
+          ..._appInformationChildren(context),
         ],
       ),
       'official': _SettingsSection(
@@ -669,7 +668,6 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
             'Official repository (ben-milanko)'),
         children: const [_OfficialUpdatePanel()],
       ),
-      'information': _appInformationSection(context),
     };
     final ids = _order.where(sections.containsKey).toList();
     for (final id in sections.keys) {
@@ -967,8 +965,13 @@ class _OwnUpdatePanel extends StatelessWidget {
             const SizedBox(height: 4),
             OutlinedButton(
               key: const ValueKey('settings-check-updates'),
-              onPressed:
-                  checking ? null : () => updates.checkForUpdates(force: true),
+              onPressed: checking
+                  ? null
+                  : () {
+                      // controlla la versione e rilegge anche test e build
+                      refreshBuildStatus();
+                      updates.checkForUpdates(force: true);
+                    },
               child: checking
                   ? const SizedBox(
                       width: 16,
@@ -1268,6 +1271,18 @@ class _BuildCheckTileState extends State<_BuildCheckTile> {
   void _reload() => setState(() => _check = BuildCheck.fetch());
 
   @override
+  void initState() {
+    super.initState();
+    buildStatusRefresh.addListener(_reload);
+  }
+
+  @override
+  void dispose() {
+    buildStatusRefresh.removeListener(_reload);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return FutureBuilder<BuildCheck>(
@@ -1348,6 +1363,18 @@ class _LatestWorkflowTileState extends State<_LatestWorkflowTile> {
 
   void _reload() =>
       setState(() => _check = fetchLatestWorkflowCheck(widget.workflow));
+
+  @override
+  void initState() {
+    super.initState();
+    buildStatusRefresh.addListener(_reload);
+  }
+
+  @override
+  void dispose() {
+    buildStatusRefresh.removeListener(_reload);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1432,13 +1459,20 @@ class _BuildRunTileState extends State<_BuildRunTile> {
   @override
   void initState() {
     super.initState();
+    buildStatusRefresh.addListener(_onRefresh);
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    buildStatusRefresh.removeListener(_onRefresh);
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _onRefresh() {
+    _autoCount = 0;
+    unawaited(_load());
   }
 
   Future<void> _load() async {

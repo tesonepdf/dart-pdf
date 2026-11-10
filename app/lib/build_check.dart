@@ -64,6 +64,16 @@ Future<String?> _githubBody(
   return f;
 }
 
+/// Cambia ogni volta che si chiede di rileggere test e build (il pulsante
+/// "Controlla aggiornamenti ora"): le righe di stato lo ascoltano.
+final ValueNotifier<int> buildStatusRefresh = ValueNotifier<int>(0);
+
+/// Rilegge da GitHub test e build, senza usare la memoria.
+void refreshBuildStatus() {
+  _githubCache.clear();
+  buildStatusRefresh.value++;
+}
+
 /// Come sono andati i test automatici (la CI di GitHub) per il commit da cui
 /// è stata compilata questa build.
 enum BuildCheckState { passed, failed, running, notStarted, unavailable }
