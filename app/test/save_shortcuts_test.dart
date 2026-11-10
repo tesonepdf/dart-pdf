@@ -172,6 +172,8 @@ void main() {
 
       await tester.tap(find.byTooltip('DartPDF menu'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-save-as')));
       await tester.pumpAndSettle();
 
@@ -227,6 +229,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byTooltip('DartPDF menu'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-save-as')));
       await tester.pumpAndSettle();
