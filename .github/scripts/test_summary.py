@@ -7,11 +7,21 @@ Per ogni test fallito mostra percorso e riga del test, nome e prima riga
 dell'errore sia nei log del job sia nelle annotazioni GitHub.
 """
 import json
+import os
 import re
 import sys
 
 LIMIT = 3400  # caratteri per annotazione
 MAX_ANNOTATIONS = 8
+
+
+def write_summary(title, body):
+    """Scrive il testo completo nel riepilogo del passo su GitHub Actions."""
+    path = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not path:
+        return
+    with open(path, 'a', encoding='utf-8') as fh:
+        fh.write(f'### {title}\n\n```\n{body}\n```\n\n')
 
 
 def escape(text):
@@ -32,7 +42,7 @@ def locations(text):
         )
         if loc not in found:
             found.append(loc)
-    return found[:4]
+    return found
 
 
 def failure_location(test):
@@ -52,15 +62,14 @@ def from_prints(prints):
                     if l.strip() and not set(l.strip()) <= set('═╞╡ ')]
             where = locations(text)
             suffix = ' @ ' + ', '.join(where) if where else ''
-            return (' / '.join(rest[:4])[:300]) + suffix
+            return ' / '.join(rest) + suffix
     return ''
 
 
 def short(error):
     lines = [l.strip() for l in error.replace('\r', '').split('\n') if l.strip()]
-    text = ' / '.join(lines[:3])
-    # Le righe di diagnosi (test temporanei "DBG ...") non si accorciano.
-    return text[:900] if text.startswith('DBG') else text[:230]
+    # Nessun taglio: l'errore si mostra per intero.
+    return ' / '.join(lines)
 
 
 def main():
@@ -115,14 +124,19 @@ def main():
         for line in lines:
             print(line)
         print('::endgroup::')
+        write_summary('Dettaglio test falliti (completo)', '\n'.join(lines))
     if not lines and len(sys.argv) > 2:
         try:
             with open(sys.argv[2], encoding='utf-8', errors='replace') as fh:
-                tail = fh.read()[-LIMIT:]
+                full = fh.read()
         except OSError:
-            tail = ''
-        if tail.strip():
-            print('::error title=flutter test (stderr)::' + escape(tail))
+            full = ''
+        if full.strip():
+            print('::group::flutter test (stderr completo)')
+            print(full)
+            print('::endgroup::')
+            write_summary('flutter test (stderr completo)', full)
+            print('::error title=flutter test (stderr)::' + escape(full[-LIMIT:]))
     chunks, current = [], ''
     for line in lines:
         if current and len(current) + len(line) + 1 > LIMIT:

@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   FLUTTER_VERSION: '3.47.7'
@@ -70,8 +70,11 @@ jobs:
           )
           flutter analyze --no-fatal-infos --no-fatal-warnings "${sources[@]}" 2>&1 | tee /tmp/step.txt
           code=${PIPESTATUS[0]}
+          mkdir -p /tmp/logs
+          cp /tmp/step.txt /tmp/logs/analyze.txt
           if [ "$code" -ne 0 ]; then
-            echo "::error title=flutter analyze active sources::$(grep -E 'error •|Error' /tmp/step.txt | head -c 6000 | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=flutter analyze active sources::$(grep -E 'error •|Error' /tmp/step.txt | sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')"
+            { echo '### flutter analyze (log completo)'; echo '```'; cat /tmp/step.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$code"
 
@@ -88,6 +91,9 @@ jobs:
           )
           flutter test --reporter json "${tests[@]}" > /tmp/test.json 2> /tmp/test.err
           code=$?
+          mkdir -p /tmp/logs
+          cp /tmp/test.json /tmp/logs/test-app.json
+          cp /tmp/test.err /tmp/logs/test-app.err
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
           fi
@@ -104,6 +110,9 @@ jobs:
             test/redaction_bypass_test.dart \
             test/font_embed_test.dart > /tmp/test.json 2> /tmp/test.err
           code=$?
+          mkdir -p /tmp/logs
+          cp /tmp/test.json /tmp/logs/test-pdf-document.json
+          cp /tmp/test.err /tmp/logs/test-pdf-document.err
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
           fi
@@ -123,6 +132,9 @@ jobs:
             test/editing_fonts_test.dart \
             test/editing_preferences_test.dart > /tmp/test.json 2> /tmp/test.err
           code=$?
+          mkdir -p /tmp/logs
+          cp /tmp/test.json /tmp/logs/test-dart-pdf-editor.json
+          cp /tmp/test.err /tmp/logs/test-dart-pdf-editor.err
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
           fi
@@ -205,7 +217,20 @@ jobs:
             echo "Tentativo $i fallito, riprovo tra 20s"
             sleep 20
           done
+          mkdir -p /tmp/logs
+          cp /tmp/step.txt /tmp/logs/build-apk.txt
           if [ "$code" -ne 0 ]; then
-            echo "::error title=flutter build apk::$(tail -c 6000 /tmp/step.txt | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=flutter build apk::$(sed -z 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g' /tmp/step.txt)"
+            { echo '### flutter build apk (log completo)'; echo '```'; cat /tmp/step.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$code"
+
+      # Tutti i log completi di questa esecuzione, scaricabili da Actions.
+      - name: Upload log completi
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-${{ github.run_number }}
+          path: /tmp/logs
+          if-no-files-found: ignore
+          retention-days: 30
