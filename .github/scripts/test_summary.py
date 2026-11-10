@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Riassume i test falliti di `flutter test --reporter json` come annotazioni.
+"""Riassume i test falliti di `flutter test --reporter json` nei log CI.
 
 Uso: test_summary.py <test.json> [<stderr.txt>]
 
-Per ogni test fallito scrive "file: nome -> prima riga dell'errore", diviso in
-piu' annotazioni (GitHub ne mostra poche per passaggio e ognuna e' corta), cosi'
-il motivo dei fallimenti si legge dall'API senza scaricare i log.
+Per ogni test fallito mostra percorso e riga del test, nome e prima riga
+dell'errore sia nei log del job sia nelle annotazioni GitHub.
 """
 import json
 import re
@@ -20,15 +19,27 @@ def escape(text):
 
 
 def locations(text):
-    """Le prime righe dello stack che cadono nei file dell'app o dei test."""
+    """Le prime posizioni nei sorgenti dell'app e dei pacchetti."""
     found = []
-    # Solo i file dell'app (app/test, app/lib): i frame interni di flutter_test
-    # non dicono dove si rompe il test.
-    for match in re.finditer(r'(?:app|packages/[\w-]+)/(?:test|lib)/([\w./-]+\.dart):(\d+)', text):
-        loc = match.group(1).rsplit('/', 1)[-1] + ':' + match.group(2)
+    pattern = (
+        r'(?P<root>app|packages/[\w-]+)/'
+        r'(?P<area>test|lib)/(?P<file>[\w./-]+\.dart):(?P<line>\d+)'
+    )
+    for match in re.finditer(pattern, text):
+        loc = (
+            f"{match.group('root')}/{match.group('area')}/"
+            f"{match.group('file')}:{match.group('line')}"
+        )
         if loc not in found:
             found.append(loc)
     return found[:4]
+
+
+def failure_location(test):
+    """Prefer the failing test's source over framework or implementation frames."""
+    text = '\n'.join(test['errors'] + test['prints'])
+    found = locations(text)
+    return next((loc for loc in found if '/test/' in loc), found[0] if found else '')
 
 
 def from_prints(prints):
@@ -94,11 +105,16 @@ def main():
               if t['result'] in ('failure', 'error') and not t['hidden']]
     lines = []
     for t in failed:
-        file = t['url'].rsplit('/', 1)[-1] or '?'
+        file = failure_location(t) or t['url'].rsplit('/', 1)[-1] or '?'
         error = short(t['errors'][0]) if t['errors'] else ''
         if not error or error.startswith('Test failed. See exception logs'):
             error = from_prints(t['prints']) or error or '(nessun messaggio)'
         lines.append(f"{file}: {t['name']} -> {error}")
+    if lines:
+        print('::group::Dettaglio test falliti')
+        for line in lines:
+            print(line)
+        print('::endgroup::')
     if not lines and len(sys.argv) > 2:
         try:
             with open(sys.argv[2], encoding='utf-8', errors='replace') as fh:
