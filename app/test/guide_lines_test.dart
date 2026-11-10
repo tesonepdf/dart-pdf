@@ -100,6 +100,8 @@ void main() {
     await tester.pump();
     await gesture.up();
     await tester.pump();
+    // lascia scadere i timer del gesto (pressione lunga, doppio tocco)
+    await tester.pump(const Duration(seconds: 2));
 
     expect(session.guidePoint.value, isNotNull);
     expect(session.hasPendingInk, isFalse);
@@ -117,9 +119,14 @@ void main() {
 
     final button = find.byKey(const ValueKey('pdf-guide-lines'));
     expect(button, findsOneWidget);
+    // la striscia delle impostazioni scorre: porta il pulsante in vista
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Both'));
+    final items = find.byType(PopupMenuItem<PdfGuideLines>);
+    expect(items, findsNWidgets(PdfGuideLines.values.length));
+    await tester.tap(items.last);
     await tester.pumpAndSettle();
 
     expect(session.guideLines, PdfGuideLines.both);
