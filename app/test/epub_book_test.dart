@@ -74,9 +74,31 @@ void main() {
       ]);
     });
 
-    test('una pagina senza testo non dà blocchi', () {
-      expect(htmlToBlocks('<html><body><img src="a.png"/></body></html>'),
-          isEmpty);
+    test('una pagina senza testo dà solo il blocco immagine', () {
+      expect(htmlToBlocks('<html><body><img src="a.png"/></body></html>'), [
+        const EpubBlock('', imageSrc: 'a.png', chapterStart: true),
+      ]);
+      expect(htmlToBlocks('<html><body><p>  </p></body></html>'), isEmpty);
+    });
+
+    test('corsivo solo se tutto il paragrafo è in corsivo', () {
+      final blocks = htmlToBlocks(
+          '<p><i>tutto corsivo</i></p><p>un po\' <em>sì</em> e un po\' no</p>');
+      expect(blocks.map((b) => b.italic), [true, false]);
+    });
+
+    test('le note vanno in fondo al capitolo con livello 4', () {
+      final blocks = htmlToBlocks('<h1>T</h1>'
+          '<aside epub:type="footnote"><p>nota uno</p></aside>'
+          '<p>corpo</p>');
+      expect(blocks.map((b) => (b.text, b.level)),
+          [('T', 1), ('corpo', 0), ('nota uno', 4)]);
+    });
+
+    test('cirillico e greco si traslitterano, il cinese no', () {
+      expect(pdfSafeText('Привет Щука'), 'Privet Shchuka');
+      expect(pdfSafeText('Ελλάδα'), 'Ellada');
+      expect(pdfSafeText('日'), '?');
     });
 
     test('i percorsi dentro lo zip si risolvono', () {
