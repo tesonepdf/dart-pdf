@@ -50,8 +50,12 @@ void main() {
   Future<PdfEditingController> pumpEditor(WidgetTester tester) async {
     final editing = PdfEditingController(buildMultiPagePdf(1));
     final viewer = PdfViewerController();
-    addTearDown(editing.dispose);
-    addTearDown(viewer.dispose);
+    // prima si smonta la schermata, poi si eliminano i controller
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      editing.dispose();
+      viewer.dispose();
+    });
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: ListenableBuilder(
@@ -203,7 +207,8 @@ void main() {
     expect(rect.left, closeTo(116, 0.5));
     expect(rect.bottom, closeTo(595, 0.5));
 
-    await dragMouse(tester, view(263, 595), view(280, 561));
+    // il bordo destro e' a 260 (103+144+13): si parte da li', non da 263
+    await dragMouse(tester, view(260, 595), view(280, 561));
     rect = editing.document.page(0).annotations.single.rect;
     expect(rect.right, closeTo(280, 0.5));
     expect(rect.bottom, closeTo(561, 0.5));
@@ -279,8 +284,11 @@ void main() {
       (tester) async {
     final editing = PdfEditingController(buildMultiPagePdf(1));
     final viewer = PdfViewerController();
-    addTearDown(editing.dispose);
-    addTearDown(viewer.dispose);
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      editing.dispose();
+      viewer.dispose();
+    });
     editing.preferences.showPageRulers = true;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -321,7 +329,10 @@ void main() {
   testWidgets('editor settings exposes persistent guide and grid controls',
       (tester) async {
     final preferences = PdfEditingPreferences();
-    addTearDown(preferences.dispose);
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      preferences.dispose();
+    });
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: PdfEditorView(
