@@ -4,9 +4,17 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:image/image.dart' as img;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_graphics/pdf_graphics.dart'
-    show PdfExtractedRun, PdfReflowBlock, PdfTextExtractor;
+    show
+        PdfDecodedPixels,
+        PdfExtractedRun,
+        PdfReflowBlock,
+        PdfReflowImage,
+        PdfTextExtractor,
+        decodePdfImage,
+        pdfImageFilters;
 
 import 'image_to_pdf.dart';
 
@@ -150,14 +158,28 @@ Future<PhotosPdfResult> photosToPdfAsync(
 // I paragrafi si ricostruiscono dalle righe di testo (lo stesso ordine di
 // lettura della vista "Lettura"), e il file Word si scrive a mano con la
 // libreria zip già presente (`archive`). L'impaginazione non è identica
-// all'originale e le immagini non vengono portate. Grassetto, corsivo e
-// colore si portano per paragrafo (per maggioranza di caratteri), non per
-// singola parola. Le tabelle si riconoscono ([findPageTables]) e diventano
-// tabelle vere di Word, a colonne di larghezza uguale.
+// all'originale. Grassetto, corsivo e colore si portano per paragrafo (per
+// maggioranza di caratteri), non per singola parola. Le tabelle si riconoscono
+// ([findPageTables]) e diventano tabelle vere di Word, a colonne di larghezza
+// uguale. Le immagini si portano (JPEG com'è, il resto in PNG), ridotte alla
+// larghezza della pagina; le pagine di sola immagine (scansioni) restano
+// senza, perché l'app propone di leggerle con l'OCR.
 
 /// Un elemento del corpo del file Word: un paragrafo o una tabella.
 sealed class DocxElement {
   const DocxElement();
+}
+
+/// Un'immagine del file Word, già nel formato del file ([extension] `jpeg` o
+/// `png`). [widthPt] e [heightPt] sono la misura sulla pagina del PDF, in
+/// punti; [buildDocx] la riduce alla larghezza del testo.
+class DocxImage extends DocxElement {
+  const DocxImage(this.bytes, this.extension, this.widthPt, this.heightPt);
+
+  final Uint8List bytes;
+  final String extension;
+  final double widthPt;
+  final double heightPt;
 }
 
 /// Una tabella del file Word: righe di celle di testo. Le righe più corte
@@ -321,27 +343,77 @@ String docxTableXml(DocxTable table) {
   return out.toString();
 }
 
-/// L'elemento come XML di Word.
-String docxElementXml(DocxElement element) => switch (element) {
-      DocxParagraph p => docxParagraphXml(p),
-      DocxTable t => docxTableXml(t),
-    };
+/// L'immagine come XML di Word (`<w:drawing>` dentro un paragrafo). [number]
+/// (da 1) dà il nome del file in `word/media` e il collegamento `rId$number`.
+/// Più larga del testo della pagina, si riduce tenendo le proporzioni.
+String docxImageXml(DocxImage image, {required int number}) {
+  const emuPerPoint = 12700;
+  const maxWidth = _docxTextWidth * 635; // un ventesimo di punto = 635 EMU
+  var width = (image.widthPt.isFinite ? image.widthPt : 1) * emuPerPoint;
+  var height = (image.heightPt.isFinite ? image.heightPt : 1) * emuPerPoint;
+  if (width < emuPerPoint) width = emuPerPoint.toDouble();
+  if (height < emuPerPoint) height = emuPerPoint.toDouble();
+  if (width > maxWidth) {
+    height = height * maxWidth / width;
+    width = maxWidth.toDouble();
+  }
+  final cx = width.round();
+  final cy = math.max(1, height.round());
+  const aNs = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const picNs = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+  return '<w:p><w:r><w:drawing>'
+      '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+      '<wp:extent cx="$cx" cy="$cy"/>'
+      '<wp:docPr id="$number" name="Immagine $number"/>'
+      '<wp:cNvGraphicFramePr>'
+      '<a:graphicFrameLocks xmlns:a="$aNs" noChangeAspect="1"/>'
+      '</wp:cNvGraphicFramePr>'
+      '<a:graphic xmlns:a="$aNs">'
+      '<a:graphicData uri="$picNs">'
+      '<pic:pic xmlns:pic="$picNs">'
+      '<pic:nvPicPr><pic:cNvPr id="$number" name="image$number.${image.extension}"/>'
+      '<pic:cNvPicPr/></pic:nvPicPr>'
+      '<pic:blipFill><a:blip r:embed="rId$number"/>'
+      '<a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="$cx" cy="$cy"/></a:xfrm>'
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+      '</pic:pic></a:graphicData></a:graphic>'
+      '</wp:inline></w:drawing></w:r></w:p>';
+}
 
-/// Scrive il file Word (.docx) degli [elements] (paragrafi e tabelle). Un
-/// .docx è un file zip con tre parti obbligatorie: i tipi, il collegamento al
-/// documento e il documento stesso.
+/// Scrive il file Word (.docx) degli [elements] (paragrafi, tabelle e
+/// immagini). Un .docx è un file zip con tre parti obbligatorie: i tipi, il
+/// collegamento al documento e il documento stesso; con delle immagini ci
+/// sono anche i file in `word/media` e i loro collegamenti.
 Uint8List buildDocx(List<DocxElement> elements) {
-  const ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+      'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"';
   const header = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-  final body = elements.isEmpty ? '<w:p/>' : elements.map(docxElementXml).join();
+  final images = <DocxImage>[];
+  String elementXml(DocxElement element) {
+    switch (element) {
+      case DocxParagraph p:
+        return docxParagraphXml(p);
+      case DocxTable t:
+        return docxTableXml(t);
+      case DocxImage i:
+        images.add(i);
+        return docxImageXml(i, number: images.length);
+    }
+  }
+
+  final body = elements.isEmpty ? '<w:p/>' : elements.map(elementXml).join();
   final document = '$header<w:document $ns><w:body>$body'
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
       '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" '
       'w:header="709" w:footer="709" w:gutter="0"/></w:sectPr>'
       '</w:body></w:document>';
-  const contentTypes = '$header<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+  final imageTypes = <String>{for (final i in images) i.extension};
+  final contentTypes = '$header<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
       '<Default Extension="xml" ContentType="application/xml"/>'
+      '${imageTypes.map((e) => '<Default Extension="$e" ContentType="image/$e"/>').join()}'
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
       '</Types>';
   const rels = '$header<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -351,6 +423,21 @@ Uint8List buildDocx(List<DocxElement> elements) {
     ..addFile(_zipEntry('[Content_Types].xml', contentTypes))
     ..addFile(_zipEntry('_rels/.rels', rels))
     ..addFile(_zipEntry('word/document.xml', document));
+  if (images.isNotEmpty) {
+    final links = StringBuffer();
+    for (var n = 1; n <= images.length; n++) {
+      final image = images[n - 1];
+      links.write('<Relationship Id="rId$n" '
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+          'Target="media/image$n.${image.extension}"/>');
+      archive.addFile(
+          ArchiveFile.bytes('word/media/image$n.${image.extension}', image.bytes));
+    }
+    archive.addFile(_zipEntry(
+        'word/_rels/document.xml.rels',
+        '$header<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '$links</Relationships>'));
+  }
   return ZipEncoder().encodeBytes(archive);
 }
 
@@ -362,9 +449,10 @@ ArchiveFile _zipEntry(String name, String content) =>
 typedef DocxResult = ({Uint8List bytes, int paragraphs, List<int> failedPages});
 
 /// Ricostruisce i paragrafi di ogni pagina di [document] con il motore
-/// ([PdfTextExtractor.reflowPage]) e ne fa un file Word. Le immagini e le
-/// tabelle non vengono portate (le righe delle tabelle diventano testo).
-/// Una pagina che non si legge viene saltata e riportata in `failedPages`.
+/// ([PdfTextExtractor.reflowPage]) e ne fa un file Word, con le tabelle
+/// ([findPageTables]) e le immagini ([docxImageFromReflow]); le pagine di sola
+/// immagine (scansioni) restano senza immagini. Una pagina che non si legge
+/// viene saltata e riportata in `failedPages`.
 /// [onPage] riceve la pagina che sta per essere letta (da 0) e il numero di
 /// pagine; tra una pagina e l'altra l'interfaccia ha un turno.
 Future<DocxResult> pdfToDocx(
@@ -378,14 +466,29 @@ Future<DocxResult> pdfToDocx(
   for (var i = 0; i < count; i++) {
     onPage?.call(i, count);
     try {
-      final blocks = PdfTextExtractor.reflowPage(document, i).blocks;
+      final reflow = PdfTextExtractor.reflowPage(document, i);
+      final blocks = reflow.blocks;
+      // Una pagina di sola immagine è una scansione: niente immagini, così
+      // l'app propone l'OCR.
+      final images = <({PdfRect bounds, DocxImage image})>[];
+      if (blocks.any((b) => b.text.trim().isNotEmpty)) {
+        for (final item in reflow.images) {
+          try {
+            final image = docxImageFromReflow(document, item);
+            if (image != null) images.add((bounds: item.bounds, image: image));
+          } catch (_) {
+            // Un'immagine che non si legge si salta; il resto della pagina va.
+          }
+        }
+      }
       var tables = const <PageTable>[];
       try {
         tables = findPageTables(PdfTextExtractor.extract(document, i).runs);
       } catch (_) {
         // Senza tabelle il testo si porta lo stesso, come paragrafi.
       }
-      final page = docxPageElements(blocks, tables, pageBreak: i > 0);
+      final page =
+          docxPageElements(blocks, tables, images: images, pageBreak: i > 0);
       elements.addAll(page);
       for (final e in page) {
         if (e is DocxTable || (e is DocxParagraph && e.text.isNotEmpty)) {
@@ -410,14 +513,15 @@ Future<DocxResult> pdfToDocx(
 }
 
 /// Gli elementi Word di una pagina: i paragrafi dei [blocks] (in ordine di
-/// lettura) e le [tables]. I blocchi di testo dentro una tabella si tolgono
-/// (il loro testo sta già nelle celle). Ogni tabella va prima del primo
-/// blocco rimasto che sta sotto di lei e si sovrappone in orizzontale, o in
-/// fondo se non c'è. Con [pageBreak] il primo elemento comincia su una pagina
-/// nuova.
+/// lettura), le [tables] e le [images] (con la zona che occupano nella
+/// pagina). I blocchi di testo dentro una tabella si tolgono (il loro testo
+/// sta già nelle celle). Ogni tabella o immagine va prima del primo blocco
+/// rimasto che sta sotto di lei e si sovrappone in orizzontale, o in fondo se
+/// non c'è. Con [pageBreak] il primo elemento comincia su una pagina nuova.
 List<DocxElement> docxPageElements(
   List<PdfReflowBlock> blocks,
   List<PageTable> tables, {
+  List<({PdfRect bounds, DocxImage image})> images = const [],
   bool pageBreak = false,
 }) {
   bool inside(PdfRect b, PdfRect zone) =>
@@ -428,30 +532,47 @@ List<DocxElement> docxPageElements(
           !tables.any((t) => inside(b.bounds, t.zone)))
         b,
   ];
-  final ordered = [...tables]..sort((a, b) => b.zone.top.compareTo(a.zone.top));
-  final before = <int, List<PageTable>>{};
-  for (final t in ordered) {
+  // Tabelle e immagini, ognuna con la zona e il modo di scriverla; `first` è
+  // vero se è il primo elemento della pagina e deve aprire una pagina nuova.
+  final anchored = <({PdfRect zone, List<DocxElement> Function(bool first) make})>[
+    for (final t in tables)
+      (
+        zone: t.zone,
+        make: (first) => [DocxTable(t.grid, pageBreakBefore: first)],
+      ),
+    for (final entry in images)
+      (
+        zone: entry.bounds,
+        make: (first) => [
+              // Una pagina nuova sta in un paragrafo vuoto prima dell'immagine.
+              if (first) const DocxParagraph('', pageBreakBefore: true),
+              entry.image,
+            ],
+      ),
+  ]..sort((a, b) => b.zone.top.compareTo(a.zone.top));
+  final before = <int, List<int>>{};
+  for (var n = 0; n < anchored.length; n++) {
+    final zone = anchored[n].zone;
     var at = text.length;
     for (var k = 0; k < text.length; k++) {
       final b = text[k].bounds;
-      final overlap =
-          math.min(b.right, t.zone.right) - math.max(b.left, t.zone.left);
-      if (b.top <= t.zone.top && overlap > 0) {
+      final overlap = math.min(b.right, zone.right) - math.max(b.left, zone.left);
+      if (b.top <= zone.top && overlap > 0) {
         at = k;
         break;
       }
     }
-    (before[at] ??= []).add(t);
+    (before[at] ??= []).add(n);
   }
   final out = <DocxElement>[];
-  void addTables(int at) {
-    for (final t in before[at] ?? const <PageTable>[]) {
-      out.add(DocxTable(t.grid, pageBreakBefore: pageBreak && out.isEmpty));
+  void addAnchored(int at) {
+    for (final n in before[at] ?? const <int>[]) {
+      out.addAll(anchored[n].make(pageBreak && out.isEmpty));
     }
   }
 
   for (var k = 0; k < text.length; k++) {
-    addTables(k);
+    addAnchored(k);
     final b = text[k];
     out.add(DocxParagraph(b.text.trim(),
         fontSize: b.fontSize,
@@ -461,8 +582,100 @@ List<DocxElement> docxPageElements(
         italic: b.italic,
         color: b.color));
   }
-  addTables(text.length);
+  addAnchored(text.length);
   return out;
+}
+
+/// Le dimensioni e i canali di un JPEG, letti dal primo segmento SOF (solo
+/// baseline e progressivo, gli unici che Word apre); null se non è un JPEG di
+/// quei tipi.
+({int width, int height, int components})? jpegInfo(Uint8List b) {
+  if (b.length < 4 || b[0] != 0xFF || b[1] != 0xD8) return null;
+  var i = 2;
+  while (i + 9 < b.length) {
+    if (b[i] != 0xFF) {
+      i++;
+      continue;
+    }
+    final marker = b[i + 1];
+    if (marker == 0xFF) {
+      i++;
+      continue;
+    }
+    if (marker == 0x00 ||
+        marker == 0x01 ||
+        marker == 0xD8 ||
+        (marker >= 0xD0 && marker <= 0xD7)) {
+      i += 2;
+      continue;
+    }
+    if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
+      return (
+        height: (b[i + 5] << 8) | b[i + 6],
+        width: (b[i + 7] << 8) | b[i + 8],
+        components: b[i + 9],
+      );
+    }
+    if (marker == 0xDA) return null; // i dati, senza aver visto il SOF
+    i += 2 + ((b[i + 2] << 8) | b[i + 3]);
+  }
+  return null;
+}
+
+/// Le immagini più grandi di così (in pixel) non si portano: decodificarle
+/// occuperebbe troppa memoria.
+const int _docxMaxImagePixels = 12000000;
+
+/// L'immagine [item] di una pagina pronta per il file Word, o null se non si
+/// porta (un'immagine minuscola, una maschera, una che non si decodifica).
+///
+/// Un JPEG a un solo filtro, in grigio o RGB, senza maschera né `/Decode`,
+/// passa com'è. Tutto il resto si decodifica con il motore e si riscrive in
+/// PNG, con la trasparenza appoggiata sul bianco.
+DocxImage? docxImageFromReflow(PdfDocument document, PdfReflowImage item) {
+  final request = item.request;
+  if (request.isStencil || request.isLuminosityMask) return null;
+  final widthPt = item.bounds.width;
+  final heightPt = item.bounds.height;
+  if (!(widthPt >= 2) || !(heightPt >= 2)) return null;
+  final cos = document.cos;
+  final stream = request.stream;
+  final dict = stream.dictionary;
+  final filters = pdfImageFilters(cos, dict);
+  final plain = !dict.containsKey('SMask') &&
+      !dict.containsKey('Mask') &&
+      !dict.containsKey('Decode');
+  if (plain && filters.length == 1 && filters.first == 'DCTDecode') {
+    final bytes = cos.decodeStreamData(stream, stopBeforeFilter: 'DCTDecode');
+    final info = jpegInfo(bytes);
+    if (info != null && (info.components == 1 || info.components == 3)) {
+      return DocxImage(bytes, 'jpeg', widthPt, heightPt);
+    }
+  }
+  final PdfDecodedPixels? pixels = decodePdfImage(cos, stream);
+  if (pixels == null || pixels.width < 1 || pixels.height < 1) return null;
+  if (pixels.width * pixels.height > _docxMaxImagePixels) return null;
+  return DocxImage(_pngOfPixels(pixels), 'png', widthPt, heightPt);
+}
+
+/// Un PNG a colori dai pixel RGBA (moltiplicati per l'alfa) di [pixels],
+/// appoggiati sul bianco.
+Uint8List _pngOfPixels(PdfDecodedPixels pixels) {
+  final rgba = pixels.rgba;
+  final rgb = Uint8List(pixels.width * pixels.height * 3);
+  for (var i = 0, o = 0; i + 3 < rgba.length && o + 2 < rgb.length; i += 4, o += 3) {
+    final white = 255 - rgba[i + 3];
+    rgb[o] = math.min(255, rgba[i] + white);
+    rgb[o + 1] = math.min(255, rgba[i + 1] + white);
+    rgb[o + 2] = math.min(255, rgba[i + 2] + white);
+  }
+  final image = img.Image.fromBytes(
+    width: pixels.width,
+    height: pixels.height,
+    bytes: rgb.buffer,
+    numChannels: 3,
+  );
+  return Uint8List.fromList(img.encodePng(image));
 }
 
 // --- PDF in Excel (.xlsx) ----------------------------------------------------
