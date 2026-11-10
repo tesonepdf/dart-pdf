@@ -4709,6 +4709,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (existing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _textEditRect != null && _textEditExisting) {
+          // lo strumento cambia di proposito: va ricordato prima, altrimenti
+          // il controllo "cambio strumento" chiude subito la modifica
+          _textEditTool = PdfEditTool.freeText;
           _controller.armTextToolForSelectionEdit();
         }
       });
