@@ -860,6 +860,14 @@ class _PdfAnnotationPropertiesPanelState
             font: style.font,
             onChanged: (font) => _controller.restyleSelectedText(font: font),
           ),
+          if (_controller.selectedTextFont is PdfEmbeddedFont) ...[
+            const SizedBox(width: 6),
+            EmbeddedBoldToggle(
+              keyPrefix: 'pdf-prop-font',
+              strength: _controller.activeBoldStroke,
+              onChanged: _controller.setSelectedBoldStroke,
+            ),
+          ],
         ]),
       ),
       Padding(

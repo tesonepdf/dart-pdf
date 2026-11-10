@@ -262,6 +262,9 @@ class ContentWriter {
   /// glyph, in unscaled text-space units (points at the nominal size).
   void charSpacing(double value) => op('Tc', [value]);
 
+  /// Sets the text rendering mode (`Tr`, §9.3.6): 0 fill, 2 fill + stroke.
+  void textRenderMode(int mode) => op('Tr', [mode.toDouble()]);
+
   /// Sets the horizontal text scaling (`Tz`, §9.3.4) as a percentage - 100
   /// is the font's natural width, 150 stretches glyphs to 1.5×.
   void horizontalScale(double percent) => op('Tz', [percent]);

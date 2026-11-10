@@ -1202,6 +1202,10 @@ const String kPdfFreeTextUnderlineKey = 'TextUnderline';
 const String kPdfFreeTextVerticalAlignKey = 'DartPdfTextVerticalAlignment';
 const String kPdfFreeTextInsetKey = 'DartPdfTextLeftInset';
 
+/// Simulated bold of an embedded font: the outline width as a fraction of
+/// the font size (fill + stroke text, `Tr 2`). Absent means not bold.
+const String kPdfFreeTextBoldStrokeKey = 'DartPdfBoldStroke';
+
 /// One leader of a callout: the page-space point its arrow points at, and
 /// optionally where it meets the text box (snapped onto the box perimeter;
 /// null picks the edge facing [target]).

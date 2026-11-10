@@ -2785,6 +2785,28 @@ class PdfEditingController extends ChangeNotifier {
     preferences.embeddedFont = value;
   }
 
+  /// Simulated bold (outline width / font size) of the embedded font the
+  /// controls currently target: the selected box's own, else the default
+  /// for new text. 0 means off.
+  double get activeBoldStroke {
+    final selected = selectedTextFont;
+    if (selected != null) {
+      return selected is PdfEmbeddedFont ? selected.boldStroke : 0;
+    }
+    return preferences.boldStroke;
+  }
+
+  /// Sets the simulated bold of embedded-font text: it becomes the default
+  /// for new text and is applied to the selected text boxes (not while the
+  /// inline editor owns the box - then it lands when the edit commits).
+  void setSelectedBoldStroke(double value) {
+    preferences.boldStroke = value;
+    final embedded = preferences.embeddedFont;
+    if (embedded != null) embedded.boldStroke = value;
+    if (isEditingText) return;
+    _restyleSelectedFreeText(boldStroke: value);
+  }
+
   /// A human label for the font the font controls currently target - a
   /// selected measurement's caption face, else the font new free text will
   /// be written in (the embedded font's family, or the standard family).
@@ -10215,6 +10237,7 @@ class PdfEditingController extends ChangeNotifier {
     bool? underline,
     bool? bold,
     bool? italic,
+    double? boldStroke,
   }) {
     if (font == null &&
         size == null &&
@@ -10228,7 +10251,8 @@ class PdfEditingController extends ChangeNotifier {
         fontWidth == null &&
         underline == null &&
         bold == null &&
-        italic == null) {
+        italic == null &&
+        boldStroke == null) {
       return false;
     }
     final targets = _selectedFreeTextAnnotations;
@@ -10306,6 +10330,9 @@ class PdfEditingController extends ChangeNotifier {
     final changed = apply((e) {
       PdfTextFont styledFont(PdfTextFont existing) {
         final chosen = font ?? existing;
+        if (boldStroke != null && chosen is PdfEmbeddedFont) {
+          chosen.boldStroke = boldStroke;
+        }
         if (bold == null && italic == null) return chosen;
         final base = _standardFormattingFont(chosen);
         return PdfStandardFont.styled(base.family,

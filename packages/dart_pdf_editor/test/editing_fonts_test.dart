@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -180,6 +181,28 @@ void main() {
       final a = c.document.page(0).annotations.last;
       expect(daOf(c, a), contains('/F0'));
       expect(isType0(c, a), isTrue);
+    });
+
+    test('simulated bold: new text and a selected box, on and off', () {
+      String appearance(PdfEditingController c) {
+        final a = c.document.page(0).annotations.last;
+        return latin1.decode(c.document.cos.decodeStreamData(a.normalAppearance!));
+      }
+
+      final c = PdfEditingController(buildMultiPagePdf(1))
+        ..setCustomFont(_fontBytes);
+      expect(c.activeBoldStroke, 0);
+      c.setSelectedBoldStroke(0.02);
+      expect(c.preferences.boldStroke, 0.02);
+      expect(c.activeBoldStroke, 0.02);
+
+      c.addFreeText(0, const PdfRect(72, 600, 300, 660), 'Hello');
+      expect(appearance(c), contains('2 Tr'));
+
+      c.selectAnnotation(0, c.document.page(0).annotations.length - 1);
+      c.setSelectedBoldStroke(0);
+      expect(appearance(c), isNot(contains('2 Tr')));
+      expect(c.activeBoldStroke, 0);
     });
 
     test('setCustomFont rejects non-font bytes', () {

@@ -2249,7 +2249,8 @@ extension PdfAnnotationEditing on PdfEditor {
         lineSpacing: lineSpacing,
         charSpacing: charSpacing,
         horizontalScale: horizontalScale,
-        underline: underline);
+        underline: underline,
+        boldStroke: font is PdfEmbeddedFont ? font.boldStroke : 0);
     _writeFreeTextInset(dict, textInset);
     if (borderColor != null && borderWidth > 0) {
       dict['BS'] = _borderStyle(borderWidth);
@@ -2402,6 +2403,7 @@ extension PdfAnnotationEditing on PdfEditor {
       charSpacing: charSpacing,
       horizontalScale: horizontalScale,
       underline: underline,
+      boldStroke: font is PdfEmbeddedFont ? font.boldStroke : 0,
     );
     final CosDictionary fontResource;
     if (unicodeFont != null) {
@@ -2625,7 +2627,13 @@ extension PdfAnnotationEditing on PdfEditor {
     required double charSpacing,
     required double horizontalScale,
     required bool underline,
+    double boldStroke = 0,
   }) {
+    if (boldStroke > 0) {
+      dict[kPdfFreeTextBoldStrokeKey] = CosReal(boldStroke);
+    } else {
+      dict.entries.remove(kPdfFreeTextBoldStrokeKey);
+    }
     if (verticalAlign == PdfTextVerticalAlign.top) {
       dict.entries.remove(kPdfFreeTextVerticalAlignKey);
     } else {
@@ -3494,6 +3502,13 @@ extension PdfAnnotationEditing on PdfEditor {
           charSpacing: charSpacing, horizontalScale: horizontalScale),
       writeColor: (cw) {
         cw.fillColor(color);
+        // simulated bold: fill + a thin outline in the same colour
+        if (font is PdfEmbeddedFont && font.boldStroke > 0) {
+          cw
+            ..strokeColor(color)
+            ..lineWidth(fontSize * font.boldStroke)
+            ..textRenderMode(2);
+        }
         if (charSpacing != 0) cw.charSpacing(charSpacing);
         if (horizontalScale != _defaultHorizontalScale) {
           cw.horizontalScale(horizontalScale);
@@ -3638,10 +3653,18 @@ extension PdfAnnotationEditing on PdfEditor {
             isUnicode ? run.text : pdfVisualText(run.text, resolvedDirection);
         final width = _advanceWidth(style.font, visual, style.fontSize,
             charSpacing: charSpacing, horizontalScale: horizontalScale);
+        final runFont = style.font;
+        final boldStroke = runFont is PdfEmbeddedFont ? runFont.boldStroke : 0.0;
         w
           ..font(style.font.resourceName, style.fontSize)
           ..fillColor(style.color)
           ..textAt(x - prevX, y - prevY);
+        if (boldStroke > 0) {
+          w
+            ..strokeColor(style.color)
+            ..lineWidth(style.fontSize * boldStroke)
+            ..textRenderMode(2);
+        }
         if (isUnicode) {
           w.showGlyphHex((style.font as PdfUnicodeFont).encodeHex(run.text));
         } else if (style.font is PdfEmbeddedFont) {
@@ -3649,6 +3672,7 @@ extension PdfAnnotationEditing on PdfEditor {
         } else {
           w.showText(visual);
         }
+        if (boldStroke > 0) w.textRenderMode(0);
         if (style.underline && run.text.isNotEmpty) {
           underlines
               .add(PdfTextUnderline(x, y, width, style.fontSize, style.color));
