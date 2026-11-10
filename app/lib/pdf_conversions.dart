@@ -680,12 +680,14 @@ Uint8List _pngOfPixels(PdfDecodedPixels pixels) {
 
 // --- PDF in Excel (.xlsx) ----------------------------------------------------
 //
-// Prima versione, documento intero: le righe si trovano dalla posizione
-// verticale del testo, le colonne dagli spazi larghi tra le parole, e i numeri
-// diventano numeri veri nelle celle. Una scheda (foglio) per ogni pagina che
-// ha del testo. Funziona bene sulle tabelle, male sui PDF che non lo sono.
-// Limiti: una cella che si estende su più colonne (un titolo largo dentro una
-// riga di più celle) può unire le colonne; niente formati, colori o bordi.
+// Documento intero: le righe si trovano dalla posizione verticale del testo,
+// le colonne dagli spazi larghi tra le parole, e i numeri diventano numeri
+// veri nelle celle. Una scheda (foglio) per ogni pagina che ha del testo.
+// Una pagina che è quasi tutta tabella si legge a colonne; una pagina di
+// testo ([pageSheetRows]) va in una colonna sola, con le eventuali tabelle
+// al loro posto. Limiti: una cella che si estende su più colonne (un titolo
+// largo dentro una riga di più celle) può unire le colonne; niente colori o
+// bordi.
 
 /// Una cella trovata sulla pagina, prima di sapere in che colonna va. [left] e
 /// [right] sono in punti della pagina.
@@ -932,6 +934,45 @@ PageTable? _tableOf(List<PdfExtractedRun> runs, List<List<PageCell>> rows) {
   return PageTable(zone, grid);
 }
 
+/// Sotto questa quota di righe con almeno due celle una pagina non è una
+/// tabella (vedi [pageSheetRows]).
+const double _sheetTableShare = 0.4;
+
+/// Le righe del foglio di una pagina intera. Se almeno il 40% delle righe ha
+/// due o più celle la pagina è una tabella e vale [pageGrid]. Altrimenti è
+/// una pagina di testo: ogni riga è un paragrafo in colonna A (così le parole
+/// non finiscono sparpagliate in colonne a caso), tranne le tabelle trovate
+/// ([findPageTables]), che stanno nel foglio a colonne, nel punto della
+/// pagina in cui si trovano. Vuota se non c'è testo.
+List<List<String>> pageSheetRows(Iterable<PdfExtractedRun> runs) {
+  final all = runs.toList();
+  final rows = pageCellRows(all);
+  if (rows.isEmpty) return const [];
+  final multi = rows.where((r) => r.length >= 2).length;
+  if (multi >= _sheetTableShare * rows.length) return pageGrid(all);
+
+  final tables = findPageTables(all);
+  final emitted = <PageTable>{};
+  final out = <List<String>>[];
+  for (final row in rows) {
+    final first = row.first;
+    final y = (first.top + first.bottom) / 2;
+    PageTable? table;
+    for (final t in tables) {
+      if (t.zone.contains((first.left + first.right) / 2, y)) {
+        table = t;
+        break;
+      }
+    }
+    if (table == null) {
+      out.add([row.map((c) => c.text).join(' ')]);
+    } else if (emitted.add(table)) {
+      out.addAll(table.grid);
+    }
+  }
+  return out;
+}
+
 /// Il numero scritto in [raw], oppure null se è testo. Capisce il formato
 /// italiano (`1.234,56`) e quello inglese (`1,234.56`); un solo `,` è il
 /// decimale, un solo `.` è il decimale tranne per `1.234` (migliaia). Un
@@ -1129,8 +1170,8 @@ typedef XlsxResult = ({
 });
 
 /// Legge ogni pagina di [document] con il motore ([PdfTextExtractor]), ne
-/// ricava righe e colonne ([pageGrid]) e fa un file Excel con una scheda per
-/// pagina che ha del testo (le altre non hanno scheda). Una pagina che non si
+/// ricava righe e colonne ([pageSheetRows]) e fa un file Excel con una scheda
+/// per pagina che ha del testo (le altre non hanno scheda). Una pagina che non si
 /// legge viene saltata e riportata in `failedPages`. [onPage] riceve la
 /// pagina che sta per essere letta (da 0) e il numero di pagine.
 Future<XlsxResult> pdfToXlsx(
@@ -1145,7 +1186,7 @@ Future<XlsxResult> pdfToXlsx(
   for (var i = 0; i < count; i++) {
     onPage?.call(i, count);
     try {
-      final grid = pageGrid(PdfTextExtractor.extract(document, i).runs);
+      final grid = pageSheetRows(PdfTextExtractor.extract(document, i).runs);
       if (grid.isNotEmpty) {
         sheets.add(XlsxSheet('Pagina ${i + 1}', grid));
         for (final row in grid) {

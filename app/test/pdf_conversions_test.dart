@@ -490,6 +490,71 @@ void main() {
       expect(rows.single.first.bottom, 700);
     });
 
+    test('pageSheetRows: una pagina di testo va in una colonna sola', () {
+      // Righe con rientri diversi: con le colonne finirebbero sparpagliate.
+      final rows = pageSheetRows([
+        run('Titolo della pagina', 50, 150, 700),
+        run('prima riga di testo', 50, 150, 685),
+        run('riga rientrata', 80, 160, 670),
+        run('ultima riga', 50, 110, 655),
+      ]);
+      expect(rows, [
+        ['Titolo della pagina'],
+        ['prima riga di testo'],
+        ['riga rientrata'],
+        ['ultima riga'],
+      ]);
+    });
+
+    test('pageSheetRows: una pagina quasi tutta tabella resta a colonne', () {
+      final runs = [
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+        run('Mela', 50, 90, 685),
+        run('3', 170, 180, 685),
+        run('Pera', 50, 90, 670),
+        run('5', 170, 180, 670),
+      ];
+      expect(pageSheetRows(runs), pageGrid(runs));
+      expect(pageSheetRows(runs), [
+        ['Nome', 'Qta'],
+        ['Mela', '3'],
+        ['Pera', '5'],
+      ]);
+    });
+
+    test('pageSheetRows: testo con una tabella in mezzo, al suo posto', () {
+      final rows = pageSheetRows([
+        run('Relazione', 50, 120, 760),
+        run('Un primo paragrafo di testo', 50, 200, 745),
+        run('Un secondo paragrafo di testo', 50, 200, 730),
+        run('Ecco i dati:', 50, 110, 715),
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+        run('Mela', 50, 90, 685),
+        run('3', 170, 180, 685),
+        run('Pera', 50, 90, 670),
+        run('5', 170, 180, 670),
+        run('Fine della relazione', 50, 170, 640),
+        run('Firma', 50, 90, 625),
+      ]);
+      expect(rows, [
+        ['Relazione'],
+        ['Un primo paragrafo di testo'],
+        ['Un secondo paragrafo di testo'],
+        ['Ecco i dati:'],
+        ['Nome', 'Qta'],
+        ['Mela', '3'],
+        ['Pera', '5'],
+        ['Fine della relazione'],
+        ['Firma'],
+      ]);
+    });
+
+    test('pageSheetRows: senza testo è vuota', () {
+      expect(pageSheetRows(const []), isEmpty);
+    });
+
     test('parseSpreadsheetNumber: formato italiano e inglese', () {
       expect(parseSpreadsheetNumber('1.234,56'), 1234.56);
       expect(parseSpreadsheetNumber('1,234.56'), 1234.56);
