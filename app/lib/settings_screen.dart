@@ -1268,7 +1268,9 @@ class _BuildCheckTile extends StatefulWidget {
 class _BuildCheckTileState extends State<_BuildCheckTile> {
   late Future<BuildCheck> _check = BuildCheck.fetch();
 
-  void _reload() => setState(() => _check = BuildCheck.fetch());
+  void _reload() => setState(() {
+        _check = BuildCheck.fetch();
+      });
 
   @override
   void initState() {
@@ -1361,8 +1363,9 @@ class _LatestWorkflowTile extends StatefulWidget {
 class _LatestWorkflowTileState extends State<_LatestWorkflowTile> {
   late Future<BuildCheck> _check = fetchLatestWorkflowCheck(widget.workflow);
 
-  void _reload() =>
-      setState(() => _check = fetchLatestWorkflowCheck(widget.workflow));
+  void _reload() => setState(() {
+        _check = fetchLatestWorkflowCheck(widget.workflow);
+      });
 
   @override
   void initState() {
