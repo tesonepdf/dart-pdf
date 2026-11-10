@@ -347,9 +347,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pdf-shell-view-options')),
         kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('pdf-shell-editing-guides')),
-        kind: PointerDeviceKind.mouse);
+    // il foglio delle opzioni scorre: porta la voce in vista prima del tocco
+    final guidesEntry = find.byKey(const ValueKey('pdf-shell-editing-guides'));
+    await tester.ensureVisible(guidesEntry);
     await tester.pumpAndSettle();
+    await tester.tap(guidesEntry, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pdf-guides-dialog')), findsOneWidget);
     expect(find.byKey(const ValueKey('pdf-smart-alignment-guides')), findsNothing);
     expect(find.byKey(const ValueKey('pdf-grid-snap')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('pdf-page-rulers')));
