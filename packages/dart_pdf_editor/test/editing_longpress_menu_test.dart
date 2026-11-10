@@ -73,7 +73,12 @@ void main() {
       expect(
           find.byKey(const ValueKey('pdf-annot-menu-delete')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('pdf-annot-menu-delete')));
+      // su telefono il menu e' un foglio in basso che scorre: la voce
+      // Elimina e' in fondo, va portata in vista prima del tocco
+      final delete = find.byKey(const ValueKey('pdf-annot-menu-delete'));
+      await tester.ensureVisible(delete);
+      await tester.pumpAndSettle();
+      await tester.tap(delete);
       await tester.pumpAndSettle();
       expect(editing.document.page(0).annotations, isEmpty);
       await tester.pump(const Duration(milliseconds: 400));
@@ -92,11 +97,13 @@ void main() {
 
       // press point must sit inside the 800×600 viewport (view y ≈ 408)
       await longPressAt(tester, viewPoint(200, 480));
-      final paste =
-          tester.widget(find.byKey(const ValueKey('pdf-annot-menu-paste')))
-              as PopupMenuItem;
+      // su telefono le voci del menu sono ListTile in un foglio in basso
+      final pasteFinder = find.byKey(const ValueKey('pdf-annot-menu-paste'));
+      final paste = tester.widget<ListTile>(pasteFinder);
       expect(paste.enabled, isTrue);
-      await tester.tap(find.byKey(const ValueKey('pdf-annot-menu-paste')));
+      await tester.ensureVisible(pasteFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(pasteFinder);
       await tester.pumpAndSettle();
 
       final annotations = editing.document.page(0).annotations;
