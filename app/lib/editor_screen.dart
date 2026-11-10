@@ -70,6 +70,7 @@ import 'save_folder.dart';
 import 'page_choice.dart';
 import 'page_numbers.dart';
 import 'comic_book.dart';
+import 'epub_book.dart';
 import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
@@ -2947,6 +2948,30 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Un libro .epub in un PDF nuovo di solo testo (titoli e paragrafi, un
+  /// capitolo per volta su pagine A4), che si apre in una scheda.
+  Future<void> _openEpub() async {
+    try {
+      final file = await pickEpubFile();
+      if (file == null || !mounted) return;
+      _toast('Apro il libro…', duration: const Duration(seconds: 6));
+      final result = await epubToPdfAsync(await file.readAsBytes());
+      if (!mounted) return;
+      _readOnly = false;
+      _addTab(DocumentTab.document(
+        title: epubTitle(file.name),
+        bytes: result.bytes,
+        preferences: _prefs,
+      ));
+    } on FormatException catch (e) {
+      if (mounted) _toast('Libro non aperto: ${e.message}.');
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('epub open failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Libro non aperto: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Parti di pagine di uno o più PDF, messe su fogli A4 in un PDF nuovo che
   /// si apre in una scheda.
   Future<void> _composeSheet() async {
@@ -5480,6 +5505,12 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_openComic()),
       ),
       _MenuAction(
+        id: 'open-epub',
+        icon: Icons.menu_book_outlined,
+        title: 'Apri un libro (.epub)…',
+        run: () => unawaited(_openEpub()),
+      ),
+      _MenuAction(
         id: 'compose-sheet',
         icon: Icons.dashboard_customize_outlined,
         title: 'Componi foglio…',
@@ -6763,6 +6794,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (action.id != 'photos-one-sheet' &&
               action.id != 'photos-to-pdf' &&
               action.id != 'open-comic' &&
+              action.id != 'open-epub' &&
               action.id != 'compose-sheet' &&
               action.id != 'scanner-import')
             entry(action),
@@ -6790,6 +6822,8 @@ class _EditorScreenState extends State<EditorScreen>
             'Foto in PDF (una per pagina)…', () => unawaited(_photosToPdf())),
         importEntry('open-comic', Icons.auto_stories_outlined,
             'Apri un fumetto (.cbz)…', () => unawaited(_openComic())),
+        importEntry('open-epub', Icons.menu_book_outlined,
+            'Apri un libro (.epub)…', () => unawaited(_openEpub())),
         importEntry('compose-sheet', Icons.dashboard_customize_outlined,
             'Componi foglio…', () => unawaited(_composeSheet())),
         importEntry('scanner-import', Icons.scanner_outlined,

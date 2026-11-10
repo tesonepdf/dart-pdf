@@ -52,6 +52,8 @@ void main() {
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-open-comic')), findsOneWidget);
     expect(find.text('Apri un fumetto (.cbz)…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-open-epub')), findsOneWidget);
+    expect(find.text('Apri un libro (.epub)…'), findsOneWidget);
   });
 
   testWidgets('senza documento non c\'è Esporta come testo ma c\'è Foto in PDF',
@@ -68,6 +70,7 @@ void main() {
     expect(find.byKey(const ValueKey('menu-watermark')), findsNothing);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-open-comic')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-open-epub')), findsOneWidget);
     expect(find.text('Foto in PDF (una per pagina)…'), findsOneWidget);
   });
 }
