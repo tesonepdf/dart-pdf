@@ -101,7 +101,8 @@ jobs:
             test/redaction_test.dart \
             test/redaction_raster_test.dart \
             test/redaction_hidden_content_test.dart \
-            test/redaction_bypass_test.dart > /tmp/test.json 2> /tmp/test.err
+            test/redaction_bypass_test.dart \
+            test/font_embed_test.dart > /tmp/test.json 2> /tmp/test.err
           code=$?
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
@@ -116,7 +117,11 @@ jobs:
             test/editing_autosize_rotation_test.dart \
             test/editing_mobile_toolbar_test.dart \
             test/viewer_intents_test.dart \
-            test/paste_routing_test.dart > /tmp/test.json 2> /tmp/test.err
+            test/paste_routing_test.dart \
+            test/editing_longpress_menu_test.dart \
+            test/editing_guides_grid_test.dart \
+            test/editing_fonts_test.dart \
+            test/editing_preferences_test.dart > /tmp/test.json 2> /tmp/test.err
           code=$?
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
