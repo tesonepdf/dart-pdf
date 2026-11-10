@@ -205,6 +205,38 @@ void main() {
       expect(c.activeBoldStroke, 0);
     });
 
+    test('common office font names map to their original name', () {
+      expect(pdfCommonFontName('TimesNewRomanPSMT'), 'Times New Roman');
+      expect(pdfCommonFontName('ABCDEF+TimesNewRoman,Bold'), 'Times New Roman');
+      expect(pdfCommonFontName('Arial-BoldMT'), 'Arial');
+      expect(pdfCommonFontName('CourierNewPSMT'), 'Courier New');
+      expect(pdfCommonFontName('Calibri'), 'Calibri');
+      expect(pdfCommonFontName('Helvetica'), isNull);
+      expect(pdfCommonFontName('Helv'), isNull);
+    });
+
+    test('a box in a non-embedded Times New Roman shows its original name',
+        () {
+      final c = PdfEditingController(buildMultiPagePdf(1))
+        ..addFreeText(0, const PdfRect(72, 600, 300, 660), 'Hello');
+      final slot = c.document.page(0).annotations.length - 1;
+      c.document.page(0).annotations[slot].dict['DA'] =
+          CosString.fromText('/TimesNewRomanPSMT 12 Tf 0 g');
+      c.selectAnnotation(0, slot);
+      expect(c.selectedTextOriginalFontName, 'Times New Roman');
+      // the editing font is the base-14 equivalent
+      expect(c.selectedTextFont, isA<PdfStandardFont>());
+      expect((c.selectedTextFont as PdfStandardFont).family.label,
+          contains('Times'));
+    });
+
+    test('a plain Helvetica box has no original name', () {
+      final c = PdfEditingController(buildMultiPagePdf(1))
+        ..addFreeText(0, const PdfRect(72, 600, 300, 660), 'Hello');
+      c.selectAnnotation(0, c.document.page(0).annotations.length - 1);
+      expect(c.selectedTextOriginalFontName, isNull);
+    });
+
     test('setCustomFont rejects non-font bytes', () {
       final c = PdfEditingController(buildMultiPagePdf(1));
       expect(c.setCustomFont(Uint8List(8)), isFalse);
