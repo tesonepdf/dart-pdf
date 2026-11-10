@@ -4070,7 +4070,8 @@ class _EditorScreenState extends State<EditorScreen>
             tab.originPath!,
             bookmark: tab.originBookmark,
           )
-        : await _saveAsDocument(context, bytes, tab.title);
+        : await _saveAsDocument(context, bytes, tab.title,
+            askName: saveAs);
     if (!mounted) return;
     if (inPlace && !result.succeeded) {
       // The origin couldn't be written (moved, read-only) - say so, then offer
@@ -4223,12 +4224,15 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Future<SaveResult> _saveAsDocument(
-      BuildContext context, Uint8List bytes, String suggestedName) {
+      BuildContext context, Uint8List bytes, String suggestedName,
+      {bool askName = true}) {
     final saveAs = widget.saveDocumentAs;
     if (saveAs != null) return saveAs(context, bytes, suggestedName);
     // Android: si salva nella cartella scelta dall'utente (la prima volta la
-    // chiede), non piu' con il foglio di condivisione
+    // chiede), non piu' con il foglio di condivisione. Con askName false
+    // (voce Salva) si usa il nome del documento e si sovrascrive il file.
     if (SaveFolder.supported) {
+      if (!askName) return SaveFolder.save(context, bytes, suggestedName);
       return _askFileName(suggestedName).then((name) {
         if (name == null || !mounted) return SaveResult.cancelled;
         return SaveFolder.save(context, bytes, name);
@@ -5175,6 +5179,17 @@ class _EditorScreenState extends State<EditorScreen>
   List<_MenuAction> _documentActions() {
     final l = appL10n(context);
     return [
+      _MenuAction(
+        id: 'save',
+        requiresDocument: true,
+        icon: Icons.save_outlined,
+        title: 'Salva',
+        shortcut: _menuShortcut('S'),
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_save(tab));
+        },
+      ),
       _MenuAction(
         id: 'save-as',
         requiresDocument: true,
@@ -6287,7 +6302,7 @@ class _EditorScreenState extends State<EditorScreen>
     String? groupOf(_MenuAction action) {
       if (action.sheet == _SheetPlacement.formData) return 'forms';
       return switch (action.id) {
-        'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
+        'save' || 'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
         'digital-signature' ||
         'ocr' ||
         'open-without-ocr' ||
