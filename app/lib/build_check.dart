@@ -7,6 +7,63 @@ import 'package:http/http.dart' as http;
 import 'app_info.dart';
 import 'update.dart' show dartPdfAndroidTag;
 
+/// Risposte di GitHub tenute in memoria: GitHub senza chiave concede 60
+/// richieste all'ora, quindi le righe di Informazioni condividono le stesse
+/// richieste (come nell'app Turni: un'ultima run per flusso) e, se GitHub
+/// blocca o manca la rete, si mostra l'ultimo esito buono.
+final Map<String, ({DateTime at, String body})> _githubCache = {};
+final Map<String, Future<String?>> _githubInflight = {};
+const _githubTtl = Duration(seconds: 30);
+
+Future<String?> _githubFetch(Uri uri, String key) async {
+  final c = http.Client();
+  try {
+    final response = await c
+        .get(uri, headers: const {'Accept': 'application/vnd.github+json'})
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      _githubCache[key] = (at: DateTime.now(), body: response.body);
+      return response.body;
+    }
+  } catch (_) {
+    // rete o limite: si ripiega sull'ultimo esito buono
+  } finally {
+    c.close();
+  }
+  return _githubCache[key]?.body;
+}
+
+/// Corpo della risposta di GitHub per [path], o null se non disponibile.
+/// Con un [client] di prova chiama sempre direttamente, senza memoria.
+Future<String?> _githubBody(
+  String path,
+  Map<String, String> query, {
+  http.Client? client,
+}) async {
+  final uri = Uri.https('api.github.com', path, query);
+  if (client != null) {
+    try {
+      final response = await client
+          .get(uri, headers: const {'Accept': 'application/vnd.github+json'})
+          .timeout(const Duration(seconds: 15));
+      return response.statusCode == 200 ? response.body : null;
+    } catch (_) {
+      return null;
+    }
+  }
+  final key = uri.toString();
+  final cached = _githubCache[key];
+  if (cached != null && DateTime.now().difference(cached.at) < _githubTtl) {
+    return cached.body;
+  }
+  final running = _githubInflight[key];
+  if (running != null) return running;
+  final f = _githubFetch(uri, key);
+  _githubInflight[key] = f;
+  unawaited(f.whenComplete(() => _githubInflight.remove(key)));
+  return f;
+}
+
 /// Come sono andati i test automatici (la CI di GitHub) per il commit da cui
 /// è stata compilata questa build.
 enum BuildCheckState { passed, failed, running, notStarted, unavailable }
@@ -53,6 +110,29 @@ class BuildCheck {
     if (commit.isEmpty || commit == 'unknown') {
       return const BuildCheck(BuildCheckState.unavailable);
     }
+    if (client == null) {
+      // Stessa richiesta della riga "test dell'ultima build": una sola
+      // lettura per tutte e due, poi si cerca il commit di questa build.
+      final body = await _githubBody(
+        '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}'
+        '/actions/workflows/ci.yml/runs',
+        const {'branch': 'main', 'per_page': '10'},
+      );
+      if (body == null) return const BuildCheck(BuildCheckState.unavailable);
+      try {
+        final runs = (jsonDecode(body) as Map)['workflow_runs'] as List;
+        final mine = runs
+            .whereType<Map>()
+            .where((r) => r['head_sha'] == commit)
+            .firstOrNull;
+        if (mine != null) {
+          return fromRunsJson(jsonEncode({'workflow_runs': [mine]}));
+        }
+      } catch (_) {
+        return const BuildCheck(BuildCheckState.unavailable);
+      }
+      // commit piu' vecchio delle ultime 10 run: si chiede proprio quello
+    }
     final own = client == null;
     final c = client ?? http.Client();
     try {
@@ -86,28 +166,17 @@ Future<BuildCheck> fetchLatestWorkflowCheck(
   String workflow, {
   http.Client? client,
 }) async {
-  final own = client == null;
-  final c = client ?? http.Client();
+  final body = await _githubBody(
+    '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}'
+    '/actions/workflows/$workflow/runs',
+    const {'branch': 'main', 'per_page': '10'},
+    client: client,
+  );
+  if (body == null) return const BuildCheck(BuildCheckState.unavailable);
   try {
-    final response = await c
-        .get(
-          Uri.https(
-            'api.github.com',
-            '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}'
-                '/actions/workflows/$workflow/runs',
-            {'branch': 'main', 'per_page': '1'},
-          ),
-          headers: const {'Accept': 'application/vnd.github+json'},
-        )
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) {
-      return const BuildCheck(BuildCheckState.unavailable);
-    }
-    return BuildCheck.fromRunsJson(response.body);
+    return BuildCheck.fromRunsJson(body);
   } catch (_) {
     return const BuildCheck(BuildCheckState.unavailable);
-  } finally {
-    if (own) c.close();
   }
 }
 
@@ -243,41 +312,26 @@ class BuildRun {
   /// Chiede a GitHub l'ultima build e, se è in elaborazione, a che punto è.
   /// Il repository è pubblico: non serve nessuna chiave.
   static Future<BuildRun> fetch({http.Client? client}) async {
-    final own = client == null;
-    final c = client ?? http.Client();
-    const headers = {'Accept': 'application/vnd.github+json'};
     final base = '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}';
     try {
       final (workflow, branch) = _source;
-      final response = await c
-          .get(
-            Uri.https('api.github.com', '$base/actions/workflows/$workflow/runs',
-                {'branch': branch, 'per_page': '1'}),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) {
-        return const BuildRun(BuildRunState.unavailable);
-      }
-      final run = fromRunsJson(response.body);
+      final body = await _githubBody(
+        '$base/actions/workflows/$workflow/runs',
+        {'branch': branch, 'per_page': '1'},
+        client: client,
+      );
+      if (body == null) return const BuildRun(BuildRunState.unavailable);
+      final run = fromRunsJson(body);
       if (run.state != BuildRunState.running || run.runId == null) return run;
-      try {
-        final jobs = await c
-            .get(
-              Uri.https('api.github.com', '$base/actions/runs/${run.runId}/jobs',
-                  {'per_page': '10'}),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15));
-        return jobs.statusCode == 200 ? run.withJobs(jobs.body) : run;
-      } catch (_) {
-        // I dettagli del passo sono un di più: la build in corso si vede lo stesso.
-        return run;
-      }
+      final jobs = await _githubBody(
+        '$base/actions/runs/${run.runId}/jobs',
+        const {'per_page': '10'},
+        client: client,
+      );
+      // I dettagli del passo sono un di più: la build in corso si vede lo stesso.
+      return jobs == null ? run : run.withJobs(jobs);
     } catch (_) {
       return const BuildRun(BuildRunState.unavailable);
-    } finally {
-      if (own) c.close();
     }
   }
 }

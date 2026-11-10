@@ -1421,8 +1421,8 @@ class _BuildRunTile extends StatefulWidget {
 class _BuildRunTileState extends State<_BuildRunTile> {
   /// Ogni controllo chiede 2 cose a GitHub, che senza chiave ne concede 60
   /// all'ora: si ricontrolla da soli solo per un po', poi serve toccare.
-  static const _autoRefresh = Duration(seconds: 40);
-  static const _maxAutoRefreshes = 12;
+  static const _autoRefresh = Duration(seconds: 60);
+  static const _maxAutoRefreshes = 5;
 
   BuildRun? _run;
   bool _loading = false;
