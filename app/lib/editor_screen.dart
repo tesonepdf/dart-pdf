@@ -2927,12 +2927,11 @@ class _EditorScreenState extends State<EditorScreen>
       final file = await pickComicFile();
       if (file == null || !mounted) return;
       _toast('Apro il fumetto…', duration: const Duration(seconds: 6));
-      final images = await comicImagesAsync(await file.readAsBytes());
-      final result = await photosToPdfAsync(images, PhotoPdfPage.photoSize);
+      final result = await comicToPdfAsync(await file.readAsBytes());
       if (!mounted) return;
       _readOnly = false;
       _addTab(DocumentTab.document(
-        title: comicTitle(file.name),
+        title: comicTitleFor(file.name, result.info),
         bytes: result.bytes,
         preferences: _prefs,
       ));

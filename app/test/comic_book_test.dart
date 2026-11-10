@@ -1,4 +1,5 @@
 // Fumetti .cbz (comic_book.dart): nomi, ordine, lettura dello zip e PDF.
+import 'dart:convert' show utf8;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -73,5 +74,43 @@ void main() {
     final result = await photosToPdfAsync(images, PhotoPdfPage.photoSize);
     expect(PdfDocument.open(result.bytes).pageCount, 2);
     expect(result.skipped, 0);
+  });
+
+  group('capitoli e informazioni', () {
+    test('le cartelle diventano capitoli, tolta quella comune', () {
+      expect(
+        comicChapterNames(['serie/cap1/01.png', 'serie/cap1/02.png', 'serie/cap2/01.png']),
+        ['cap1', 'cap1', 'cap2'],
+      );
+    });
+
+    test('con una sola cartella non ci sono capitoli', () {
+      expect(comicChapterNames(['a/1.png', 'a/2.png']), [null, null]);
+      expect(comicChapterNames(['1.png', '2.png']), [null, null]);
+    });
+
+    test('ComicInfo.xml: titolo, serie e numero', () {
+      final info = parseComicInfo(
+          '<ComicInfo><Title>La &amp; fine</Title><Series>Dylan</Series><Number>3</Number></ComicInfo>');
+      expect(info, (title: 'La & fine', series: 'Dylan', number: '3'));
+      expect(comicTitleFor('x.cbz', info), 'Dylan 3 - La & fine.pdf');
+      expect(comicTitleFor('x.cbz', null), 'x.pdf');
+    });
+  });
+
+  test('comicToPdf: una pagina per immagine e segnalibri per capitolo', () {
+    final cbz = _zip({
+      'cap1/1.png': _png(2),
+      'cap1/2.png': _png(3),
+      'cap2/1.png': _png(4),
+      'ComicInfo.xml': utf8.encode('<ComicInfo><Series>S</Series></ComicInfo>'),
+    });
+    final result = comicToPdf(cbz);
+    expect(result.pages, 3);
+    expect(result.skipped, 0);
+    expect(result.chapters.map((c) => c.title), ['cap1', 'cap2']);
+    expect(result.chapters.map((c) => c.page), [0, 2]);
+    expect(result.info?.series, 'S');
+    expect(PdfDocument.open(result.bytes).pageCount, 3);
   });
 }

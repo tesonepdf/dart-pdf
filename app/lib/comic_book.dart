@@ -1,8 +1,12 @@
+import 'dart:convert' show utf8;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:pdf_document/pdf_document.dart';
+
+import 'pdf_conversions.dart';
 
 // Fumetti .cbz: un file zip con una pagina per immagine. Si leggono le
 // immagini nell'ordine dei nomi (pagina2 prima di pagina10) e si fa un PDF con
@@ -88,3 +92,167 @@ String comicTitle(String fileName) {
   if (stem.isEmpty) stem = 'fumetto';
   return '$stem.pdf';
 }
+
+// --- Capitoli, informazioni del fumetto e PDF a pezzi -----------------------
+
+/// Un capitolo del fumetto: il titolo e la prima pagina (da 0) del PDF.
+typedef ComicChapter = ({String title, int page});
+
+/// Le informazioni di `ComicInfo.xml` che servono: titolo, serie e numero.
+typedef ComicInfo = ({String title, String series, String number});
+
+String _unescapeXml(String s) => s
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&amp;', '&');
+
+String _xmlTag(String xml, String tag) {
+  final m = RegExp('<$tag>([^<]*)</$tag>', caseSensitive: false).firstMatch(xml);
+  return m == null ? '' : _unescapeXml(m.group(1)!).trim();
+}
+
+/// Legge titolo, serie e numero da un `ComicInfo.xml`. Un campo mancante
+/// resta vuoto.
+ComicInfo parseComicInfo(String xml) => (
+      title: _xmlTag(xml, 'Title'),
+      series: _xmlTag(xml, 'Series'),
+      number: _xmlTag(xml, 'Number'),
+    );
+
+/// Il titolo della scheda dalle informazioni del fumetto: "Serie 3 - Titolo".
+/// Senza serie né titolo si usa il nome del file ([comicTitle]).
+String comicTitleFor(String fileName, ComicInfo? info) {
+  if (info == null || (info.title.isEmpty && info.series.isEmpty)) {
+    return comicTitle(fileName);
+  }
+  final head = [info.series, info.number].where((p) => p.isNotEmpty).join(' ');
+  final name = [head, info.title].where((p) => p.isNotEmpty).join(' - ');
+  final clean = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), ' ').trim();
+  return clean.isEmpty ? comicTitle(fileName) : '$clean.pdf';
+}
+
+/// Per ogni immagine (nomi già in ordine) il capitolo a cui appartiene, o
+/// null se sta fuori da ogni cartella. Si tolgono le cartelle che hanno tutte
+/// le immagini in comune (un cartellone unico dentro lo zip), poi la cartella
+/// che resta è il capitolo. Con una sola cartella di capitolo, o nessuna, non
+/// ci sono capitoli.
+List<String?> comicChapterNames(List<String> sortedNames) {
+  final dirs = [
+    for (final n in sortedNames)
+      (n.replaceAll('\\', '/').split('/')..removeLast()),
+  ];
+  if (dirs.isEmpty) return const [];
+  var common = 0;
+  while (dirs.every((d) => d.length > common) &&
+      dirs.every((d) => d[common] == dirs.first[common])) {
+    common++;
+  }
+  final names = [
+    for (final d in dirs) d.length > common ? d.sublist(common).join(' / ') : null,
+  ];
+  final distinct = names.whereType<String>().toSet();
+  if (distinct.length < 2) return [for (final _ in names) null];
+  return names;
+}
+
+/// Il risultato di [comicToPdf].
+typedef ComicPdfResult = ({
+  Uint8List bytes,
+  int pages,
+  int skipped,
+  List<ComicChapter> chapters,
+  ComicInfo? info,
+});
+
+const _mergeEvery = 40;
+
+/// Dal file .cbz al PDF: una pagina per immagine, nell'ordine dei nomi, con i
+/// capitoli come segnalibri. Si lavora un'immagine alla volta e i PDF
+/// parziali si uniscono ogni [_mergeEvery] pagine, così in memoria non stanno
+/// insieme tutte le immagini decodificate. Lancia [FormatException] se non è
+/// uno zip, se non ha immagini o se nessuna si legge.
+ComicPdfResult comicToPdf(Uint8List cbz) {
+  final Archive archive;
+  try {
+    archive = ZipDecoder().decodeBytes(cbz);
+  } catch (_) {
+    throw const FormatException('non è un file .cbz leggibile');
+  }
+  final files = [
+    for (final f in archive.files)
+      if (f.isFile && isComicImageName(f.name)) f,
+  ]..sort((a, b) => naturalCompare(a.name, b.name));
+  if (files.isEmpty) {
+    throw const FormatException('nel fumetto non ci sono immagini');
+  }
+  ComicInfo? info;
+  for (final f in archive.files) {
+    final base = f.name.replaceAll('\\', '/').split('/').last.toLowerCase();
+    if (f.isFile && base == 'comicinfo.xml') {
+      try {
+        info = parseComicInfo(utf8.decode(f.content as List<int>,
+            allowMalformed: true));
+      } catch (_) {}
+      break;
+    }
+  }
+  final chapterOf = comicChapterNames([for (final f in files) f.name]);
+  final partials = <Uint8List>[];
+  final pending = <Uint8List>[];
+  final chapters = <ComicChapter>[];
+  String? lastChapter;
+  var pages = 0;
+  var skipped = 0;
+  for (var i = 0; i < files.length; i++) {
+    final bytes = Uint8List.fromList(files[i].content as List<int>);
+    final PhotosPdfResult one;
+    try {
+      one = photosToPdf([bytes], PhotoPdfPage.photoSize);
+    } on FormatException {
+      skipped++;
+      continue;
+    }
+    if (one.pages == 0) {
+      skipped++;
+      continue;
+    }
+    final chapter = chapterOf[i];
+    if (chapter != null && chapter != lastChapter) {
+      chapters.add((title: chapter, page: pages));
+      lastChapter = chapter;
+    }
+    pending.add(one.bytes);
+    pages++;
+    if (pending.length >= _mergeEvery) {
+      partials.add(PdfMerger.merge(List.of(pending)));
+      pending.clear();
+    }
+  }
+  if (pending.isNotEmpty) {
+    partials.add(pending.length == 1 ? pending.single : PdfMerger.merge(pending));
+  }
+  if (partials.isEmpty) {
+    throw const FormatException('nessuna immagine leggibile');
+  }
+  var out = partials.length == 1 ? partials.single : PdfMerger.merge(partials);
+  if (chapters.length >= 2) {
+    final editor = PdfEditor(PdfDocument.open(out));
+    for (final c in chapters) {
+      editor.addOutlineItem(c.title, pageIndex: c.page);
+    }
+    out = editor.save();
+  }
+  return (
+    bytes: out,
+    pages: pages,
+    skipped: skipped,
+    chapters: chapters.length >= 2 ? chapters : const [],
+    info: info,
+  );
+}
+
+/// [comicToPdf] fuori dal filo dell'interfaccia.
+Future<ComicPdfResult> comicToPdfAsync(Uint8List cbz) =>
+    compute(comicToPdf, cbz, debugLabel: 'comic to PDF');
