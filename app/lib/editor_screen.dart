@@ -68,6 +68,8 @@ import 'update.dart';
 import 'update_install_flow.dart';
 import 'save_folder.dart';
 import 'page_choice.dart';
+import 'pdf_conversions.dart';
+import 'photos_to_pdf_dialog.dart';
 import 'whatsapp_send.dart';
 import 'open_with_rank.dart';
 import 'update_installer.dart';
@@ -2873,6 +2875,47 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Più foto in un PDF nuovo, una pagina per foto. Si scelgono le foto, si
+  /// decide l'ordine trascinandole e il tipo di pagina (A4 o la misura della
+  /// foto); il PDF si apre in una scheda nuova.
+  Future<void> _photosToPdf() async {
+    try {
+      final picked = await _pickPhotoFiles();
+      if (picked.isEmpty || !mounted) return;
+      final items = <PhotoItem>[];
+      for (final file in picked) {
+        final raw = await file.readAsBytes();
+        if (looksLikePdf(raw)) continue;
+        items.add(PhotoItem(file.name, raw));
+      }
+      if (!mounted) return;
+      if (items.isEmpty) {
+        _toast('Scegli almeno una foto.');
+        return;
+      }
+      final choice = await showPhotosToPdfDialog(context, items);
+      if (choice == null || !mounted) return;
+      _toast('Creo il PDF…', duration: const Duration(seconds: 6));
+      final result = await photosToPdfAsync(
+          [for (final p in choice.photos) p.bytes], choice.page);
+      if (!mounted) return;
+      _readOnly = false;
+      _addTab(DocumentTab.document(
+        title: _nextUntitledTitle(),
+        bytes: result.bytes,
+        preferences: _prefs,
+        initiallyDirty: true,
+      ));
+      if (result.skipped > 0) {
+        _toast('${result.skipped} file non letti e saltati.');
+      }
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('photos to PDF failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('PDF non creato: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Parti di pagine di uno o più PDF, messe su fogli A4 in un PDF nuovo che
   /// si apre in una scheda.
   Future<void> _composeSheet() async {
@@ -4687,6 +4730,77 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  // --- plain text export ---------------------------------------------------
+
+  /// Salva il testo di tutto il documento in un file `.txt`, con una riga vuota
+  /// tra le pagine. Si legge la versione attuale, modifiche non salvate
+  /// comprese. Se nel PDF non c'è testo (una scansione, cioè solo immagini)
+  /// propone prima l'OCR.
+  Future<void> _exportText(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      _toast('Leggo il testo…', duration: const Duration(seconds: 4));
+      final result = await pdfToPlainText(session.document);
+      if (!mounted) return;
+      if (!plainTextHasContent(result.text)) {
+        await _offerOcrBeforeText();
+        return;
+      }
+      final saved = await saveTextAs(
+          context, result.text, textExportFileName(tab.title),
+          typeLabel: 'Testo semplice');
+      if (!mounted) return;
+      final unread = result.failedPages.isEmpty
+          ? ''
+          : 'Pagine non lette: ${result.failedPages.map((i) => i + 1).join(', ')}.';
+      final message = [if (saved.message != null) saved.message!, unread]
+          .where((m) => m.isNotEmpty)
+          .join('\n');
+      if (message.isNotEmpty) _toast(message);
+    } catch (e) {
+      AppDevTools.instance.addLog('text export failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
+  /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
+  /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
+  /// cui si può esportare di nuovo.
+  Future<void> _offerOcrBeforeText() async {
+    if (!OnDeviceOcr.isSupported) {
+      _toast('Nel PDF non c\'è testo da salvare.');
+      return;
+    }
+    final run = await showPdfDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('export-text-ocr-dialog'),
+        title: const Text('Nel PDF non c\'è testo'),
+        content: const Text(
+            'Sembra una scansione: contiene solo immagini. Per salvarlo come '
+            'testo, prima va letto con l\'OCR. Alla fine si apre una copia '
+            'con il testo, da cui puoi esportare di nuovo.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(appL10n(context).cancel),
+          ),
+          PdfDialogSubmit.action(
+            onSubmit: () => Navigator.of(context).pop(true),
+            child: FilledButton(
+              key: const ValueKey('export-text-ocr-run'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Fai l\'OCR'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (run == true && mounted) await _runOcr();
+  }
+
   // --- form data exchange (FDF / XFDF / XDP) -------------------------------
 
   /// Imports form field values and comments from an FDF, XFDF or XDP file
@@ -5180,6 +5294,12 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_photosOnOneSheet()),
       ),
       _MenuAction(
+        id: 'photos-to-pdf',
+        icon: Icons.collections_outlined,
+        title: 'Foto in PDF (una per pagina)…',
+        run: () => unawaited(_photosToPdf()),
+      ),
+      _MenuAction(
         id: 'compose-sheet',
         icon: Icons.dashboard_customize_outlined,
         title: 'Componi foglio…',
@@ -5281,6 +5401,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_exportImage(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'export-text',
+        requiresDocument: true,
+        icon: Icons.text_snippet_outlined,
+        title: 'Esporta come testo semplice (.txt)…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_exportText(tab));
         },
       ),
       _MenuAction(
@@ -6331,7 +6461,13 @@ class _EditorScreenState extends State<EditorScreen>
     String? groupOf(_MenuAction action) {
       if (action.sheet == _SheetPlacement.formData) return 'forms';
       return switch (action.id) {
-        'save' || 'save-as' || 'reduce-file-size' || 'print' || 'export-image' => 'save',
+        'save' ||
+        'save-as' ||
+        'reduce-file-size' ||
+        'print' ||
+        'export-image' ||
+        'export-text' =>
+          'save',
         'digital-signature' ||
         'ocr' ||
         'open-without-ocr' ||
@@ -6387,6 +6523,7 @@ class _EditorScreenState extends State<EditorScreen>
       file: [
         for (final action in _fileActions())
           if (action.id != 'photos-one-sheet' &&
+              action.id != 'photos-to-pdf' &&
               action.id != 'compose-sheet' &&
               action.id != 'scanner-import')
             entry(action),
@@ -6410,6 +6547,8 @@ class _EditorScreenState extends State<EditorScreen>
             'Altra misura…', () => unawaited(_importPhotoOtherSize())),
         importEntry('photos-one-sheet', Icons.photo_library_outlined,
             'Foto su un solo foglio…', () => unawaited(_photosOnOneSheet())),
+        importEntry('photos-to-pdf', Icons.collections_outlined,
+            'Foto in PDF (una per pagina)…', () => unawaited(_photosToPdf())),
         importEntry('compose-sheet', Icons.dashboard_customize_outlined,
             'Componi foglio…', () => unawaited(_composeSheet())),
         importEntry('scanner-import', Icons.scanner_outlined,

@@ -45,6 +45,14 @@ XTypeGroup imageTypeGroup(String label) => XTypeGroup(
       uniformTypeIdentifiers: const ['public.png', 'public.jpeg'],
     );
 
+/// Plain text files (`.txt`), for "Export as plain text".
+XTypeGroup textTypeGroup(String label) => XTypeGroup(
+      label: label,
+      extensions: const ['txt'],
+      mimeTypes: const ['text/plain'],
+      uniformTypeIdentifiers: const ['public.plain-text'],
+    );
+
 /// PDFs and every common photo/bitmap format, for the "open" picker.
 XTypeGroup documentTypeGroup(String label) => XTypeGroup(
       label: label,
@@ -837,6 +845,58 @@ Future<SaveResult> saveJsonAs(
       );
       if (location == null) return SaveResult.cancelled;
       final path = ensureJsonExtension(location.path);
+      try {
+        await file.saveTo(path);
+        return SaveResult.saved(path);
+      } catch (e) {
+        return SaveResult.failed(e);
+      }
+  }
+}
+
+/// Save-as for a plain text file, with the same platform behaviour as
+/// [saveBytesAs]: a save dialog on desktop, a browser download on the web, the
+/// share sheet on phones. [name] should carry `.txt`. The text is saved as
+/// UTF-8.
+Future<SaveResult> saveTextAs(
+  BuildContext context,
+  String text,
+  String name, {
+  required String typeLabel,
+}) async {
+  final bytes = Uint8List.fromList(utf8.encode(text));
+  final file = XFile.fromData(
+    bytes,
+    mimeType: 'text/plain',
+    name: name,
+  );
+
+  if (kIsWeb) {
+    await file.saveTo(name);
+    return SaveResult.downloaded(name);
+  }
+
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android || TargetPlatform.iOS:
+      final box = context.findRenderObject() as RenderBox?;
+      final origin =
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+      final result = await SharePlus.instance.share(ShareParams(
+        files: [file],
+        fileNameOverrides: [name],
+        title: name,
+        sharePositionOrigin: origin ?? const Rect.fromLTWH(0, 0, 1, 1),
+      ));
+      return _saveResultFromShare(result);
+    default:
+      final location = await getSaveLocation(
+        suggestedName: name,
+        acceptedTypeGroups: [textTypeGroup(typeLabel)],
+      );
+      if (location == null) return SaveResult.cancelled;
+      final path = location.path.toLowerCase().endsWith('.txt')
+          ? location.path
+          : '${location.path}.txt';
       try {
         await file.saveTo(path);
         return SaveResult.saved(path);
