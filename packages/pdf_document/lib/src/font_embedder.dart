@@ -57,6 +57,12 @@ class PdfEmbeddedFont implements PdfTextFont {
   /// The font's PostScript name, used for /BaseFont and /FontName.
   final String postScriptName;
 
+  /// Simulated bold: the width of the outline stroked around each glyph, as
+  /// a fraction of the font size (0 = off, ~0.02 light, ~0.04 strong). The
+  /// text is written as fill + stroke (`Tr 2`) in the text colour, which any
+  /// PDF viewer draws the same way. Not part of the font program.
+  double boldStroke = 0;
+
   /// A human-friendly family name (name table id 1), for font menus.
   final String familyName;
 
@@ -250,7 +256,15 @@ class PdfEmbeddedFont implements PdfTextFont {
           ?.group(1);
       final dict = name != null ? cos.resolve(fonts[name]) : null;
       if (dict is! CosDictionary) return null;
-      return fromFontDict(cos, dict, name ?? 'F0');
+      final font = fromFontDict(cos, dict, name ?? 'F0');
+      final bold = cos.resolve(annotation.dict[kPdfFreeTextBoldStrokeKey]);
+      final strength = bold is CosInteger
+          ? bold.value.toDouble()
+          : bold is CosReal
+              ? bold.value
+              : 0.0;
+      if (font != null && strength > 0) font.boldStroke = strength;
+      return font;
     } catch (_) {
       return null;
     }

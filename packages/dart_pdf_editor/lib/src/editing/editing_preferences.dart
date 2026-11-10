@@ -193,6 +193,7 @@ class PdfEditingPreferences extends ChangeNotifier
   PdfStandardFont _fontFamily = PdfStandardFont.helvetica;
   String? _embeddedFontData;
   PdfEmbeddedFont? _embeddedFont;
+  double _boldStroke = 0;
   PdfTextAlign? _textAlign;
   PdfTextVerticalAlign _textVerticalAlign = PdfTextVerticalAlign.top;
   double _opacity = 1;
@@ -370,6 +371,8 @@ class PdfEditingPreferences extends ChangeNotifier
         _fontFamily =
             PdfStandardFont.values.asNameMap()[fontFamily] ?? _fontFamily;
       }
+      _boldStroke =
+          (store.getDouble('${_prefix}boldStroke') ?? _boldStroke).clamp(0.0, 0.1);
       _embeddedFontData = store.getString('${_prefix}embeddedFont');
       _textVerticalAlign = PdfTextVerticalAlign.values
               .asNameMap()[store.getString('${_prefix}textVerticalAlign')] ??
@@ -1264,7 +1267,7 @@ class PdfEditingPreferences extends ChangeNotifier
   /// standard [fontFamily]. Hosts can supply their own [PdfPreferencesStore].
   PdfEmbeddedFont? get embeddedFont {
     if (_embeddedFont != null || _embeddedFontData == null) {
-      return _embeddedFont;
+      return _embeddedFont?..boldStroke = _boldStroke;
     }
     try {
       final bytes = GZipDecoder().decodeBytes(base64Decode(_embeddedFontData!));
@@ -1272,7 +1275,20 @@ class PdfEditingPreferences extends ChangeNotifier
     } catch (_) {
       _embeddedFontData = null;
     }
-    return _embeddedFont;
+    return _embeddedFont?..boldStroke = _boldStroke;
+  }
+
+  /// Simulated bold for the embedded font: the outline width as a fraction
+  /// of the font size (0 = off, 0.02 light, 0.04 strong). Applies to new
+  /// text written in an embedded font and persists across restarts.
+  double get boldStroke => _boldStroke;
+
+  set boldStroke(double value) {
+    final v = value.clamp(0.0, 0.1).toDouble();
+    if (v == _boldStroke) return;
+    _boldStroke = v;
+    _write((s) => s.setDouble('${_prefix}boldStroke', v));
+    notifyListeners();
   }
 
   set embeddedFont(PdfEmbeddedFont? value) {

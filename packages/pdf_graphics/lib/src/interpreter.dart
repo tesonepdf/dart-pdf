@@ -3190,6 +3190,24 @@ class PdfInterpreter {
               mode == 3 && glyphs == null && font.declaresNoWidths,
           mcid: _currentMcid,
         ));
+        // Fill + stroke (Tr 2) on an embedded font: the device fills the
+        // real glyph outline above, so the outline stroke (simulated bold)
+        // is added here as a vector stroke of the same outlines.
+        if (embedded &&
+            mode == 2 &&
+            glyphs != null &&
+            !paintedAsTiling &&
+            _state.stroke.width > 0) {
+          final outline = _glyphOutlinePath(glyphs, transform);
+          if (outline != null) {
+            device.strokePath(
+              outline,
+              _state.strokeColor,
+              PdfStroke(width: _state.stroke.width * k, join: 1),
+              _state.strokeAlpha,
+            );
+          }
+        }
       }
     }
     // The pen advances along the writing direction: x for horizontal text,

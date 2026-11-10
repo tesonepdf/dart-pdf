@@ -5033,6 +5033,14 @@ class _StyleMenuState extends State<_StyleMenu> {
                               controller.fontFamily,
                           onChanged: _setFont,
                         ),
+                        if ((controller.selectedTextFont ??
+                                controller.activeFont) is PdfEmbeddedFont) ...[
+                          const SizedBox(width: 6),
+                          EmbeddedBoldToggle(
+                            strength: controller.activeBoldStroke,
+                            onChanged: controller.setSelectedBoldStroke,
+                          ),
+                        ],
                       ]),
                     ),
                     Padding(

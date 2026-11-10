@@ -406,3 +406,70 @@ class _NoneSlashPainter extends CustomPainter {
   @override
   bool shouldRepaint(_NoneSlashPainter oldDelegate) => false;
 }
+
+
+/// Simulated bold for an embedded font: cycles off -> light -> strong.
+/// The outline stroke is written into the PDF as fill + stroke text, so it
+/// looks the same on screen, in print and in any other viewer.
+class EmbeddedBoldToggle extends StatelessWidget {
+  const EmbeddedBoldToggle({
+    super.key,
+    required this.strength,
+    required this.onChanged,
+    this.keyPrefix = 'pdf-font',
+  });
+
+  /// Current outline width as a fraction of the font size (0 = off).
+  final double strength;
+
+  final ValueChanged<double> onChanged;
+
+  final String keyPrefix;
+
+  static const double light = 0.02;
+  static const double strong = 0.04;
+
+  /// 0 off, 1 light, 2 strong.
+  int get level => strength <= 0
+      ? 0
+      : strength < (light + strong) / 2
+          ? 1
+          : 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = level > 0;
+    return Tooltip(
+      message: pdfL10n(context).propBold,
+      child: InkWell(
+        key: ValueKey('$keyPrefix-bold-stroke'),
+        onTap: () => onChanged(switch (level) {
+          0 => light,
+          1 => strong,
+          _ => 0.0,
+        }),
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: selected ? scheme.primary : Colors.transparent,
+            border:
+                Border.all(color: selected ? scheme.primary : scheme.outline),
+          ),
+          child: Text(
+            level == 0 ? 'B' : 'B$level',
+            style: TextStyle(
+              fontSize: level == 0 ? 15 : 12,
+              fontWeight: FontWeight.w900,
+              color: selected ? scheme.onPrimary : scheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

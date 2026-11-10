@@ -77,6 +77,41 @@ void main() {
   });
 
   group('addFreeText with an embedded font', () {
+    test('simulated bold writes fill+stroke text and survives a re-read', () {
+      final font = PdfEmbeddedFont.parse(fontBytes)..boldStroke = 0.04;
+      final doc = roundTrip((e) => e.addFreeText(
+            0,
+            const PdfRect(72, 600, 320, 680),
+            'Bold',
+            fontSize: 20,
+            color: 0x112233,
+            font: font,
+          ));
+      final ft = doc.page(0).annotations.single;
+      final content = appearanceText(doc, ft);
+      expect(content, contains('2 Tr'));
+      // outline width = font size x strength = 20 x 0.04
+      expect(content, contains('0.8 w'));
+      // stroke in the text colour
+      expect(content, contains('0.067 0.133 0.2 RG'));
+      expect(ft.dict.entries.containsKey(kPdfFreeTextBoldStrokeKey), isTrue);
+      // re-reading the box keeps the setting
+      expect(PdfEmbeddedFont.fromFreeText(ft)!.boldStroke, closeTo(0.04, 1e-9));
+    });
+
+    test('a normal embedded-font box has no stroke and no bold key', () {
+      final doc = roundTrip((e) => e.addFreeText(
+            0,
+            const PdfRect(72, 600, 320, 680),
+            'Plain',
+            font: PdfEmbeddedFont.parse(fontBytes),
+          ));
+      final ft = doc.page(0).annotations.single;
+      expect(appearanceText(doc, ft), isNot(contains('Tr')));
+      expect(ft.dict.entries.containsKey(kPdfFreeTextBoldStrokeKey), isFalse);
+      expect(PdfEmbeddedFont.fromFreeText(ft)!.boldStroke, 0);
+    });
+
     test('writes a Type0/CIDFontType2 Identity-H font with FontFile2', () {
       final doc = roundTrip((e) => e.addFreeText(
             0,
