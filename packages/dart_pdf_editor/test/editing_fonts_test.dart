@@ -226,8 +226,8 @@ void main() {
       expect(c.selectedTextOriginalFontName, 'Times New Roman');
       // the editing font is the base-14 equivalent
       expect(c.selectedTextFont, isA<PdfStandardFont>());
-      expect((c.selectedTextFont as PdfStandardFont).family.label,
-          contains('Times'));
+      expect((c.selectedTextFont as PdfStandardFont).family,
+          PdfStandardFontFamily.serif);
     });
 
     test('a plain Helvetica box has no original name', () {
