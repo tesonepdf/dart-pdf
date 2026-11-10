@@ -118,6 +118,11 @@ enum PdfAnnotationRotationMode { selectionCenter, individualCenters }
 /// tools - they act on the viewer's current text selection through
 /// [PdfEditingController.addMarkup]. [highlight] is the Draw group's
 /// freehand highlighter.
+/// Linee guida di riferimento dello strumento Disegna: una linea orizzontale,
+/// una verticale o entrambe, che attraversano tutto il foglio nel punto
+/// toccato. Non entrano nel PDF: servono solo per leggere i valori.
+enum PdfGuideLines { off, horizontal, vertical, both }
+
 enum PdfEditTool {
   /// Tap to select an annotation; drag it to move, drag its handles to
   /// resize.
@@ -2498,6 +2503,27 @@ class PdfEditingController extends ChangeNotifier {
     _textToolFromSelection = true;
     notifyListeners();
   }
+
+  PdfGuideLines _guideLines = PdfGuideLines.off;
+
+  /// Quali linee guida sono accese (solo con Disegna o Evidenzia armati).
+  PdfGuideLines get guideLines => _guideLines;
+  set guideLines(PdfGuideLines value) {
+    if (_guideLines == value) return;
+    _guideLines = value;
+    if (value == PdfGuideLines.off) guidePoint.value = null;
+    notifyListeners();
+  }
+
+  /// Le linee guida sono accese e visibili con lo strumento attuale.
+  bool get guideLinesActive =>
+      _guideLines != PdfGuideLines.off &&
+      (_tool == PdfEditTool.ink || _tool == PdfEditTool.highlight);
+
+  /// Dove passano le linee guida: pagina e punto in coordinate pagina. Un
+  /// notificatore a parte, cosi' muovere il dito non ridisegna tutto l'editor.
+  final ValueNotifier<({int page, double x, double y})?> guidePoint =
+      ValueNotifier(null);
 
   /// Chiusa la modifica (X): si torna a Seleziona.
   void leaveTextToolForSelection() {
