@@ -1992,6 +1992,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     });
   }
 
+  /// Porta le linee guida nel punto [local] (spazio vista di questa pagina).
+  void _placeGuide(Offset local) {
+    final (x, y) = _geometry.toPagePoint(local);
+    _controller.guidePoint.value = (page: widget.pageIndex, x: x, y: y);
+  }
+
   /// Raw-pointer bookkeeping the pan callbacks can't see: the pressure
   /// stream, stylus detection for palm rejection, multi-touch bail, and
   /// - with ink or the eraser armed - the stroke itself.
@@ -2021,6 +2027,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _bailActiveGesture();
         return;
       }
+    }
+    // linee guida accese: il dito/penna sposta le linee, non disegna
+    if (_controller.guideLinesActive) {
+      _placeGuide(event.localPosition);
+      return;
     }
     if (_controller.isPickingColor) {
       _pickDownPosition = event.localPosition;
@@ -2119,6 +2130,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   void _onPointerMove(PointerMoveEvent event) {
     if (!mounted) return;
+    if (_controller.guideLinesActive) {
+      if (_pointers.touchPointers.length < 2 &&
+          (event.kind != PointerDeviceKind.mouse || event.buttons != 0)) {
+        _placeGuide(event.localPosition);
+      }
+      return;
+    }
     if (event.pointer == _polyTapPointer &&
         (event.localPosition - _polyTapDown!).distance >
             computeHitSlop(event.kind, null)) {
@@ -8269,6 +8287,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final cropping = _controller.isCroppingImage &&
         _controller.selectedPage == widget.pageIndex;
     final picking = _controller.isPickingColor;
+    final guiding = _controller.guideLinesActive;
     // Cursor guides and rulers also mount this overlay in ordinary reader/
     // hand mode. In that passive state the MouseRegion paints them, but no
     // gesture recognizer may enter the arena and steal scrolling or text
@@ -8396,7 +8415,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         behavior: HitTestBehavior.opaque,
         // with finger drawing off, touch falls through to the scroll
         // view and only pen-like devices reach the ink recognizers
-        supportedDevices: _drawTool && !_controller.preferences.fingerDrawsInk
+        supportedDevices: !guiding &&
+                _drawTool &&
+                !_controller.preferences.fingerDrawsInk
             ? const {
                 PointerDeviceKind.stylus,
                 PointerDeviceKind.invertedStylus,
@@ -8418,14 +8439,24 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         // the document unscrollable for as long as the tool was armed - so
         // the eyedropper only ever reached the pages that happened to be on
         // screen when it was armed.
-        onPanStart:
-            cropping || picking || !acceptsEditingGestures ? null : _panStart,
-        onPanUpdate:
-            cropping || picking || !acceptsEditingGestures ? null : _panUpdate,
-        onPanEnd:
-            cropping || picking || !acceptsEditingGestures ? null : _panEnd,
-        onTapUp:
-            cropping || picking || !acceptsEditingGestures ? null : _onTapUp,
+        onPanStart: guiding
+            ? (_) {}
+            : cropping || picking || !acceptsEditingGestures
+                ? null
+                : _panStart,
+        onPanUpdate: guiding
+            ? (_) {}
+            : cropping || picking || !acceptsEditingGestures
+                ? null
+                : _panUpdate,
+        onPanEnd: guiding
+            ? (_) {}
+            : cropping || picking || !acceptsEditingGestures
+                ? null
+                : _panEnd,
+        onTapUp: guiding || cropping || picking || !acceptsEditingGestures
+            ? null
+            : _onTapUp,
         onDoubleTapDown: !cropping &&
                 !picking &&
                 (_polyTool || _hybridPolyTool || _tool == PdfEditTool.form)
@@ -8660,6 +8691,51 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   size: Size.infinite,
                 ),
               ),
+              if (_controller.guideLinesActive)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: ValueListenableBuilder<
+                          ({int page, double x, double y})?>(
+                        valueListenable: _controller.guidePoint,
+                        builder: (context, point, _) {
+                          if (point == null || point.page != widget.pageIndex) {
+                            return const SizedBox.shrink();
+                          }
+                          final at = _geometry.toViewOffset(point.x, point.y);
+                          final size = _geometry.viewSize;
+                          final mode = _controller.guideLines;
+                          return CustomPaint(
+                            key: const ValueKey('pdf-reference-guides'),
+                            painter: _AlignmentGuidePainter(
+                              guides: [
+                                if (mode == PdfGuideLines.horizontal ||
+                                    mode == PdfGuideLines.both)
+                                  (
+                                    axis: Axis.horizontal,
+                                    position: at.dy,
+                                    from: 0.0,
+                                    to: size.width,
+                                  ),
+                                if (mode == PdfGuideLines.vertical ||
+                                    mode == PdfGuideLines.both)
+                                  (
+                                    axis: Axis.vertical,
+                                    position: at.dx,
+                                    from: 0.0,
+                                    to: size.height,
+                                  ),
+                              ],
+                              chromeScale: _chromeScale,
+                              color: const Color(0xFF1E88E5),
+                            ),
+                            size: Size.infinite,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
               if (_nudgeGuides.isNotEmpty)
                 Positioned.fill(
                   child: IgnorePointer(

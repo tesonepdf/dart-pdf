@@ -15,6 +15,8 @@ Deciso dall'utente il 07/11: tutto quello che era su `prova-sviluppatore` è sta
 |---|---|---|---|
 | 08/11 | La barra in alto con il numero di pagina deve essere **sempre visibile**, non sparire scorrendo (`editor_screen.dart`: `autoHideChrome: false`). | `#10036` | applicato, da provare sul telefono |
 | 08/11 | Condividi, WhatsApp (due voci) e Salva con nome chiedono **cosa mandare**: tutto il documento, solo la pagina che si guarda, o alcune pagine (`1,3,5-7`). Finestra nuova in `app/lib/page_choice.dart`, collegata in `editor_screen.dart`, accesa da `app.dart` (`askPagesBeforeSending`, spenta di base per i test). Con "Salva con nome" e poche pagine si salva una copia e si apre in una scheda nuova: il documento intero non passa a un file parziale. Non chiede su un documento di una pagina. | `#10037`, corretto in `#10038` (l'app importa `material_ui`, non `flutter/material`) | applicato, da provare sul telefono |
+| 10/11 | La matita sulla casella di testo selezionata non faceva niente: la modifica si chiudeva subito perche' lo strumento cambiava (da Seleziona a Casella di testo) e l'editor lo prendeva per un cambio voluto (`editing_overlay.dart`: lo strumento atteso viene aggiornato prima). | `#289` | applicato, da provare sul telefono |
+| 10/11 | In Disegna (con Disegna o Evidenzia armati) nuovo pulsante "Linee guida": nessuna / orizzontale / verticale / entrambe. La linea attraversa tutto il foglio nel punto toccato e segue il dito; con la guida accesa il dito sposta le linee e non disegna. Non entra nel PDF. File: `editing_controller.dart`, `editing_toolbar.dart`, `editing_overlay.dart`. | `#290` | applicato, da provare sul telefono |
 
 ## NUMERI DEI COMMIT E DELLE BUILD: contano solo quelli di `main`
 

@@ -1941,11 +1941,52 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     ];
   }
 
+  /// Linee guida: scelta tra nessuna, orizzontale, verticale o entrambe.
+  Widget _guideLinesButton(BuildContext context) {
+    final it = Localizations.localeOf(context).languageCode == 'it';
+    final mode = controller.guideLines;
+    String name(PdfGuideLines m) => switch (m) {
+          PdfGuideLines.off => it ? 'Nessuna linea' : 'No guide',
+          PdfGuideLines.horizontal => it ? 'Orizzontale' : 'Horizontal',
+          PdfGuideLines.vertical => it ? 'Verticale' : 'Vertical',
+          PdfGuideLines.both => it ? 'Entrambe' : 'Both',
+        };
+    IconData icon(PdfGuideLines m) => switch (m) {
+          PdfGuideLines.off => Icons.border_clear,
+          PdfGuideLines.horizontal => Icons.border_horizontal,
+          PdfGuideLines.vertical => Icons.border_vertical,
+          PdfGuideLines.both => Icons.border_inner,
+        };
+    return PopupMenuButton<PdfGuideLines>(
+      key: const ValueKey('pdf-guide-lines'),
+      tooltip: it ? 'Linee guida' : 'Guide lines',
+      icon: Icon(icon(mode),
+          color: mode == PdfGuideLines.off
+              ? null
+              : Theme.of(context).colorScheme.primary),
+      initialValue: mode,
+      onSelected: (value) => controller.guideLines = value,
+      itemBuilder: (context) => [
+        for (final m in PdfGuideLines.values)
+          PopupMenuItem<PdfGuideLines>(
+            value: m,
+            child: Row(children: [
+              Icon(icon(m), size: 20),
+              const SizedBox(width: 12),
+              Text(name(m)),
+            ]),
+          ),
+      ],
+    );
+  }
+
   /// Draw-tool sub-controls: the finger/pen toggle and the manual ink
   /// commit/discard buttons.
   List<Widget> _drawToolExtras(BuildContext context) {
     final tool = controller.tool;
     return [
+      if (tool == PdfEditTool.ink || tool == PdfEditTool.highlight)
+        _guideLinesButton(context),
       if ((tool == PdfEditTool.ink ||
               tool == PdfEditTool.highlight ||
               tool == PdfEditTool.eraser) &&
