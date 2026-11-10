@@ -510,14 +510,23 @@ class _ArrowStepsSection extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Con le frecce, quando la casella e\' a meno di un tocco da un '
-          'allineamento compaiono le righe rosse e il tocco successivo '
-          'allinea. Scegli i bordi che si allineano.',
+          'allineamento compare la linea rossa e il tocco successivo '
+          'allinea. Scegli i lati (di base sinistro e inferiore). '
+          'Spostando a mano non c\'e\' nessun aggancio.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         ListenableBuilder(
           listenable: prefs,
           builder: (context, _) => Column(
             children: [
+              SwitchListTile(
+                key: const ValueKey('settings-nudge-align-enabled'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Agganci'),
+                value: prefs.nudgeAlignEnabled,
+                onChanged: (v) => prefs.nudgeAlignEnabled = v,
+              ),
               for (final (label, key, get, set) in <(
                 String,
                 String,
@@ -537,12 +546,6 @@ class _ArrowStepsSection extends StatelessWidget {
                   (v) => prefs.nudgeAlignRight = v
                 ),
                 (
-                  'Centro orizzontale',
-                  'center-x',
-                  () => prefs.nudgeAlignCenterX,
-                  (v) => prefs.nudgeAlignCenterX = v
-                ),
-                (
                   'Bordo inferiore',
                   'bottom',
                   () => prefs.nudgeAlignBottom,
@@ -554,12 +557,6 @@ class _ArrowStepsSection extends StatelessWidget {
                   () => prefs.nudgeAlignTop,
                   (v) => prefs.nudgeAlignTop = v
                 ),
-                (
-                  'Centro verticale',
-                  'center-y',
-                  () => prefs.nudgeAlignCenterY,
-                  (v) => prefs.nudgeAlignCenterY = v
-                ),
               ])
                 SwitchListTile(
                   key: ValueKey('settings-nudge-align-$key'),
@@ -567,7 +564,7 @@ class _ArrowStepsSection extends StatelessWidget {
                   dense: true,
                   title: Text(label),
                   value: get(),
-                  onChanged: set,
+                  onChanged: prefs.nudgeAlignEnabled ? set : null,
                 ),
             ],
           ),

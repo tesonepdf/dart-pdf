@@ -182,6 +182,7 @@ class PdfEditingPreferences extends ChangeNotifier
   double _gridSpacing = 10;
   double _lineArrowStepX = 4;
   double _lineArrowStepY = 4;
+  bool _nudgeAlignEnabled = true;
   bool _nudgeAlignLeft = true;
   bool _nudgeAlignRight = false;
   bool _nudgeAlignCenterX = false;
@@ -330,6 +331,8 @@ class PdfEditingPreferences extends ChangeNotifier
       _menuHoldMs =
           (store.getInt('${_prefix}menuHoldMs') ?? _menuHoldMs).clamp(300, 1000);
       _snapToGrid = store.getBool('${_prefix}snapToGrid') ?? _snapToGrid;
+      _nudgeAlignEnabled =
+          store.getBool('${_prefix}nudgeAlignEnabled') ?? _nudgeAlignEnabled;
       _nudgeAlignLeft =
           store.getBool('${_prefix}nudgeAlignLeft') ?? _nudgeAlignLeft;
       _nudgeAlignRight =
@@ -1085,6 +1088,16 @@ class PdfEditingPreferences extends ChangeNotifier
   // Which edges an arrow-nudged text box lines up with on other text boxes.
 
   /// Align the left edge with the left edge of other text boxes.
+  /// Master switch for the red alignment lines of the arrow nudges.
+  bool get nudgeAlignEnabled => _nudgeAlignEnabled;
+
+  set nudgeAlignEnabled(bool value) {
+    if (value == _nudgeAlignEnabled) return;
+    _nudgeAlignEnabled = value;
+    _write((s) => s.setBool('${_prefix}nudgeAlignEnabled', value));
+    notifyListeners();
+  }
+
   bool get nudgeAlignLeft => _nudgeAlignLeft;
 
   set nudgeAlignLeft(bool value) {
