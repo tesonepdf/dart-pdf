@@ -1,3 +1,4 @@
+import 'dart:convert' show latin1;
 // Filigrana (watermark.dart): la scrittura nel PDF con il motore e la finestra.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -37,6 +38,17 @@ void main() {
         applyWatermark(editor, WatermarkOptions(angle: angle));
         expect(editor.hasChanges, isTrue);
       }
+    });
+
+    test('la scritta è trasparente: lo stato grafico con opacità è nel file', () {
+      final editor = PdfEditor(two());
+      applyWatermark(editor,
+          const WatermarkOptions(strength: WatermarkStrength.light));
+      final out = latin1.decode(editor.save());
+      expect(out, contains('/ExtGState'));
+      expect(out, contains('StGs1'));
+      expect(WatermarkStrength.light.opacity,
+          lessThan(WatermarkStrength.strong.opacity));
     });
 
     test('senza testo o oltre la fine non cambia niente', () {

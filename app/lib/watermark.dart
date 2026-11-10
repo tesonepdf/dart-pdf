@@ -10,9 +10,9 @@ import 'l10n/app_l10n.dart';
 
 // Filigrana: scrive un testo grande, anche inclinato, al centro delle pagine,
 // su tutte o da una pagina in poi. Si usa `PdfContentEditing.stampPage` e
-// `PdfStamp.text` del motore (Helvetica grassetto). Il motore non ha la
-// trasparenza: l'intensità è un grigio più o meno chiaro, e la scritta sta
-// sopra al contenuto della pagina.
+// `PdfStamp.text` del motore (Helvetica grassetto). La scritta è grigia e
+// davvero trasparente (opacità del motore): l'intensità cambia l'opacità, e il
+// contenuto della pagina si vede attraverso la scritta.
 
 /// Grandezza del testo.
 enum WatermarkSize {
@@ -38,16 +38,21 @@ enum WatermarkAngle {
   final double degrees;
 }
 
-/// Quanto si vede la scritta (grigio 0xRRGGBB).
+/// Quanto si vede la scritta: l'opacità del grigio.
 enum WatermarkStrength {
-  light('Chiara', 0xD0D0D0),
-  medium('Media', 0xB0B0B0),
-  strong('Forte', 0x808080);
+  light('Chiara', 0.15),
+  medium('Media', 0.3),
+  strong('Forte', 0.5);
 
-  const WatermarkStrength(this.label, this.color);
+  const WatermarkStrength(this.label, this.opacity);
 
   final String label;
-  final int color;
+
+  /// Da 0 (invisibile) a 1 (pieno).
+  final double opacity;
+
+  /// Il grigio della scritta, 0xRRGGBB.
+  int get color => 0x808080;
 }
 
 /// Le scelte per la filigrana.
@@ -92,6 +97,7 @@ void applyWatermark(PdfEditor editor, WatermarkOptions options) {
         y: cy - (width / 2) * math.sin(r) - half * math.cos(r),
         size: size,
         color: options.strength.color,
+        opacity: options.strength.opacity,
         bold: true,
         angleDegrees: options.angle.degrees,
       );
