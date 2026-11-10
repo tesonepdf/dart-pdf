@@ -1178,7 +1178,9 @@ class _PdfAnnotationPropertiesPanelState
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(children: [
-          Expanded(child: Text(l.propFont)),
+          Expanded(
+              child: Text(l.propFont,
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
           variesLabel('pdf-prop-form-font-varies', fonts.varies),
           Flexible(
             flex: 3,
