@@ -4831,6 +4831,43 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Salva come file Excel (`.xlsx`) solo una zona di una pagina: si sceglie
+  /// la pagina e si disegna il rettangolo (o si prende la pagina intera), e
+  /// righe e colonne si cercano solo lì dentro. Molto più preciso del
+  /// documento intero su una tabella in mezzo ad altro testo.
+  Future<void> _exportExcelZone(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      session.finishInk();
+      final bytes = Uint8List.fromList(session.bytes);
+      final document = session.document.openAppended(bytes);
+      final zone = await pickPageZone(
+        context,
+        name: tab.title,
+        bytes: bytes,
+        document: document,
+        initialPage: tab.viewer?.currentPage ?? 0,
+      );
+      if (zone == null || !mounted) return;
+      final result = pdfZoneToXlsx(document, zone.page, zone.region);
+      if (result.cells == 0) {
+        _toast('Nella zona scelta non c\'è testo. Se è una scansione, fai '
+            'prima l\'OCR.');
+        return;
+      }
+      final saved = await saveXlsxAs(
+          context, result.bytes, xlsxZoneFileName(tab.title, zone.page),
+          typeLabel: 'Foglio Excel');
+      if (!mounted) return;
+      if (saved.message != null) _toast(saved.message!);
+    } catch (e) {
+      AppDevTools.instance.addLog('excel zone export failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
   /// Nel PDF non c'è testo: se l'OCR è disponibile lo propone, altrimenti lo
   /// dice e basta. L'OCR apre una copia con il testo in una scheda nuova, da
   /// cui si può esportare di nuovo.
@@ -5497,6 +5534,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_exportExcel(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'export-excel-zone',
+        requiresDocument: true,
+        icon: Icons.crop_free,
+        title: 'Esporta una zona come Excel (.xlsx)…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_exportExcelZone(tab));
         },
       ),
       _MenuAction(
@@ -6554,7 +6601,8 @@ class _EditorScreenState extends State<EditorScreen>
         'export-image' ||
         'export-text' ||
         'export-word' ||
-        'export-excel' =>
+        'export-excel' ||
+        'export-excel-zone' =>
           'save',
         'digital-signature' ||
         'ocr' ||

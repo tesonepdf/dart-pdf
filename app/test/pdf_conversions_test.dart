@@ -408,6 +408,48 @@ void main() {
           contains('Hello, world!'));
     });
 
+    test('con una zona contano solo i pezzi di testo dentro la zona', () {
+      final runs = [
+        run('Fuori', 50, 90, 760),
+        run('Voce', 50, 80, 700),
+        run('Importo', 200, 250, 700),
+        run('Pane', 50, 80, 685),
+        run('1,50', 225, 250, 685),
+        run('Piè di pagina', 50, 150, 40),
+      ];
+      // La tabella sta tra y 680 e 715; il titolo e il piè di pagina restano fuori.
+      final grid = pageGrid(runs, zone: const PdfRect(40, 680, 300, 715));
+      expect(grid, [
+        ['Voce', 'Importo'],
+        ['Pane', '1,50'],
+      ]);
+      // Senza zona entrano tutti i pezzi.
+      expect(pageGrid(runs).length, 4);
+      // Una zona senza testo dà una griglia vuota.
+      expect(pageGrid(runs, zone: const PdfRect(400, 300, 500, 400)), isEmpty);
+    });
+
+    test('xlsxZoneFileName: titolo e pagina', () {
+      expect(xlsxZoneFileName('Report.pdf', 1), 'Report (pagina 2).xlsx');
+      expect(xlsxZoneFileName('   ', 0), 'documento (pagina 1).xlsx');
+    });
+
+    test('pdfZoneToXlsx: la pagina intera porta il testo, una zona vuota no',
+        () {
+      final doc = PdfDocument.open(buildClassicPdf());
+      final whole = pdfZoneToXlsx(doc, 0, doc.page(0).cropBox);
+      expect(whole.sheets, 1);
+      expect(whole.cells, greaterThan(0));
+      final xml = partOf(whole.bytes, 'xl/worksheets/sheet1.xml');
+      expect(xml, contains('Hello, world!'));
+      expect(partOf(whole.bytes, 'xl/workbook.xml'), contains('name="Zona"'));
+
+      final empty = pdfZoneToXlsx(doc, 0, const PdfRect(-500, -500, -400, -400));
+      expect(empty.cells, 0);
+      expect(empty.sheets, 0);
+      expect(empty.bytes, isEmpty);
+    });
+
     test('un PDF senza testo (una scansione) non ha celle né file', () async {
       final blank = PdfBlankDocument.create(pageCount: 2);
       final result = await pdfToXlsx(PdfDocument.open(blank));
