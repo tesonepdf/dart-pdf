@@ -449,4 +449,22 @@ void main() {
       expect(second.color, const Color(0xFF00ACC1));
     });
   });
+
+  group('menuHoldMs', () {
+    test('defaults to 750, clamps to 300-1000 and persists', () async {
+      SharedPreferences.setMockInitialValues({});
+      final a = PdfEditingPreferences();
+      await a.ready;
+      expect(a.menuHoldMs, 750);
+      a.menuHoldMs = 100;
+      expect(a.menuHoldMs, 300);
+      a.menuHoldMs = 5000;
+      expect(a.menuHoldMs, 1000);
+      a.menuHoldMs = 600;
+      await Future<void>.delayed(Duration.zero);
+      final b = PdfEditingPreferences();
+      await b.ready;
+      expect(b.menuHoldMs, 600);
+    });
+  });
 }

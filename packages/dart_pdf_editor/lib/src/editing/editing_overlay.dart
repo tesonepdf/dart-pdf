@@ -8513,11 +8513,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           // recognizer claims only when the press point has a menu to
           // offer, so text selection and slow drags keep their gestures)
           child: RawGestureDetector(
+            key: ValueKey('menu-hold-${_controller.preferences.menuHoldMs}'),
             behavior: HitTestBehavior.opaque,
             gestures: <Type, GestureRecognizerFactory>{
               _MenuLongPressRecognizer: GestureRecognizerFactoryWithHandlers<
                   _MenuLongPressRecognizer>(
-                () => _MenuLongPressRecognizer(debugOwner: this),
+                () => _MenuLongPressRecognizer(
+                  debugOwner: this,
+                  duration:
+                      Duration(milliseconds: _controller.preferences.menuHoldMs),
+                ),
                 (recognizer) => recognizer
                   ..shouldClaim = _menuLongPressClaims
                   ..onLongPressStart = _onMenuLongPress,
@@ -9174,7 +9179,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 /// has a menu to offer - otherwise a held finger must stay available to
 /// text selection, marquees, and slow move drags.
 class _MenuLongPressRecognizer extends LongPressGestureRecognizer {
-  _MenuLongPressRecognizer({super.debugOwner})
+  _MenuLongPressRecognizer({super.debugOwner, super.duration})
       : super(supportedDevices: {
           PointerDeviceKind.touch,
           PointerDeviceKind.stylus,

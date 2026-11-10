@@ -53,7 +53,7 @@ void main() {
   Future<void> longPressAt(WidgetTester tester, Offset at) async {
     final gesture =
         await tester.startGesture(at, kind: PointerDeviceKind.touch);
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
     await gesture.up();
     await tester.pumpAndSettle();
@@ -141,7 +141,7 @@ void main() {
       final at = viewPoint(150, 600);
       final gesture =
           await tester.startGesture(at, kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 800));
       await gesture.moveTo(at + const Offset(6, 5));
       await tester.pump();
       await gesture.up();
@@ -192,7 +192,7 @@ void main() {
 
       final gesture = await tester.startGesture(viewPoint(280, 470),
           kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 800));
       await gesture.moveTo(viewPoint(400, 380));
       await tester.pump();
       await gesture.moveTo(viewPoint(520, 280));
@@ -215,7 +215,7 @@ void main() {
 
       final gesture = await tester.startGesture(viewPoint(280, 470),
           kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 800));
       await gesture.moveTo(viewPoint(420, 380));
       await tester.pump();
       await gesture.cancel();
@@ -239,7 +239,7 @@ void main() {
 
       final gesture = await tester.startGesture(viewPoint(200, 480),
           kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 800));
       await gesture.moveTo(viewPoint(420, 380));
       await tester.pump();
       await gesture.up();
@@ -276,7 +276,7 @@ void main() {
       // rectangle the finger swept over is not marquee-selected
       final gesture = await tester.startGesture(viewPoint(100, 726),
           kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 800));
       await gesture.moveTo(viewPoint(450, 380));
       await tester.pump();
       await gesture.up();
@@ -284,6 +284,79 @@ void main() {
 
       expect(controller.selectedText, startsWith('Page'));
       expect(editing.selectedAnnotationSlots, isEmpty);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+  });
+
+  group('hold time', () {
+    const menuKey = ValueKey('pdf-annot-menu-delete');
+
+    Future<PdfEditingController> withRect(WidgetTester tester) async {
+      final editing = await pumpViewer(tester);
+      editing
+        ..addRectangle(0, const PdfRect(300, 400, 400, 450))
+        ..tool = PdfEditTool.select;
+      await tester.pump();
+      return editing;
+    }
+
+    testWidgets('default hold time is 750 ms', (tester) async {
+      final editing = await withRect(tester);
+      expect(editing.preferences.menuHoldMs, 750);
+    });
+
+    testWidgets('a still press of 400 ms does not open the menu',
+        (tester) async {
+      await withRect(tester);
+      final gesture = await tester.startGesture(viewPoint(350, 425),
+          kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.byKey(menuKey), findsNothing);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(menuKey), findsNothing);
+    });
+
+    testWidgets('a still press of 800 ms opens the menu', (tester) async {
+      await withRect(tester);
+      final gesture = await tester.startGesture(viewPoint(350, 425),
+          kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pumpAndSettle();
+      expect(find.byKey(menuKey), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('a 400 ms press followed by a drag moves, no menu',
+        (tester) async {
+      final editing = await withRect(tester);
+      final gesture = await tester.startGesture(viewPoint(350, 425),
+          kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 400));
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump(const Duration(milliseconds: 500));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(menuKey), findsNothing);
+      expect(editing.selectedAnnotationSlots, [(0, 0)]);
+    });
+
+    testWidgets('the setting changes the hold time', (tester) async {
+      final editing = await withRect(tester);
+      editing.preferences.menuHoldMs = 300;
+      await tester.pump();
+      final gesture = await tester.startGesture(viewPoint(350, 425),
+          kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.byKey(menuKey), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
       await tester.pump(const Duration(milliseconds: 400));
     });
   });
