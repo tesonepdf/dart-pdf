@@ -272,6 +272,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 _SettingsSection(
                   title: 'Strumenti',
                   children: [
+                    _MenuHoldSection(prefs: widget.prefs),
+                    const Divider(height: 32),
                     _ArrowStepsSection(prefs: widget.prefs),
                     const Divider(height: 32),
                     MeasureScaleSettingsSection(prefs: widget.prefs),
@@ -388,6 +390,54 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               onPressed: () => Navigator.of(context).pop(),
               child: Text(appL10n(context).close),
             )),
+      ],
+    );
+  }
+}
+
+/// Settings block for the touch context menu: how long a finger must stay
+/// still on an element before the menu opens.
+class _MenuHoldSection extends StatelessWidget {
+  const _MenuHoldSection({required this.prefs});
+
+  final PdfEditingPreferences prefs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Menu del tocco prolungato',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Quanto tieni premuto fermo su un elemento prima che compaia il '
+          'menu. Se muovi il dito prima, l\'elemento si sposta e il menu '
+          'non compare.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        ListenableBuilder(
+          listenable: prefs,
+          builder: (context, _) => Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  key: const ValueKey('settings-menu-hold'),
+                  min: 300,
+                  max: 1000,
+                  divisions: 14,
+                  value: prefs.menuHoldMs.clamp(300, 1000).toDouble(),
+                  label: '${prefs.menuHoldMs} ms',
+                  onChanged: (v) => prefs.menuHoldMs = v.round(),
+                ),
+              ),
+              SizedBox(
+                width: 64,
+                child: Text('${prefs.menuHoldMs} ms', textAlign: TextAlign.end),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

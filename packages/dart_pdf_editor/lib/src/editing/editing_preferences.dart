@@ -177,6 +177,7 @@ class PdfEditingPreferences extends ChangeNotifier
   bool _smartAlignmentGuides = true;
   bool _showPageRulers = false;
   bool _showSnapGrid = false;
+  int _menuHoldMs = 750;
   bool _snapToGrid = false;
   double _gridSpacing = 10;
   double _lineArrowStepX = 4;
@@ -326,6 +327,8 @@ class PdfEditingPreferences extends ChangeNotifier
       _showPageRulers =
           store.getBool('${_prefix}showPageRulers') ?? _showPageRulers;
       _showSnapGrid = store.getBool('${_prefix}showSnapGrid') ?? _showSnapGrid;
+      _menuHoldMs =
+          (store.getInt('${_prefix}menuHoldMs') ?? _menuHoldMs).clamp(300, 1000);
       _snapToGrid = store.getBool('${_prefix}snapToGrid') ?? _snapToGrid;
       _nudgeAlignLeft =
           store.getBool('${_prefix}nudgeAlignLeft') ?? _nudgeAlignLeft;
@@ -1149,6 +1152,19 @@ class PdfEditingPreferences extends ChangeNotifier
     if (value == _showPageRulers) return;
     _showPageRulers = value;
     _write((s) => s.setBool('${_prefix}showPageRulers', value));
+    notifyListeners();
+  }
+
+  /// Milliseconds a finger must stay still on an annotation before the
+  /// touch context menu opens (300-1000, default 750). A shorter press that
+  /// moves drags the annotation instead.
+  int get menuHoldMs => _menuHoldMs;
+
+  set menuHoldMs(int value) {
+    final v = value.clamp(300, 1000);
+    if (v == _menuHoldMs) return;
+    _menuHoldMs = v;
+    _write((s) => s.setInt('${_prefix}menuHoldMs', v));
     notifyListeners();
   }
 
