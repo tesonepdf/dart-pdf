@@ -69,6 +69,7 @@ import 'update_install_flow.dart';
 import 'save_folder.dart';
 import 'page_choice.dart';
 import 'page_numbers.dart';
+import 'comic_book.dart';
 import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
@@ -2918,6 +2919,34 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Un fumetto .cbz in un PDF nuovo, una pagina per immagine (nell'ordine dei
+  /// nomi), che si apre in una scheda.
+  Future<void> _openComic() async {
+    try {
+      final file = await pickComicFile();
+      if (file == null || !mounted) return;
+      _toast('Apro il fumetto…', duration: const Duration(seconds: 6));
+      final images = await comicImagesAsync(await file.readAsBytes());
+      final result = await photosToPdfAsync(images, PhotoPdfPage.photoSize);
+      if (!mounted) return;
+      _readOnly = false;
+      _addTab(DocumentTab.document(
+        title: comicTitle(file.name),
+        bytes: result.bytes,
+        preferences: _prefs,
+      ));
+      if (result.skipped > 0) {
+        _toast('${result.skipped} immagini non lette e saltate.');
+      }
+    } on FormatException catch (e) {
+      if (mounted) _toast('Fumetto non aperto: ${e.message}.');
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('comic open failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Fumetto non aperto: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Parti di pagine di uno o più PDF, messe su fogli A4 in un PDF nuovo che
   /// si apre in una scheda.
   Future<void> _composeSheet() async {
@@ -5445,6 +5474,12 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_photosToPdf()),
       ),
       _MenuAction(
+        id: 'open-comic',
+        icon: Icons.auto_stories_outlined,
+        title: 'Apri un fumetto (.cbz)…',
+        run: () => unawaited(_openComic()),
+      ),
+      _MenuAction(
         id: 'compose-sheet',
         icon: Icons.dashboard_customize_outlined,
         title: 'Componi foglio…',
@@ -6727,6 +6762,7 @@ class _EditorScreenState extends State<EditorScreen>
         for (final action in _fileActions())
           if (action.id != 'photos-one-sheet' &&
               action.id != 'photos-to-pdf' &&
+              action.id != 'open-comic' &&
               action.id != 'compose-sheet' &&
               action.id != 'scanner-import')
             entry(action),
@@ -6752,6 +6788,8 @@ class _EditorScreenState extends State<EditorScreen>
             'Foto su un solo foglio…', () => unawaited(_photosOnOneSheet())),
         importEntry('photos-to-pdf', Icons.collections_outlined,
             'Foto in PDF (una per pagina)…', () => unawaited(_photosToPdf())),
+        importEntry('open-comic', Icons.auto_stories_outlined,
+            'Apri un fumetto (.cbz)…', () => unawaited(_openComic())),
         importEntry('compose-sheet', Icons.dashboard_customize_outlined,
             'Componi foglio…', () => unawaited(_composeSheet())),
         importEntry('scanner-import', Icons.scanner_outlined,
