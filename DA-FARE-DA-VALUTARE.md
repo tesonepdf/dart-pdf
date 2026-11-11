@@ -57,6 +57,20 @@ Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io
 4. Web app: l'utente la vuole, ma **dopo** conflitti e build prova, così in caso di problemi si sa dove cercare. Niente è stato fatto.
 5. Le novità di Ben arrivate dopo `f5efa6e5` (es. scorciatoia Ctrl/Cmd+Shift+X) si lasciano stare finché l'utente non dice altrimenti.
 
+#### DA FARE: spiegazione e tipo (patch o completa) a ogni aggiornamento (richiesta dell'utente, 12/11)
+
+Ad ogni aggiornamento l'utente vuole vedere **cosa cambia** (una spiegazione) e **se è una patch o una release completa**. Non è ancora fatto: non è stato iniziato perché il contesto della chat era quasi esaurito, così non si è lasciato niente a metà.
+
+Cosa c'è già, da cui partire:
+- La build sa se pubblica patch o completa: `plan/decision.json` (campo `full`, `reason`) nel job `release` di `build.yml`; la dimensione della patch è in `patches.json` (`patches[].size`).
+- Le note della release si scrivono nel passo `android_notes` di `build.yml` (riga col `printf 'Build #%s...'`): oggi dicono solo "Nuova versione Android disponibile" più i marcatori `<!-- app-build -->` ecc. L'app le legge in `update.dart` (campo `notes`) e le mostra nell'avviso di aggiornamento.
+
+Piano:
+1. **Spiegazione:** nel passo delle note, mettere i messaggi dei commit tra la build precedente e questa (si ha `$GITHUB_SHA`; la precedente sta nel marcatore `main-sha` della release vecchia), senza il numero `#N` e senza `[completo]`. Resta in italiano.
+2. **Tipo:** aggiungere alle note una riga leggibile ("Aggiornamento: patch, circa X MB" oppure "Aggiornamento: completo, circa Y MB, perché ...") presa da `decision.json` e dalla dimensione della patch; più un marcatore `<!-- update-kind: patch|full -->` per l'app. La riga va scritta DOPO aver calcolato il piano, quindi le note vanno composte dopo il passo `plan`.
+3. **App:** mostrare le note nell'avviso e, se manca, usare il marcatore per scrivere "Patch" o "Completa" in modo chiaro. Se il telefono è indietro di più build, il tipo vero lo decide il piano dell'app (`planUpdate`): mostrare quello (patch dalla versione installata o base più patch), non solo quello dell'ultima build.
+4. Testo nuovo sempre in italiano; niente codice nei paletti, solo descrizioni.
+
 #### Aggiornamenti a patch (dal build #345): come funzionano e cosa non rompere
 
 Regola dell'utente (paletto 14 in `CONFLITTI-FUSIONE.md`): sul telefono si scarica solo la differenza; l'APK completo si carica nella release solo come nuova base. **Non rimettere l'APK completo a ogni build e non cambiare il formato dei file senza cambiare insieme i due lati.**
