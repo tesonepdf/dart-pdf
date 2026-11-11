@@ -44,6 +44,57 @@ void main() {
     expect(labels.toSet().length, labels.length);
   });
 
+  test('ci sono anche i quaranta font piu\' comuni, senza nomi ripetuti', () {
+    const forty = <String>[
+      'Roboto',
+      'Lato',
+      'Montserrat',
+      'Poppins',
+      'Noto Sans',
+      'Source Sans 3',
+      'Nunito',
+      'Ubuntu',
+      'Inter',
+      'Work Sans',
+      'Raleway',
+      'Oswald',
+      'PT Sans',
+      'Rubik',
+      'Quicksand',
+      'Mulish',
+      'Karla',
+      'Cabin',
+      'Titillium Web',
+      'Josefin Sans',
+      'Barlow',
+      'IBM Plex Sans',
+      'DM Sans',
+      'Roboto Condensed',
+      'Merriweather',
+      'Playfair Display',
+      'Lora',
+      'PT Serif',
+      'Noto Serif',
+      'Source Serif 4',
+      'Libre Baskerville',
+      'Crimson Text',
+      'Roboto Slab',
+      'Cormorant Garamond',
+      'Bitter',
+      'Source Code Pro',
+      'Roboto Mono',
+      'IBM Plex Mono',
+      'Bebas Neue',
+      'Dancing Script',
+    ];
+    final labels = bundledEditorFonts.map((f) => f.label).toList();
+    expect(forty.length, 40);
+    for (final name in forty) {
+      expect(labels, contains(name));
+    }
+    expect(bundledEditorFonts.length, 55);
+  });
+
   test('ogni font si legge dal pacchetto e si incorpora', () async {
     for (final font in bundledEditorFonts) {
       final bytes = await loadBundledFont(font);
