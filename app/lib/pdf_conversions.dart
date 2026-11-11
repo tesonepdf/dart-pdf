@@ -10,6 +10,7 @@ import 'package:pdf_graphics/pdf_graphics.dart'
     show
         PdfDecodedPixels,
         PdfExtractedRun,
+        PdfPageShapes,
         PdfReflowBlock,
         PdfReflowImage,
         PdfTextExtractor,
@@ -689,7 +690,9 @@ Uint8List _pngOfPixels(PdfDecodedPixels pixels) {
 // largo dentro una riga di più celle) può unire le colonne; niente colori o
 // bordi. I numeri hanno il formato giusto ([parseSpreadsheetValue]):
 // percentuali, valute (€, $, £) e date (gg/mm/aaaa, aaaa-mm-gg) diventano
-// numeri veri, con lo stile in `xl/styles.xml`.
+// numeri veri, con lo stile in `xl/styles.xml`. Colori di sfondo e bordi si
+// leggono dai rettangoli pieni e dalle linee della pagina ([PdfPageShapes]) e
+// si assegnano alle celle in base a dove cade il testo ([pageSheet]).
 
 /// Una cella trovata sulla pagina, prima di sapere in che colonna va. [left] e
 /// [right] sono in punti della pagina.
@@ -837,12 +840,25 @@ List<({double left, double right})> columnSpans(List<List<PageCell>> rows) {
   return spans;
 }
 
-/// La griglia di testo di una pagina: righe per colonne, con `''` dove la
-/// cella è vuota. Vuota se nella pagina non c'è testo. Con [zone] conta solo
-/// il testo dentro la zona (vedi [pageCellRows]).
-List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs, {PdfRect? zone}) {
-  final rows = pageCellRows(runs, zone: zone);
-  if (rows.isEmpty) return const [];
+/// Una griglia di testo con la posizione di righe e colonne sulla pagina,
+/// per dare alle celle sfondo e bordi ([_gridStyles]).
+class _PlacedGrid {
+  _PlacedGrid(this.text, this.spans, this.bands, this.centers);
+
+  final List<List<String>> text;
+
+  /// Le colonne, da sinistra a destra (x in punti della pagina).
+  final List<({double left, double right})> spans;
+
+  /// Le righe, dall'alto in basso: la fascia verticale del loro testo.
+  final List<({double top, double bottom})> bands;
+
+  /// Il centro di ogni cella (il testo se c'è, altrimenti la fascia).
+  final List<List<({double x, double y})>> centers;
+}
+
+_PlacedGrid? _placeGrid(List<List<PageCell>> rows) {
+  if (rows.isEmpty) return null;
   final spans = columnSpans(rows);
 
   // La colonna che comincia più a destra senza superare l'inizio della cella.
@@ -869,26 +885,172 @@ List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs, {PdfRect? zone}) {
   }
 
   final grid = <List<String>>[];
+  final bands = <({double top, double bottom})>[];
+  final centers = <List<({double x, double y})>>[];
   for (final row in rows) {
     final line = List<String>.filled(spans.length, '');
+    final textX = List<double?>.filled(spans.length, null);
+    var top = row.first.top, bottom = row.first.bottom;
     for (final c in row) {
       // Una cella sola nella riga (un titolo) va dove comincia, non dove
       // copre più colonne.
       final i = row.length == 1 ? byLeftEdge(c) : byOverlap(c);
       line[i] = line[i].isEmpty ? c.text : '${line[i]} ${c.text}';
+      textX[i] ??= (c.left + c.right) / 2;
+      top = math.max(top, c.top);
+      bottom = math.min(bottom, c.bottom);
     }
     grid.add(line);
+    bands.add((top: top, bottom: bottom));
+    centers.add([
+      for (var i = 0; i < spans.length; i++)
+        (
+          x: textX[i] ?? (spans[i].left + spans[i].right) / 2,
+          y: (top + bottom) / 2,
+        ),
+    ]);
   }
-  return grid;
+  return _PlacedGrid(grid, spans, bands, centers);
 }
+
+/// La griglia di testo di una pagina: righe per colonne, con `''` dove la
+/// cella è vuota. Vuota se nella pagina non c'è testo. Con [zone] conta solo
+/// il testo dentro la zona (vedi [pageCellRows]).
+List<List<String>> pageGrid(Iterable<PdfExtractedRun> runs, {PdfRect? zone}) =>
+    _placeGrid(pageCellRows(runs, zone: zone))?.text ?? const [];
+
+// --- Sfondi e bordi delle celle ----------------------------------------------
+
+/// Quanto lontano dal testo, in punti, può stare il bordo esterno di una
+/// tabella.
+const double _borderOuterReach = 14;
+
+/// Quanta tolleranza, in punti, ha una linea per cadere tra due celle.
+const double _borderTolerance = 1.5;
+
+/// Oltre questo numero di linee i bordi non si cercano (pagine da disegno
+/// tecnico: sarebbe lento e inutile).
+const int _borderMaxLines = 20000;
+
+/// Cerca sfondi e bordi per le celle di una pagina.
+class _ShapeStyler {
+  _ShapeStyler(PdfPageShapes shapes, List<({double x, double y})> centers)
+      : lines = shapes.lines.length > _borderMaxLines
+            ? const []
+            : shapes.lines,
+        fills = [
+          for (final f in shapes.fills)
+            // Uno sfondo che copre tutto il testo è il colore della carta,
+            // non quello di una cella.
+            if (centers.length < 2 ||
+                !centers.every((c) => f.bounds.contains(c.x, c.y)))
+              f,
+        ];
+
+  final List<PdfFilledRect> fills;
+  final List<PdfRuleLine> lines;
+
+  /// Il colore (0xRRGGBB) dello sfondo che copre il punto, l'ultimo disegnato.
+  int? fillAt(double x, double y) {
+    for (var i = fills.length - 1; i >= 0; i--) {
+      if (fills[i].bounds.contains(x, y)) return fills[i].color;
+    }
+    return null;
+  }
+
+  bool _vertical(double lo, double hi, double y) {
+    final a = math.min(lo, hi) - _borderTolerance;
+    final b = math.max(lo, hi) + _borderTolerance;
+    for (final l in lines) {
+      if (l.isHorizontal) continue;
+      final x = (l.bounds.left + l.bounds.right) / 2;
+      if (x >= a &&
+          x <= b &&
+          y >= l.bounds.bottom - _borderTolerance &&
+          y <= l.bounds.top + _borderTolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _horizontal(double lo, double hi, double x) {
+    final a = math.min(lo, hi) - _borderTolerance;
+    final b = math.max(lo, hi) + _borderTolerance;
+    for (final l in lines) {
+      if (!l.isHorizontal) continue;
+      final y = (l.bounds.bottom + l.bounds.top) / 2;
+      if (y >= a &&
+          y <= b &&
+          x >= l.bounds.left - _borderTolerance &&
+          x <= l.bounds.right + _borderTolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+/// Gli stili (sfondo e bordi) delle celle di [grid], una lista per riga.
+List<List<XlsxCellStyle>> _gridStyles(_PlacedGrid grid, _ShapeStyler styler) {
+  final rows = grid.text.length;
+  final columns = grid.spans.length;
+  final out = <List<XlsxCellStyle>>[];
+  for (var r = 0; r < rows; r++) {
+    final band = grid.bands[r];
+    final line = <XlsxCellStyle>[];
+    for (var c = 0; c < columns; c++) {
+      final center = grid.centers[r][c];
+      final span = grid.spans[c];
+      var borders = 0;
+      // Sinistra e destra: una linea verticale nello spazio tra le colonne
+      // (o poco fuori dalla tabella, per il bordo esterno) che passa per la
+      // fascia della riga.
+      final leftLo = c > 0 ? grid.spans[c - 1].right : span.left - _borderOuterReach;
+      final leftHi = span.left;
+      final rightLo = span.right;
+      final rightHi =
+          c < columns - 1 ? grid.spans[c + 1].left : span.right + _borderOuterReach;
+      if (styler._vertical(leftLo, leftHi, center.y)) {
+        borders |= XlsxBorders.left;
+      }
+      if (styler._vertical(rightLo, rightHi, center.y)) {
+        borders |= XlsxBorders.right;
+      }
+      // Sopra e sotto: una linea orizzontale nello spazio tra le righe.
+      final topLo = r > 0 ? grid.bands[r - 1].bottom : band.top;
+      final topHi = r > 0 ? band.top : band.top + _borderOuterReach;
+      final bottomLo = r < rows - 1 ? grid.bands[r + 1].top : band.bottom - _borderOuterReach;
+      final bottomHi = band.bottom;
+      if (styler._horizontal(topLo, topHi, center.x)) {
+        borders |= XlsxBorders.top;
+      }
+      if (styler._horizontal(bottomLo, bottomHi, center.x)) {
+        borders |= XlsxBorders.bottom;
+      }
+      line.add(XlsxCellStyle(
+          fill: styler.fillAt(center.x, center.y), borders: borders));
+    }
+    out.add(line);
+  }
+  return out;
+}
+
+/// Le righe di una scheda con gli stili delle celle (vuoti se non si
+/// conoscono forme).
+typedef SheetPage = ({
+  List<List<String>> rows,
+  List<List<XlsxCellStyle>> styles,
+});
 
 /// Una tabella trovata sulla pagina: la [zone] che occupa (nello spazio della
 /// pagina) e la [grid] di testo, righe per colonne.
 class PageTable {
-  const PageTable(this.zone, this.grid);
+  const PageTable(this.zone, this.grid, [this._placed]);
 
   final PdfRect zone;
   final List<List<String>> grid;
+  final _PlacedGrid? _placed;
 }
 
 /// Le tabelle di una pagina. Una tabella è un gruppo di almeno due righe di
@@ -931,48 +1093,100 @@ PageTable? _tableOf(List<PdfExtractedRun> runs, List<List<PageCell>> rows) {
     cells.map((c) => c.right).reduce(math.max) + 0.5,
     cells.map((c) => c.top).reduce(math.max) + 0.5,
   );
-  final grid = pageGrid(runs, zone: zone);
-  if (grid.length < 2) return null;
-  return PageTable(zone, grid);
+  final placed = _placeGrid(pageCellRows(runs, zone: zone));
+  if (placed == null || placed.text.length < 2) return null;
+  return PageTable(zone, placed.text, placed);
 }
 
 /// Sotto questa quota di righe con almeno due celle una pagina non è una
 /// tabella (vedi [pageSheetRows]).
 const double _sheetTableShare = 0.4;
 
-/// Le righe del foglio di una pagina intera. Se almeno il 40% delle righe ha
-/// due o più celle la pagina è una tabella e vale [pageGrid]. Altrimenti è
-/// una pagina di testo: ogni riga è un paragrafo in colonna A (così le parole
-/// non finiscono sparpagliate in colonne a caso), tranne le tabelle trovate
-/// ([findPageTables]), che stanno nel foglio a colonne, nel punto della
-/// pagina in cui si trovano. Vuota se non c'è testo.
-List<List<String>> pageSheetRows(Iterable<PdfExtractedRun> runs) {
+/// Le righe del foglio di una pagina intera e gli stili delle sue celle. Se
+/// almeno il 40% delle righe ha due o più celle la pagina è una tabella e
+/// vale la griglia ([pageGrid]). Altrimenti è una pagina di testo: ogni riga
+/// è un paragrafo in colonna A (così le parole non finiscono sparpagliate in
+/// colonne a caso), tranne le tabelle trovate ([findPageTables]), che stanno
+/// nel foglio a colonne, nel punto della pagina in cui si trovano. Vuota se
+/// non c'è testo.
+///
+/// Con [shapes] (gli sfondi e le linee della pagina) le celle prendono il
+/// colore di sfondo e i bordi; senza, `styles` è vuoto.
+SheetPage pageSheet(Iterable<PdfExtractedRun> runs, {PdfPageShapes? shapes}) {
   final all = runs.toList();
   final rows = pageCellRows(all);
-  if (rows.isEmpty) return const [];
+  if (rows.isEmpty) return (rows: const [], styles: const []);
+  final styler = shapes == null
+      ? null
+      : _ShapeStyler(shapes, [
+          for (final row in rows)
+            for (final c in row)
+              (x: (c.left + c.right) / 2, y: (c.top + c.bottom) / 2),
+        ]);
   final multi = rows.where((r) => r.length >= 2).length;
-  if (multi >= _sheetTableShare * rows.length) return pageGrid(all);
+  if (multi >= _sheetTableShare * rows.length) {
+    final placed = _placeGrid(rows)!;
+    return (
+      rows: placed.text,
+      styles: styler == null ? const [] : _gridStyles(placed, styler),
+    );
+  }
 
   final tables = findPageTables(all);
   final emitted = <PageTable>{};
-  final out = <List<String>>[];
+  final outRows = <List<String>>[];
+  final outStyles = <List<XlsxCellStyle>>[];
   for (final row in rows) {
     final first = row.first;
+    final x = (first.left + first.right) / 2;
     final y = (first.top + first.bottom) / 2;
     PageTable? table;
     for (final t in tables) {
-      if (t.zone.contains((first.left + first.right) / 2, y)) {
+      if (t.zone.contains(x, y)) {
         table = t;
         break;
       }
     }
     if (table == null) {
-      out.add([row.map((c) => c.text).join(' ')]);
+      outRows.add([row.map((c) => c.text).join(' ')]);
+      outStyles.add([XlsxCellStyle(fill: styler?.fillAt(x, y))]);
     } else if (emitted.add(table)) {
-      out.addAll(table.grid);
+      outRows.addAll(table.grid);
+      final placed = table._placed;
+      if (placed != null && styler != null) {
+        outStyles.addAll(_gridStyles(placed, styler));
+      } else {
+        outStyles.addAll([
+          for (final r in table.grid)
+            [for (final _ in r) const XlsxCellStyle()],
+        ]);
+      }
     }
   }
-  return out;
+  return (rows: outRows, styles: styler == null ? const [] : outStyles);
+}
+
+/// Le righe di [pageSheet], senza gli stili.
+List<List<String>> pageSheetRows(Iterable<PdfExtractedRun> runs) =>
+    pageSheet(runs).rows;
+
+/// Come [pageSheet] ma per una zona [zone] della pagina, sempre a colonne
+/// (vedi [pageGrid]).
+SheetPage pageZoneSheet(Iterable<PdfExtractedRun> runs, PdfRect zone,
+    {PdfPageShapes? shapes}) {
+  final rows = pageCellRows(runs, zone: zone);
+  final placed = _placeGrid(rows);
+  if (placed == null) return (rows: const [], styles: const []);
+  final styler = shapes == null
+      ? null
+      : _ShapeStyler(shapes, [
+          for (final row in placed.centers)
+            for (final c in row) c,
+        ]);
+  return (
+    rows: placed.text,
+    styles: styler == null ? const [] : _gridStyles(placed, styler),
+  );
 }
 
 /// Il numero scritto in [raw], oppure null se è testo. Capisce il formato
@@ -1156,47 +1370,78 @@ SheetValue? parseSpreadsheetValue(String raw) {
     };
 
 /// Gli stili delle celle di un file Excel (`xl/styles.xml`). Lo stile 0 è
-/// quello normale; ogni formato usato ne prende uno, nell'ordine in cui
-/// compare ([styleFor]).
+/// quello normale; ogni combinazione di formato, sfondo e bordi usata ne
+/// prende uno, nell'ordine in cui compare ([styleFor]).
 class XlsxStyles {
-  final List<SheetFormat> _formats = [SheetFormat.general];
+  final List<({SheetFormat format, int? fill, int borders})> _styles = [
+    (format: SheetFormat.general, fill: null, borders: 0),
+  ];
+  final List<int> _fills = [];
+  final List<int> _borderMasks = [];
 
-  /// Il numero di stile (`s="N"`) per [format]; 0 per [SheetFormat.general].
-  int styleFor(SheetFormat format) {
-    final at = _formats.indexOf(format);
-    if (at >= 0) return at;
-    _formats.add(format);
-    return _formats.length - 1;
+  /// Il numero di stile (`s="N"`) per la combinazione; 0 per un numero
+  /// normale senza sfondo né bordi.
+  int styleFor(SheetFormat format, {int? fill, int borders = 0}) {
+    final rgb = fill == null ? null : fill & 0xFFFFFF;
+    final b = borders & 15;
+    for (var i = 0; i < _styles.length; i++) {
+      final s = _styles[i];
+      if (s.format == format && s.fill == rgb && s.borders == b) return i;
+    }
+    _styles.add((format: format, fill: rgb, borders: b));
+    if (rgb != null && !_fills.contains(rgb)) _fills.add(rgb);
+    if (b != 0 && !_borderMasks.contains(b)) _borderMasks.add(b);
+    return _styles.length - 1;
   }
 
   /// `xl/styles.xml`.
   String toXml() {
     final codes = StringBuffer();
-    var codeCount = 0;
-    final xfs = StringBuffer();
-    for (final format in _formats) {
-      final f = _xlsxNumberFormat(format);
-      if (f == null) {
-        xfs.write('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
-        continue;
-      }
-      final code = f.code;
-      if (code != null) {
-        codeCount++;
+    final seenCodes = <int>{};
+    for (final style in _styles) {
+      final f = _xlsxNumberFormat(style.format);
+      final code = f?.code;
+      if (f != null && code != null && seenCodes.add(f.id)) {
         codes.write('<numFmt numFmtId="${f.id}" formatCode="${xmlSafeText(code).replaceAll('"', '&quot;')}"/>');
       }
-      xfs.write('<xf numFmtId="${f.id}" fontId="0" fillId="0" borderId="0" '
-          'xfId="0" applyNumberFormat="1"/>');
+    }
+    final fills = StringBuffer('<fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill>');
+    for (final rgb in _fills) {
+      final hex = rgb.toRadixString(16).padLeft(6, '0').toUpperCase();
+      fills.write('<fill><patternFill patternType="solid">'
+          '<fgColor rgb="FF$hex"/><bgColor indexed="64"/></patternFill></fill>');
+    }
+    final borders = StringBuffer(
+        '<border><left/><right/><top/><bottom/><diagonal/></border>');
+    for (final mask in _borderMasks) {
+      String side(String name, int bit) => mask & bit != 0
+          ? '<$name style="thin"><color auto="1"/></$name>'
+          : '<$name/>';
+      borders.write('<border>${side('left', XlsxBorders.left)}'
+          '${side('right', XlsxBorders.right)}${side('top', XlsxBorders.top)}'
+          '${side('bottom', XlsxBorders.bottom)}<diagonal/></border>');
+    }
+    final xfs = StringBuffer();
+    for (final style in _styles) {
+      final f = _xlsxNumberFormat(style.format);
+      final fillId = style.fill == null ? 0 : _fills.indexOf(style.fill!) + 2;
+      final borderId =
+          style.borders == 0 ? 0 : _borderMasks.indexOf(style.borders) + 1;
+      xfs.write('<xf numFmtId="${f?.id ?? 0}" fontId="0" fillId="$fillId" '
+          'borderId="$borderId" xfId="0"'
+          '${f != null ? ' applyNumberFormat="1"' : ''}'
+          '${fillId != 0 ? ' applyFill="1"' : ''}'
+          '${borderId != 0 ? ' applyBorder="1"' : ''}/>');
     }
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        '${codeCount == 0 ? '' : '<numFmts count="$codeCount">$codes</numFmts>'}'
+        '${seenCodes.isEmpty ? '' : '<numFmts count="${seenCodes.length}">$codes</numFmts>'}'
         '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
-        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
-        '<fill><patternFill patternType="gray125"/></fill></fills>'
-        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<fills count="${_fills.length + 2}">$fills</fills>'
+        '<borders count="${_borderMasks.length + 1}">$borders</borders>'
         '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        '<cellXfs count="${_formats.length}">$xfs</cellXfs>'
+        '<cellXfs count="${_styles.length}">$xfs</cellXfs>'
         '</styleSheet>';
   }
 }
@@ -1204,10 +1449,38 @@ class XlsxStyles {
 /// Una scheda del file Excel: il [name] e le [rows] di testo (celle vuote
 /// `''`). I numeri si riconoscono quando si scrive il file.
 class XlsxSheet {
-  const XlsxSheet(this.name, this.rows);
+  const XlsxSheet(this.name, this.rows, {this.cellStyles = const []});
 
   final String name;
   final List<List<String>> rows;
+
+  /// Sfondo e bordi delle celle, una lista per riga come [rows]. Può essere
+  /// vuota o più corta: le celle senza stile restano normali.
+  final List<List<XlsxCellStyle>> cellStyles;
+
+  XlsxCellStyle styleAt(int row, int column) =>
+      row < cellStyles.length && column < cellStyles[row].length
+          ? cellStyles[row][column]
+          : const XlsxCellStyle();
+}
+
+/// I lati di una cella con il bordo, da sommare con `|`.
+abstract final class XlsxBorders {
+  static const int left = 1;
+  static const int right = 2;
+  static const int top = 4;
+  static const int bottom = 8;
+}
+
+/// Sfondo e bordi di una cella: [fill] è un colore 0xRRGGBB (null = nessuno),
+/// [borders] i lati con il bordo ([XlsxBorders]).
+class XlsxCellStyle {
+  const XlsxCellStyle({this.fill, this.borders = 0});
+
+  final int? fill;
+  final int borders;
+
+  bool get isPlain => fill == null && borders == 0;
 }
 
 /// Il nome della colonna `index` (da 0): A, B, ... Z, AA, AB...
@@ -1236,17 +1509,26 @@ String xlsxSheetXml(XlsxSheet sheet, {XlsxStyles? styles}) {
     final cells = StringBuffer();
     for (var c = 0; c < row.length; c++) {
       var text = row[c];
-      if (text.trim().isEmpty) continue;
+      final look = sheet.styleAt(rowNumber - 1, c);
+      final ref = '${xlsxColumnName(c)}$rowNumber';
+      if (text.trim().isEmpty) {
+        // Una cella vuota si scrive solo se ha uno sfondo o un bordo.
+        if (look.isPlain) continue;
+        final style = styles.styleFor(SheetFormat.general,
+            fill: look.fill, borders: look.borders);
+        cells.write('<c r="$ref" s="$style"/>');
+        continue;
+      }
       if (text.length > 32767) text = text.substring(0, 32767);
       widths[c] = math.max(widths[c], text.length);
-      final ref = '${xlsxColumnName(c)}$rowNumber';
       final number = parseSpreadsheetValue(text);
+      final style = styles.styleFor(number?.format ?? SheetFormat.general,
+          fill: look.fill, borders: look.borders);
+      final attr = style == 0 ? '' : ' s="$style"';
       if (number == null) {
-        cells.write('<c r="$ref" t="inlineStr"><is>'
+        cells.write('<c r="$ref"$attr t="inlineStr"><is>'
             '<t xml:space="preserve">${xmlSafeText(text)}</t></is></c>');
       } else {
-        final style = styles.styleFor(number.format);
-        final attr = style == 0 ? '' : ' s="$style"';
         cells.write('<c r="$ref"$attr><v>${number.value}</v></c>');
       }
     }
@@ -1352,9 +1634,17 @@ Future<XlsxResult> pdfToXlsx(
   for (var i = 0; i < count; i++) {
     onPage?.call(i, count);
     try {
-      final grid = pageSheetRows(PdfTextExtractor.extract(document, i).runs);
+      final runs = PdfTextExtractor.extract(document, i).runs;
+      PdfPageShapes? shapes;
+      try {
+        shapes = PdfPageShapes.extract(document, i);
+      } catch (_) {
+        // Senza sfondi e bordi il testo si porta lo stesso.
+      }
+      final page = pageSheet(runs, shapes: shapes);
+      final grid = page.rows;
       if (grid.isNotEmpty) {
-        sheets.add(XlsxSheet('Pagina ${i + 1}', grid));
+        sheets.add(XlsxSheet('Pagina ${i + 1}', grid, cellStyles: page.styles));
         for (final row in grid) {
           for (final text in row) {
             if (text.trim().isEmpty) continue;
@@ -1389,8 +1679,16 @@ String xlsxZoneFileName(String title, int page) {
 /// precisa del documento intero perché righe e colonne si cercano solo nella
 /// zona. Se nella zona non c'è testo `cells` è 0 e `bytes` è vuoto.
 XlsxResult pdfZoneToXlsx(PdfDocument document, int pageIndex, PdfRect zone) {
-  final grid = pageGrid(PdfTextExtractor.extract(document, pageIndex).runs,
-      zone: zone);
+  PdfPageShapes? shapes;
+  try {
+    shapes = PdfPageShapes.extract(document, pageIndex);
+  } catch (_) {
+    // Senza sfondi e bordi il testo si porta lo stesso.
+  }
+  final page = pageZoneSheet(
+      PdfTextExtractor.extract(document, pageIndex).runs, zone,
+      shapes: shapes);
+  final grid = page.rows;
   var cells = 0;
   var numbers = 0;
   for (final row in grid) {
@@ -1401,7 +1699,9 @@ XlsxResult pdfZoneToXlsx(PdfDocument document, int pageIndex, PdfRect zone) {
     }
   }
   return (
-    bytes: grid.isEmpty ? Uint8List(0) : buildXlsx([XlsxSheet('Zona', grid)]),
+    bytes: grid.isEmpty
+        ? Uint8List(0)
+        : buildXlsx([XlsxSheet('Zona', grid, cellStyles: page.styles)]),
     sheets: grid.isEmpty ? 0 : 1,
     cells: cells,
     numbers: numbers,

@@ -9,7 +9,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf_cos/pdf_cos.dart' show PdfMatrix;
 import 'package:pdf_graphics/pdf_graphics.dart'
-    show PdfExtractedRun, PdfReflowBlock;
+    show
+        PdfExtractedRun,
+        PdfFilledRect,
+        PdfPageShapes,
+        PdfReflowBlock,
+        PdfRuleLine;
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 
@@ -698,6 +703,143 @@ void main() {
       expect(partOf(xlsx, 'xl/_rels/workbook.xml.rels'),
           contains('Target="styles.xml"'));
       expect(partOf(xlsx, 'xl/worksheets/sheet1.xml'), contains('s="1"'));
+    });
+
+    test('pageSheet: sfondo e bordi dalle forme della pagina', () {
+      final runs = [
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+        run('Mela', 50, 90, 685),
+        run('3', 170, 180, 685),
+      ];
+      final shapes = PdfPageShapes([
+        // Il colore della carta: copre tutto il testo, non è di una cella.
+        PdfFilledRect(const PdfRect(0, 0, 600, 800), 0xFFFFCC),
+        // Lo sfondo della prima cella dell'intestazione.
+        PdfFilledRect(const PdfRect(45, 698, 100, 715), 0xCCCCFF),
+      ], [
+        // Una linea orizzontale tra intestazione e prima riga.
+        PdfRuleLine(const PdfRect(40, 697.5, 300, 697.5)),
+        // Una verticale tra le due colonne.
+        PdfRuleLine(const PdfRect(120, 680, 120, 715)),
+      ]);
+      final page = pageSheet(runs, shapes: shapes);
+      expect(page.rows, [
+        ['Nome', 'Qta'],
+        ['Mela', '3'],
+      ]);
+      final a1 = page.styles[0][0];
+      expect(a1.fill, 0xCCCCFF);
+      expect(a1.borders, XlsxBorders.right | XlsxBorders.bottom);
+      final b1 = page.styles[0][1];
+      expect(b1.fill, isNull);
+      expect(b1.borders, XlsxBorders.left | XlsxBorders.bottom);
+      final a2 = page.styles[1][0];
+      expect(a2.fill, isNull);
+      expect(a2.borders, XlsxBorders.right | XlsxBorders.top);
+      final b2 = page.styles[1][1];
+      expect(b2.borders, XlsxBorders.left | XlsxBorders.top);
+    });
+
+    test('pageSheet: senza forme gli stili sono vuoti', () {
+      final page = pageSheet([
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+      ]);
+      expect(page.rows, [
+        ['Nome', 'Qta'],
+      ]);
+      expect(page.styles, isEmpty);
+    });
+
+    test('pageSheet: una riga di testo evidenziata prende lo sfondo', () {
+      final shapes = PdfPageShapes([
+        PdfFilledRect(const PdfRect(40, 726, 200, 744), 0xFFFF00),
+      ], const []);
+      final page = pageSheet([
+        run('Titolo', 50, 100, 730),
+        run('un paragrafo normale', 50, 200, 700),
+        run('un altro paragrafo', 50, 190, 685),
+      ], shapes: shapes);
+      expect(page.rows, [
+        ['Titolo'],
+        ['un paragrafo normale'],
+        ['un altro paragrafo'],
+      ]);
+      expect(page.styles[0].single.fill, 0xFFFF00);
+      expect(page.styles[1].single.fill, isNull);
+      expect(page.styles[2].single.fill, isNull);
+    });
+
+    test('pageZoneSheet: stili solo per il testo dentro la zona', () {
+      final shapes = PdfPageShapes([
+        PdfFilledRect(const PdfRect(45, 698, 100, 715), 0xCCCCFF),
+      ], const []);
+      final page = pageZoneSheet([
+        run('Fuori', 50, 90, 760),
+        run('Nome', 50, 90, 700),
+        run('Qta', 150, 180, 700),
+        run('Mela', 50, 90, 685),
+        run('3', 170, 180, 685),
+      ], const PdfRect(40, 680, 300, 715), shapes: shapes);
+      expect(page.rows, [
+        ['Nome', 'Qta'],
+        ['Mela', '3'],
+      ]);
+      expect(page.styles[0][0].fill, 0xCCCCFF);
+      expect(page.styles[0][1].fill, isNull);
+    });
+
+    test('xlsxSheetXml: celle con sfondo e bordi, anche quelle vuote', () {
+      final styles = XlsxStyles();
+      final xml = xlsxSheetXml(
+          const XlsxSheet('Pagina 1', [
+            ['Nome', ''],
+            ['12%', ''],
+          ], cellStyles: [
+            [
+              XlsxCellStyle(fill: 0xCCCCFF, borders: XlsxBorders.bottom),
+              XlsxCellStyle(fill: 0xCCCCFF),
+            ],
+            [XlsxCellStyle(borders: XlsxBorders.bottom)],
+          ]),
+          styles: styles);
+      expect(xml, contains('<c r="A1" s="1" t="inlineStr">'));
+      // La cella vuota con lo sfondo si scrive, senza testo.
+      expect(xml, contains('<c r="B1" s="2"/>'));
+      // Percentuale con bordo: stile suo.
+      expect(xml, contains('<c r="A2" s="3"><v>0.12</v></c>'));
+      // Una cella vuota senza stile non si scrive.
+      expect(xml, isNot(contains('r="B2"')));
+      final xlsx = buildXlsx(const [
+        XlsxSheet('Pagina 1', [
+          ['Nome'],
+        ], cellStyles: [
+          [XlsxCellStyle(fill: 0xCCCCFF, borders: XlsxBorders.bottom)],
+        ]),
+      ]);
+      final styleXml = partOf(xlsx, 'xl/styles.xml');
+      expect(styleXml, contains('<fills count="3">'));
+      expect(styleXml, contains('<fgColor rgb="FFCCCCFF"/>'));
+      expect(styleXml, contains('<borders count="2">'));
+      expect(styleXml,
+          contains('<border><left/><right/><top/><bottom style="thin">'));
+      expect(styleXml, contains('fillId="2" borderId="1"'));
+      expect(styleXml, contains('applyFill="1" applyBorder="1"'));
+    });
+
+    test('XlsxStyles: stessa combinazione, stesso stile', () {
+      final styles = XlsxStyles();
+      expect(styles.styleFor(SheetFormat.general, fill: 0xFF0000), 1);
+      expect(styles.styleFor(SheetFormat.general, fill: 0xFF0000), 1);
+      expect(styles.styleFor(SheetFormat.general, fill: 0x00FF00), 2);
+      expect(styles.styleFor(SheetFormat.percent, fill: 0xFF0000), 3);
+      expect(styles.styleFor(SheetFormat.general, borders: 15), 4);
+      expect(styles.styleFor(SheetFormat.general), 0);
+      final xml = styles.toXml();
+      expect(xml, contains('<fills count="4">'));
+      expect(xml, contains('<borders count="2">'));
+      expect(xml, contains('<cellXfs count="5">'));
     });
 
     test('xlsxColumnName: A, Z, AA, ZZ, AAA', () {
