@@ -816,6 +816,48 @@ void main() {
       expect(block.color, 0);
     });
   });
+
+  group('forme della pagina (sfondi e bordi)', () {
+    PdfPageShapes shapesOf(List<String> operations) => PdfPageShapes.extract(
+        PdfDocument.open(_buildTextPdf(operations)), 0);
+
+    test('un rettangolo colorato è uno sfondo, il bianco no', () {
+      final shapes = shapesOf([
+        '1 1 1 rg 0 0 600 800 re f',
+        '0.8 0.8 1 rg 50 700 100 20 re f',
+        _textAt(60, 705, 'Totale'),
+      ]);
+      expect(shapes.fills, hasLength(1));
+      expect(shapes.fills.single.color, 0xCCCCFF);
+      expect(shapes.fills.single.bounds, const PdfRect(50, 700, 150, 720));
+      expect(shapes.lines, isEmpty);
+    });
+
+    test('una linea orizzontale è un bordo', () {
+      final shapes = shapesOf(['0 0 0 RG 1 w 50 650 m 200 650 l S']);
+      expect(shapes.lines, hasLength(1));
+      expect(shapes.lines.single.isHorizontal, isTrue);
+      expect(shapes.lines.single.bounds, const PdfRect(50, 650, 200, 650));
+      expect(shapes.fills, isEmpty);
+    });
+
+    test('un rettangolo sottile pieno è un bordo, non uno sfondo', () {
+      final shapes = shapesOf([
+        '0 0 0 rg 50 600 100 0.5 re f',
+        '0 0 0 rg 300 500 0.5 80 re f',
+      ]);
+      expect(shapes.fills, isEmpty);
+      expect(shapes.lines, hasLength(2));
+      expect(shapes.lines[0].isHorizontal, isTrue);
+      expect(shapes.lines[1].isHorizontal, isFalse);
+    });
+
+    test('un rettangolo disegnato col contorno dà quattro lati', () {
+      final shapes = shapesOf(['0 0 0 RG 50 500 100 50 re S']);
+      expect(shapes.lines.where((l) => l.isHorizontal), hasLength(2));
+      expect(shapes.lines.where((l) => !l.isHorizontal), hasLength(2));
+    });
+  });
 }
 
 /// Page text for hand-built [runs], through the recorded-text entry point

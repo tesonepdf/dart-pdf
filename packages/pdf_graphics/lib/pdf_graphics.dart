@@ -21,6 +21,7 @@ export 'src/icc.dart';
 export 'src/image_colorants.dart';
 export 'src/image_decode_cache.dart';
 export 'src/image_pixels.dart';
+export 'src/page_shapes.dart';
 export 'src/interpreter.dart';
 export 'src/line_fields.dart';
 export 'src/shading.dart';
