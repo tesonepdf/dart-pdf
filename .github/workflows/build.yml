@@ -20,6 +20,10 @@ on:
         description: 'Build fittizia: aumenta solo il contatore, non compila nulla'
         type: boolean
         default: false
+      completo:
+        description: 'Pubblica l APK completo come nuova base (senza patch)'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       solo_contatore:
@@ -47,6 +51,12 @@ env:
   ANDROID_TAG: ${{ github.ref_name == 'prova-sviluppatore' && 'app-android-prova' || 'app-android-latest' }}
   # Nessuna lettera dopo il numero: la prova si riconosce perche' parte da 10014.
   NUM_SUFFIX: ''
+  # Patch tra APK (tool/apk_patch.py). SOLO_PATCH=false: l'APK completo si carica
+  # sempre e le patch si aggiungono; true: l'APK completo si carica solo quando
+  # serve una nuova base (parte nativa cambiata, patch troppo grande, catena
+  # lunga, primo avvio o [completo] nel messaggio del commit).
+  SOLO_PATCH: 'false'
+  FORCE_FULL: ${{ contains(github.event.head_commit.message, '[completo]') || inputs.completo == true }}
 
 jobs:
   version:
@@ -338,6 +348,10 @@ jobs:
           name: windows
           path: dl/windows
 
+      - name: Prova dello strumento delle patch
+        continue-on-error: true
+        run: cd tool && python3 -m unittest test_apk_patch
+
       - name: Pubblica la Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -350,7 +364,7 @@ jobs:
           # riprova i comandi gh se GitHub risponde con un errore momentaneo
           gh() { local i; for i in 1 2 3 4; do command gh "$@" && return 0; echo "gh $1 $2: tentativo $i fallito"; sleep 8; done; return 1; }
           cp dl/apk/app-release.apk DartPDF-Android.apk
-          assets=(DartPDF-Android.apk)
+          assets=()
           if [[ -f dl/windows/windows-x64.zip ]]; then
             cp dl/windows/windows-x64.zip windows-x64.zip
             assets+=(windows-x64.zip)
@@ -372,6 +386,26 @@ jobs:
             android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
             android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
+            # Patch tra APK: confronta con l'APK precedente della release e decide
+            # cosa caricare (vedi tool/apk_patch.py). Se il piano fallisce si
+            # pubblica l'APK completo, come prima.
+            rm -rf plan
+            if ! python3 tool/apk_patch.py plan --repo "$GITHUB_REPOSITORY" --tag "$android_tag" \
+                --new DartPDF-Android.apk --build "$NUMERO" --out plan \
+                --slim "$SOLO_PATCH" --force-full "$FORCE_FULL"; then
+              echo "::warning::Piano delle patch non riuscito: pubblico l'APK completo"
+              rm -rf plan
+              mkdir plan
+              echo '{"full": true, "patch": null, "delete": [], "reason": "piano fallito"}' > plan/decision.json
+            fi
+            if [[ "$(jq -r .full plan/decision.json)" == "true" ]]; then
+              assets+=(DartPDF-Android.apk)
+            fi
+            for f in plan/patches.json plan/patch-*.dpat; do
+              if [[ -f "$f" ]]; then assets+=("$f"); fi
+            done
+            echo "Si caricano: ${assets[*]}"
+
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$android_tag" \
                 "${assets[@]}" \
@@ -391,12 +425,27 @@ jobs:
                 --repo "$GITHUB_REPOSITORY" --clobber
               android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
               old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
-                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "windows-x64.zip" and .name != "release-info.json") | .id')"
+                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "windows-x64.zip" and .name != "release-info.json" and .name != "patches.json" and (.name | test("^patch-.*\\.dpat$") | not)) | .id')"
               if [[ -n "$old_asset_ids" ]]; then
                 while IFS= read -r asset_id; do
                   gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
                 done <<< "$old_asset_ids"
                 # elenco file aggiornato dopo la pulizia
+                gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
+                gh release upload "$android_tag" release-info.json \
+                  --repo "$GITHUB_REPOSITORY" --clobber
+              fi
+              # patch che non servono piu' (fuori dall'elenco)
+              deleted_patch=0
+              for name in $(jq -r '.delete[]' plan/decision.json); do
+                patch_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
+                  --jq ".[] | select(.name == \"$name\") | .id")"
+                if [[ -n "$patch_id" ]]; then
+                  gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$patch_id"
+                  deleted_patch=1
+                fi
+              done
+              if [[ "$deleted_patch" == 1 ]]; then
                 gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" > release-info.json
                 gh release upload "$android_tag" release-info.json \
                   --repo "$GITHUB_REPOSITORY" --clobber
