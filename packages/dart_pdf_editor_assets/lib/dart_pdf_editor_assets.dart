@@ -95,6 +95,128 @@ const List<PdfBundledFont> bundledEditorFonts = <PdfBundledFont>[
   PdfBundledFont(
       'Lobster', 'packages/$_package/assets/fonts/Lobster-Regular.ttf',
       package: _package),
+  // I quaranta font gratuiti piu' comuni (licenza OFL, solo versione normale;
+  // il grassetto e' simulato). Sans, serif, a spaziatura fissa e da titolo.
+  PdfBundledFont(
+      'Roboto', 'packages/$_package/assets/fonts/Roboto-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Lato', 'packages/$_package/assets/fonts/Lato-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Montserrat', 'packages/$_package/assets/fonts/Montserrat-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Poppins', 'packages/$_package/assets/fonts/Poppins-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Noto Sans', 'packages/$_package/assets/fonts/NotoSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Source Sans 3', 'packages/$_package/assets/fonts/SourceSans3-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Nunito', 'packages/$_package/assets/fonts/Nunito-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Ubuntu', 'packages/$_package/assets/fonts/Ubuntu-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Inter', 'packages/$_package/assets/fonts/Inter-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Work Sans', 'packages/$_package/assets/fonts/WorkSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Raleway', 'packages/$_package/assets/fonts/Raleway-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Oswald', 'packages/$_package/assets/fonts/Oswald-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'PT Sans', 'packages/$_package/assets/fonts/PTSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Rubik', 'packages/$_package/assets/fonts/Rubik-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Quicksand', 'packages/$_package/assets/fonts/Quicksand-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Mulish', 'packages/$_package/assets/fonts/Mulish-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Karla', 'packages/$_package/assets/fonts/Karla-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Cabin', 'packages/$_package/assets/fonts/Cabin-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Titillium Web', 'packages/$_package/assets/fonts/TitilliumWeb-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Josefin Sans', 'packages/$_package/assets/fonts/JosefinSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Barlow', 'packages/$_package/assets/fonts/Barlow-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'IBM Plex Sans', 'packages/$_package/assets/fonts/IBMPlexSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'DM Sans', 'packages/$_package/assets/fonts/DMSans-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Roboto Condensed', 'packages/$_package/assets/fonts/RobotoCondensed-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Merriweather', 'packages/$_package/assets/fonts/Merriweather-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Playfair Display', 'packages/$_package/assets/fonts/PlayfairDisplay-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Lora', 'packages/$_package/assets/fonts/Lora-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'PT Serif', 'packages/$_package/assets/fonts/PTSerif-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Noto Serif', 'packages/$_package/assets/fonts/NotoSerif-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Source Serif 4', 'packages/$_package/assets/fonts/SourceSerif4-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Libre Baskerville', 'packages/$_package/assets/fonts/LibreBaskerville-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Crimson Text', 'packages/$_package/assets/fonts/CrimsonText-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Roboto Slab', 'packages/$_package/assets/fonts/RobotoSlab-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Cormorant Garamond', 'packages/$_package/assets/fonts/CormorantGaramond-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Bitter', 'packages/$_package/assets/fonts/Bitter-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Source Code Pro', 'packages/$_package/assets/fonts/SourceCodePro-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Roboto Mono', 'packages/$_package/assets/fonts/RobotoMono-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'IBM Plex Mono', 'packages/$_package/assets/fonts/IBMPlexMono-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Bebas Neue', 'packages/$_package/assets/fonts/BebasNeue-Regular.ttf',
+      package: _package),
+  PdfBundledFont(
+      'Dancing Script', 'packages/$_package/assets/fonts/DancingScript-Regular.ttf',
+      package: _package),
 ];
 
 /// The package-asset URL of the prebuilt web render worker shipped here.

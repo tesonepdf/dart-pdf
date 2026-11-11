@@ -49,7 +49,9 @@ flutter:
   # Spectral, Lobster, Carlito, Arimo, Tinos, Cousine, Caladea, Gelasio, Open
   # Sans, Comic Neue and EB Garamond are SIL Open Font Licence; the TeX Gyre
   # families use the GUST Font License - see the *-LICENSE.txt files in
-  # assets/fonts/.
+  # assets/fonts/. The forty most common free fonts added after those (Roboto,
+  # Lato, Montserrat, ... Dancing Script) are all SIL Open Font Licence, regular
+  # weight only, static TrueType; each has its own *-LICENSE.txt.
   assets:
     - assets/web/pdf_render_worker.dart.js
     - assets/fonts/DejaVuSans.ttf
@@ -78,6 +80,46 @@ flutter:
     - assets/fonts/TeXGyreCursor-Bold.otf
     - assets/fonts/TeXGyreCursor-Italic.otf
     - assets/fonts/TeXGyreCursor-BoldItalic.otf
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Lato-Regular.ttf
+    - assets/fonts/Montserrat-Regular.ttf
+    - assets/fonts/Poppins-Regular.ttf
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/SourceSans3-Regular.ttf
+    - assets/fonts/Nunito-Regular.ttf
+    - assets/fonts/Ubuntu-Regular.ttf
+    - assets/fonts/Inter-Regular.ttf
+    - assets/fonts/WorkSans-Regular.ttf
+    - assets/fonts/Raleway-Regular.ttf
+    - assets/fonts/Oswald-Regular.ttf
+    - assets/fonts/PTSans-Regular.ttf
+    - assets/fonts/Rubik-Regular.ttf
+    - assets/fonts/Quicksand-Regular.ttf
+    - assets/fonts/Mulish-Regular.ttf
+    - assets/fonts/Karla-Regular.ttf
+    - assets/fonts/Cabin-Regular.ttf
+    - assets/fonts/TitilliumWeb-Regular.ttf
+    - assets/fonts/JosefinSans-Regular.ttf
+    - assets/fonts/Barlow-Regular.ttf
+    - assets/fonts/IBMPlexSans-Regular.ttf
+    - assets/fonts/DMSans-Regular.ttf
+    - assets/fonts/RobotoCondensed-Regular.ttf
+    - assets/fonts/Merriweather-Regular.ttf
+    - assets/fonts/PlayfairDisplay-Regular.ttf
+    - assets/fonts/Lora-Regular.ttf
+    - assets/fonts/PTSerif-Regular.ttf
+    - assets/fonts/NotoSerif-Regular.ttf
+    - assets/fonts/SourceSerif4-Regular.ttf
+    - assets/fonts/LibreBaskerville-Regular.ttf
+    - assets/fonts/CrimsonText-Regular.ttf
+    - assets/fonts/RobotoSlab-Regular.ttf
+    - assets/fonts/CormorantGaramond-Regular.ttf
+    - assets/fonts/Bitter-Regular.ttf
+    - assets/fonts/SourceCodePro-Regular.ttf
+    - assets/fonts/RobotoMono-Regular.ttf
+    - assets/fonts/IBMPlexMono-Regular.ttf
+    - assets/fonts/BebasNeue-Regular.ttf
+    - assets/fonts/DancingScript-Regular.ttf
     - assets/fonts/TeXGyreAdventor-Regular.otf
     - assets/fonts/TeXGyreAdventor-Bold.otf
     - assets/fonts/Carlito-Regular.ttf
