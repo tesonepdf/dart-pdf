@@ -348,8 +348,8 @@ jobs:
           name: windows
           path: dl/windows
 
+      # Se il test non passa la release si ferma: le patch sbagliate non si pubblicano.
       - name: Prova dello strumento delle patch
-        continue-on-error: true
         run: cd tool && python3 -m unittest test_apk_patch
 
       - name: Pubblica la Release
