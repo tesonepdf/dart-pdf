@@ -91,3 +91,7 @@ key.properties
 _apk/
 /apk/
 .tools/flutter/
+
+# Python (strumenti in tool/)
+__pycache__/
+*.pyc
