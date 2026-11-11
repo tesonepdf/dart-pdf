@@ -146,8 +146,8 @@ void main() {
         download: download,
         onProgress: fractions.add,
       );
-      expect(result, isNotNull);
-      expect(File(result!).readAsBytesSync(), _new);
+      expect(result.apkPath, isNotNull);
+      expect(File(result.apkPath!).readAsBytesSync(), _new);
       expect(fractions, contains(1.0));
     });
 
@@ -161,7 +161,7 @@ void main() {
         download: download,
         forceFull: true,
       );
-      expect(File(result!).readAsBytesSync(), _new);
+      expect(File(result.apkPath!).readAsBytesSync(), _new);
     });
 
     test('APK installato diverso: ricade sull\'APK base', () async {
@@ -173,10 +173,11 @@ void main() {
         workDir: Directory('${tmp.path}/work'),
         download: download,
       );
-      expect(File(result!).readAsBytesSync(), _new);
+      expect(File(result.apkPath!).readAsBytesSync(), _new);
     });
 
-    test('senza elenco delle patch restituisce null', () async {
+    test('senza elenco delle patch: nessun APK, ma quello completo e\' attuale',
+        () async {
       final result = await runPatchPlan(
         assets: {...assets}..remove(kPatchManifestName),
         installedBuild: 1,
@@ -184,10 +185,12 @@ void main() {
         workDir: Directory('${tmp.path}/work'),
         download: download,
       );
-      expect(result, isNull);
+      expect(result.apkPath, isNull);
+      expect(result.plainApkIsCurrent, isTrue);
     });
 
-    test('patch corrotta: null e cartella pulita', () async {
+    test('patch corrotta: nessun APK, cartella pulita, base vecchia non usabile',
+        () async {
       File('${tmp.path}/installed.apk').writeAsBytesSync(_old);
       final work = Directory('${tmp.path}/work');
       Future<void> bad(
@@ -210,8 +213,75 @@ void main() {
         workDir: work,
         download: bad,
       );
-      expect(result, isNull);
+      expect(result.apkPath, isNull);
+      // la release ha solo la base (build 1) e la build corrente e' la 2:
+      // l'APK completo della release sarebbe un downgrade
+      expect(result.plainApkIsCurrent, isFalse);
       expect(work.listSync(), isEmpty);
+    });
+
+    test('un errore sulla patch: riprova da APK base e patch', () async {
+      File('${tmp.path}/installed.apk').writeAsBytesSync(_old);
+      var patchCalls = 0;
+      Future<void> flaky(
+        String url,
+        String path, {
+        int? expectedSize,
+        required void Function(int bytes) onBytes,
+      }) async {
+        if (url.endsWith('.dpat') && ++patchCalls == 1) {
+          throw const SocketException('rete caduta');
+        }
+        await download(url, path, expectedSize: expectedSize, onBytes: onBytes);
+      }
+
+      final result = await runPatchPlan(
+        assets: assets,
+        installedBuild: 1,
+        installedApkPath: '${tmp.path}/installed.apk',
+        workDir: Directory('${tmp.path}/work'),
+        download: flaky,
+      );
+      expect(patchCalls, 2);
+      expect(File(result.apkPath!).readAsBytesSync(), _new);
+    });
+
+    test('base uguale all\'ultima build: dopo un errore il completo e\' ok',
+        () async {
+      final sameBase = jsonEncode({
+        'version': 1,
+        'base': {
+          'build': 2,
+          'asset': 'DartPDF-Android.apk',
+          'sha256': _sha(_new),
+          'size': _new.length,
+        },
+        'current': {'build': 2, 'sha256': _sha(_new), 'size': _new.length},
+        'patches': <Object>[],
+      });
+      Future<void> brokenBase(
+        String url,
+        String path, {
+        int? expectedSize,
+        required void Function(int bytes) onBytes,
+      }) async {
+        if (url.endsWith(kPatchManifestName)) {
+          File(path).writeAsStringSync(sameBase);
+          onBytes(sameBase.length);
+          return;
+        }
+        throw const SocketException('rete caduta');
+      }
+
+      final result = await runPatchPlan(
+        assets: assets,
+        installedBuild: 1,
+        installedApkPath: null,
+        workDir: Directory('${tmp.path}/work'),
+        download: brokenBase,
+      );
+      expect(result.apkPath, isNull);
+      expect(result.plainApkIsCurrent, isTrue);
     });
 
     test('annullamento', () async {

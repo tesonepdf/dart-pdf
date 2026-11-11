@@ -13,11 +13,11 @@ import 'update_installer.dart' show UpdateCancelledException;
 const MethodChannel _updateChannel = MethodChannel('dev.milanko.dartpdf/update');
 
 /// Prepara l'APK della build corrente con le patch (vedi [runPatchPlan]) nella
-/// cartella degli aggiornamenti dell'app. Restituisce il percorso del file
-/// pronto da installare, o null se non c'e' una strada con le patch: allora si
-/// scarica l'APK completo. [forceFull] riparte dall'APK base (ripristino).
-/// Lancia [UpdateCancelledException] se l'utente annulla.
-Future<String?> buildPatchedApk({
+/// cartella degli aggiornamenti dell'app. Se non riesce, l'esito dice se
+/// l'APK completo della release e' la build corrente (allora si puo' scaricare)
+/// o una base piu' vecchia (allora no). [forceFull] riparte dall'APK base
+/// (ripristino). Lancia [UpdateCancelledException] se l'utente annulla.
+Future<PatchRunResult> buildPatchedApk({
   required Map<String, String> assets,
   required int installedBuild,
   bool forceFull = false,
@@ -25,7 +25,9 @@ Future<String?> buildPatchedApk({
   bool Function()? isCancelled,
   http.Client Function()? clientFactory,
 }) async {
-  if (!assets.containsKey(kPatchManifestName)) return null;
+  if (!assets.containsKey(kPatchManifestName)) {
+    return const PatchRunResult.failed(plainApkIsCurrent: true);
+  }
   final factory = clientFactory ?? http.Client.new;
   try {
     String? installed;
@@ -56,7 +58,9 @@ Future<String?> buildPatchedApk({
     throw const UpdateCancelledException();
   } catch (e) {
     debugPrint('Aggiornamento con patch non riuscito: $e');
-    return null;
+    // Non si sa com'e' fatta la release: meglio non installare un APK che
+    // potrebbe essere una base piu' vecchia.
+    return const PatchRunResult.failed(plainApkIsCurrent: false);
   }
 }
 

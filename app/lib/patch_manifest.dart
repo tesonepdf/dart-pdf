@@ -183,3 +183,22 @@ PatchPlan? planUpdate(
   }
   return viaBase;
 }
+
+/// Esito della preparazione dell'APK con le patch.
+class PatchRunResult {
+  /// L'APK della build corrente e' pronto da installare in [apkPath].
+  const PatchRunResult.ready(String path)
+      : apkPath = path,
+        plainApkIsCurrent = false;
+
+  /// Non e' stato possibile. [plainApkIsCurrent] dice se l'APK completo che sta
+  /// nella release (`DartPDF-Android.apk`) e' la build corrente: vero per una
+  /// release senza elenco delle patch o con la base uguale all'ultima build;
+  /// falso se e' una base piu' vecchia (o non si sa): installarla sarebbe un
+  /// downgrade, quindi non si deve scaricare al posto della build corrente.
+  const PatchRunResult.failed({required this.plainApkIsCurrent})
+      : apkPath = null;
+
+  final String? apkPath;
+  final bool plainApkIsCurrent;
+}
