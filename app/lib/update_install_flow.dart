@@ -63,7 +63,7 @@ Future<void> startUpdateInstall(
       progress: progress,
       isCancelled: () => cancelled,
     );
-    if (patched) {
+    if (patched == _PatchStep.handedOff) {
       outcome = UpdateInstallOutcome.handedOff;
     } else {
       outcome = await installer.downloadAndApply(
@@ -119,34 +119,53 @@ Future<void> startUpdateInstall(
   }
 }
 
+enum _PatchStep {
+  /// Non si usano le patch (altra piattaforma, nessun elenco): download normale.
+  plainDownload,
+
+  /// L'APK nuovo e' pronto e passato all'installazione di Android.
+  handedOff,
+}
+
 /// Android: ricostruisce l'APK nuovo con le patch (solo la differenza) e lo
-/// passa all'installazione. false = nessuna strada con le patch (o non e'
-/// Android): si usa il download normale.
-Future<bool> _tryPatched({
+/// passa all'installazione. Se non riesce, il download completo e' permesso
+/// solo quando l'APK della release e' la build corrente: nelle release con sole
+/// patch quello e' la base, piu' vecchia, e Android lo rifiuterebbe come
+/// downgrade, quindi in quel caso si lancia un errore.
+Future<_PatchStep> _tryPatched({
   required UpdateService updates,
   required UpdateInstaller installer,
   required ValueNotifier<_UpdateProgress> progress,
   required bool Function() isCancelled,
   bool forceFull = false,
 }) async {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    return _PatchStep.plainDownload;
+  }
   if (installer.modeFor(updates.downloadAssetName) !=
       UpdateApplyMode.openArtifact) {
-    return false;
+    return _PatchStep.plainDownload;
   }
   final assets = updates.latest?.assets;
   final installed = int.tryParse(updates.currentBuildNumber);
-  if (assets == null || installed == null) return false;
-  final apk = await buildPatchedApk(
+  if (assets == null || installed == null) return _PatchStep.plainDownload;
+  final result = await buildPatchedApk(
     assets: assets,
     installedBuild: installed,
     forceFull: forceFull,
     isCancelled: isCancelled,
     onProgress: (f) => progress.value = _UpdateProgress(fraction: f),
   );
-  if (apk == null) return false;
-  await installer.handOffFile(apk);
-  return true;
+  final apk = result.apkPath;
+  if (apk != null) {
+    await installer.handOffFile(apk);
+    return _PatchStep.handedOff;
+  }
+  if (result.plainApkIsCurrent) return _PatchStep.plainDownload;
+  throw const UpdateInstallException(
+      'The update could not be rebuilt from the patches, and the full APK in '
+      'the release is not the latest build. Try again later, or use '
+      '"Reinstall everything" in Settings.');
 }
 
 /// "Reinstalla tutto" (ripristino): riparte dall'APK base della release e
@@ -180,12 +199,13 @@ Future<void> startReinstallAll(
   Object? failure;
   try {
     done = await _tryPatched(
-      updates: updates,
-      installer: installer,
-      progress: progress,
-      isCancelled: () => cancelled,
-      forceFull: true,
-    );
+          updates: updates,
+          installer: installer,
+          progress: progress,
+          isCancelled: () => cancelled,
+          forceFull: true,
+        ) ==
+        _PatchStep.handedOff;
   } on UpdateCancelledException {
     // annullato: niente avviso
   } catch (e) {

@@ -29,11 +29,15 @@ Future<void> _emptyDirectory(Directory dir) async {
 ///
 /// Legge `patches.json` dagli [assets] della release, sceglie la strada piu'
 /// leggera ([planUpdate]), scarica solo i pezzi che servono, ricostruisce l'APK
-/// e ne controlla l'SHA-256. Restituisce il percorso del file pronto da
-/// installare, oppure null se non c'e' una strada o qualcosa non torna: allora
-/// chi chiama scarica l'APK completo. [forceFull] parte sempre dall'APK base
-/// (reinstallazione completa). Lancia [PatchCancelledException] se annullato.
-Future<String?> runPatchPlan({
+/// e ne controlla l'SHA-256. Se la strada con le patch dalla versione
+/// installata non riesce, riprova da capo con l'APK base piu' tutte le patch.
+/// [forceFull] parte sempre dall'APK base (reinstallazione completa).
+///
+/// Se non riesce, [PatchRunResult.plainApkIsCurrent] dice se chi chiama puo'
+/// scaricare l'APK completo della release: nelle release con sole patch quello
+/// e' la base, non la build corrente, e va lasciato stare.
+/// Lancia [PatchCancelledException] se annullato.
+Future<PatchRunResult> runPatchPlan({
   required Map<String, String> assets,
   required int installedBuild,
   required String? installedApkPath,
@@ -45,114 +49,147 @@ Future<String?> runPatchPlan({
   void Function(String message)? log,
 }) async {
   final manifestUrl = assets[kPatchManifestName];
-  if (manifestUrl == null) return null;
+  // Release senza elenco delle patch: l'APK completo e' quello corrente.
+  if (manifestUrl == null) {
+    return const PatchRunResult.failed(plainApkIsCurrent: true);
+  }
+
+  Future<void> cleanUp() async {
+    try {
+      await _emptyDirectory(workDir);
+    } catch (_) {}
+  }
+
+  PatchManifest? manifest;
   try {
     await _emptyDirectory(workDir);
     final manifestPath = '${workDir.path}/$kPatchManifestName';
     await download(manifestUrl, manifestPath, onBytes: (_) {});
-    final manifest =
-        PatchManifest.tryParse(await File(manifestPath).readAsString());
-    if (manifest == null) {
-      log?.call('elenco delle patch non leggibile');
-      return null;
-    }
-
-    final first = planUpdate(manifest, installedBuild,
-        forceFull: forceFull || installedApkPath == null);
-    if (first == null) {
-      log?.call('nessuna strada con le patch dalla build $installedBuild');
-      return null;
-    }
-    var plan = first;
-    if (!plan.useBase) {
-      // L'APK installato deve essere proprio quello da cui parte la patch.
-      final sha = await sha256OfFile(installedApkPath!);
-      if (sha != plan.edges.first.fromSha) {
-        log?.call("l'APK installato non e' quello della build pubblicata");
-        final fallback =
-            planUpdate(manifest, installedBuild, forceFull: true);
-        if (fallback == null) return null;
-        plan = fallback;
-      }
-    }
-
-    final names = [
-      if (plan.useBase) plan.base.asset,
-      for (final e in plan.edges) e.asset,
-    ];
-    for (final n in names) {
-      if (!assets.containsKey(n)) {
-        log?.call('manca nella release: $n');
-        return null;
-      }
-    }
-
-    var received = 0;
-    final total = plan.downloadBytes;
-    void bump(int delta) {
-      received += delta;
-      onProgress?.call(total > 0
-          ? math.max(0.0, math.min(1.0, received / total))
-          : null);
-    }
-
-    final finalPath = '${workDir.path}/DartPDF-Android.apk';
-    String current;
-    var currentIsTemp = false;
-    if (plan.useBase) {
-      final basePath = '${workDir.path}/base.apk';
-      await download(assets[plan.base.asset]!, basePath,
-          expectedSize: plan.base.size, onBytes: bump);
-      if (await sha256OfFile(basePath) != plan.base.sha256) {
-        log?.call("l'APK base scaricato non coincide");
-        await _emptyDirectory(workDir);
-        return null;
-      }
-      current = basePath;
-      currentIsTemp = true;
-    } else {
-      current = installedApkPath!;
-    }
-
-    for (var i = 0; i < plan.edges.length; i++) {
-      if (isCancelled?.call() ?? false) throw const PatchCancelledException();
-      final edge = plan.edges[i];
-      final patchPath = '${workDir.path}/patch-${edge.from}-${edge.to}.dpat';
-      await download(assets[edge.asset]!, patchPath,
-          expectedSize: edge.size, onBytes: bump);
-      onProgress?.call(null);
-      final out = i == plan.edges.length - 1
-          ? finalPath
-          : '${workDir.path}/step-$i.apk';
-      await applyDpatFile(
-        oldPath: current,
-        patchPath: patchPath,
-        outPath: out,
-        isCancelled: isCancelled,
-      );
-      await File(patchPath).delete();
-      if (currentIsTemp) await File(current).delete();
-      current = out;
-      currentIsTemp = true;
-    }
-    if (plan.edges.isEmpty) {
-      await File(current).rename(finalPath);
-    }
-
-    if (await sha256OfFile(finalPath) != plan.target.sha256) {
-      log?.call("l'APK ricostruito non coincide con quello pubblicato");
-      await _emptyDirectory(workDir);
-      return null;
-    }
-    return finalPath;
+    manifest = PatchManifest.tryParse(await File(manifestPath).readAsString());
   } on PatchCancelledException {
-    await _emptyDirectory(workDir);
+    await cleanUp();
     rethrow;
   } catch (e) {
-    log?.call('patch non riuscita: $e');
+    log?.call("elenco delle patch non scaricabile: $e");
+    await cleanUp();
+    return const PatchRunResult.failed(plainApkIsCurrent: false);
+  }
+  if (manifest == null) {
+    log?.call('elenco delle patch non leggibile');
+    await cleanUp();
+    return const PatchRunResult.failed(plainApkIsCurrent: false);
+  }
+  final m = manifest;
+
+  // Un tentativo: [full] parte dall'APK base, altrimenti da quello installato.
+  // retry = true se vale la pena riprovare in un altro modo.
+  Future<({String? path, bool retry})> attempt(bool full) async {
     try {
       await _emptyDirectory(workDir);
-    } catch (_) {}
-    return null;
+      final plan = planUpdate(m, installedBuild, forceFull: full);
+      if (plan == null) {
+        log?.call('nessuna strada con le patch dalla build $installedBuild');
+        return (path: null, retry: false);
+      }
+      if (!plan.useBase) {
+        // L'APK installato deve essere proprio quello da cui parte la patch.
+        final sha = await sha256OfFile(installedApkPath!);
+        if (sha != plan.edges.first.fromSha) {
+          log?.call("l'APK installato non e' quello della build pubblicata");
+          return (path: null, retry: true);
+        }
+      }
+
+      final names = [
+        if (plan.useBase) plan.base.asset,
+        for (final e in plan.edges) e.asset,
+      ];
+      for (final n in names) {
+        if (!assets.containsKey(n)) {
+          log?.call('manca nella release: $n');
+          return (path: null, retry: false);
+        }
+      }
+
+      var received = 0;
+      final total = plan.downloadBytes;
+      void bump(int delta) {
+        received += delta;
+        onProgress?.call(total > 0
+            ? math.max(0.0, math.min(1.0, received / total))
+            : null);
+      }
+
+      final finalPath = '${workDir.path}/DartPDF-Android.apk';
+      String current;
+      var currentIsTemp = false;
+      if (plan.useBase) {
+        final basePath = '${workDir.path}/base.apk';
+        await download(assets[plan.base.asset]!, basePath,
+            expectedSize: plan.base.size, onBytes: bump);
+        if (await sha256OfFile(basePath) != plan.base.sha256) {
+          log?.call("l'APK base scaricato non coincide");
+          await cleanUp();
+          return (path: null, retry: false);
+        }
+        current = basePath;
+        currentIsTemp = true;
+      } else {
+        current = installedApkPath!;
+      }
+
+      for (var i = 0; i < plan.edges.length; i++) {
+        if (isCancelled?.call() ?? false) {
+          throw const PatchCancelledException();
+        }
+        final edge = plan.edges[i];
+        final patchPath = '${workDir.path}/patch-${edge.from}-${edge.to}.dpat';
+        await download(assets[edge.asset]!, patchPath,
+            expectedSize: edge.size, onBytes: bump);
+        onProgress?.call(null);
+        final out = i == plan.edges.length - 1
+            ? finalPath
+            : '${workDir.path}/step-$i.apk';
+        await applyDpatFile(
+          oldPath: current,
+          patchPath: patchPath,
+          outPath: out,
+          isCancelled: isCancelled,
+        );
+        await File(patchPath).delete();
+        if (currentIsTemp) await File(current).delete();
+        current = out;
+        currentIsTemp = true;
+      }
+      if (plan.edges.isEmpty) {
+        await File(current).rename(finalPath);
+      }
+
+      if (await sha256OfFile(finalPath) != plan.target.sha256) {
+        log?.call("l'APK ricostruito non coincide con quello pubblicato");
+        await cleanUp();
+        return (path: null, retry: true);
+      }
+      return (path: finalPath, retry: false);
+    } on PatchCancelledException {
+      await cleanUp();
+      rethrow;
+    } catch (e) {
+      log?.call('patch non riuscita: $e');
+      await cleanUp();
+      return (path: null, retry: true);
+    }
   }
+
+  final startFull = forceFull || installedApkPath == null;
+  var result = await attempt(startFull);
+  if (result.path == null && result.retry && !startFull) {
+    log?.call("riprovo da APK base e patch");
+    result = await attempt(true);
+  }
+  final path = result.path;
+  if (path != null) return PatchRunResult.ready(path);
+  return PatchRunResult.failed(
+    plainApkIsCurrent: m.base.build == m.current.build,
+  );
 }
