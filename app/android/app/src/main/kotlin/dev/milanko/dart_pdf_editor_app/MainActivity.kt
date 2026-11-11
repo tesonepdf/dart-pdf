@@ -312,6 +312,8 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "supportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    // Il file dell'APK installato: base delle patch di aggiornamento.
+                    "installedApkPath" -> result.success(applicationInfo.sourceDir)
                     "installApk" -> {
                         val path = call.argument<String>("path")
                         if (path == null) {

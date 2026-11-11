@@ -148,6 +148,16 @@ class UpdateInstaller {
     }
   }
 
+  /// Passa all'installazione di Android un APK gia' pronto (ricostruito con le
+  /// patch, vedi patch_update_io.dart): Android chiede comunque la conferma.
+  Future<void> handOffFile(String path) async {
+    try {
+      await _ops.openArtifact(path);
+    } catch (e) {
+      throw UpdateInstallException('Could not install the update: $e');
+    }
+  }
+
   Future<void> _applyInPlace(Uint8List bytes) async {
     final target = _ops.appImagePath;
     if (target == null) {
