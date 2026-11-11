@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
+import 'patch_update_stub.dart' if (dart.library.io) 'patch_update_io.dart';
 import 'update.dart';
 import 'update_installer.dart';
 import 'update_platform.dart';
@@ -54,21 +55,33 @@ Future<void> startUpdateInstall(
   UpdateInstallOutcome? outcome;
   Object? failure;
   try {
-    outcome = await installer.downloadAndApply(
-      url: url,
-      assetName: assetName!,
-      expectedSize: updates.downloadAssetSize,
+    // Android: prima la strada leggera (solo le patch); se non c'e' o qualcosa
+    // non torna, si scarica l'APK completo come sempre.
+    final patched = await _tryPatched(
+      updates: updates,
+      installer: installer,
+      progress: progress,
       isCancelled: () => cancelled,
-      onProgress: (received, total) {
-        progress.value = _UpdateProgress(
-            fraction: (total != null && total > 0) ? received / total : null);
-      },
-      // The AppImage path relaunches immediately after applying; show a
-      // "restarting" state so the dialog isn't frozen at 100% before exit.
-      onApplying: mode == UpdateApplyMode.inPlaceRelaunch
-          ? () => progress.value = const _UpdateProgress(applying: true)
-          : null,
     );
+    if (patched) {
+      outcome = UpdateInstallOutcome.handedOff;
+    } else {
+      outcome = await installer.downloadAndApply(
+        url: url,
+        assetName: assetName!,
+        expectedSize: updates.downloadAssetSize,
+        isCancelled: () => cancelled,
+        onProgress: (received, total) {
+          progress.value = _UpdateProgress(
+              fraction: (total != null && total > 0) ? received / total : null);
+        },
+        // The AppImage path relaunches immediately after applying; show a
+        // "restarting" state so the dialog isn't frozen at 100% before exit.
+        onApplying: mode == UpdateApplyMode.inPlaceRelaunch
+            ? () => progress.value = const _UpdateProgress(applying: true)
+            : null,
+      );
+    }
   } on UpdateCancelledException {
     // User cancelled - close the dialog quietly, no toast.
   } catch (e) {
@@ -104,6 +117,97 @@ Future<void> startUpdateInstall(
       content: Text(l10n.updateHandedOff),
     ));
   }
+}
+
+/// Android: ricostruisce l'APK nuovo con le patch (solo la differenza) e lo
+/// passa all'installazione. false = nessuna strada con le patch (o non e'
+/// Android): si usa il download normale.
+Future<bool> _tryPatched({
+  required UpdateService updates,
+  required UpdateInstaller installer,
+  required ValueNotifier<_UpdateProgress> progress,
+  required bool Function() isCancelled,
+  bool forceFull = false,
+}) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+  if (installer.modeFor(updates.downloadAssetName) !=
+      UpdateApplyMode.openArtifact) {
+    return false;
+  }
+  final assets = updates.latest?.assets;
+  final installed = int.tryParse(updates.currentBuildNumber);
+  if (assets == null || installed == null) return false;
+  final apk = await buildPatchedApk(
+    assets: assets,
+    installedBuild: installed,
+    forceFull: forceFull,
+    isCancelled: isCancelled,
+    onProgress: (f) => progress.value = _UpdateProgress(fraction: f),
+  );
+  if (apk == null) return false;
+  await installer.handOffFile(apk);
+  return true;
+}
+
+/// "Reinstalla tutto" (ripristino): riparte dall'APK base della release e
+/// applica tutte le patch fino all'ultima build, senza guardare cosa c'e' sul
+/// telefono. Serve dopo una cancellazione dei dati o se qualcosa non va.
+Future<void> startReinstallAll(
+  BuildContext context, {
+  required UpdateService updates,
+  required UpdateInstaller installer,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final italian = Localizations.localeOf(context).languageCode == 'it';
+  String t(String it, String en) => italian ? it : en;
+
+  await updates.checkForUpdates(force: true);
+  if (!context.mounted) return;
+
+  final progress =
+      ValueNotifier<_UpdateProgress>(const _UpdateProgress(fraction: null));
+  var cancelled = false;
+  final dialogFuture = showPdfDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => _UpdateProgressDialog(
+      progress: progress,
+      onCancel: () => cancelled = true,
+    ),
+  );
+
+  var done = false;
+  Object? failure;
+  try {
+    done = await _tryPatched(
+      updates: updates,
+      installer: installer,
+      progress: progress,
+      isCancelled: () => cancelled,
+      forceFull: true,
+    );
+  } on UpdateCancelledException {
+    // annullato: niente avviso
+  } catch (e) {
+    failure = e;
+  }
+
+  if (context.mounted) {
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+  await dialogFuture;
+  progress.dispose();
+
+  if (done || cancelled) return;
+  final reason = failure is UpdateInstallException
+      ? failure.message
+      : (failure?.toString() ??
+          t('elenco delle patch non disponibile', 'patch list not available'));
+  messenger.showSnackBar(SnackBar(
+    key: const ValueKey('reinstall-all-failed'),
+    content: Text(t('Reinstallazione non riuscita: $reason',
+        'Reinstall failed: $reason')),
+  ));
 }
 
 Future<void> _openInBrowser(

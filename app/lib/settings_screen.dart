@@ -1064,6 +1064,12 @@ class _OwnUpdatePanel extends StatelessWidget {
         installer: installer ?? UpdateInstaller(),
       );
 
+  Future<void> _reinstallAll(BuildContext context) => startReinstallAll(
+        context,
+        updates: updates,
+        installer: installer ?? UpdateInstaller(),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1139,6 +1145,13 @@ class _OwnUpdatePanel extends StatelessWidget {
                   : Text(_t(context, 'Controlla aggiornamenti ora',
                       'Check for updates now')),
             ),
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+              TextButton(
+                key: const ValueKey('settings-reinstall-all'),
+                onPressed: checking ? null : () => _reinstallAll(context),
+                child: Text(_t(context, 'Reinstalla tutto (ripristino)',
+                    'Reinstall everything (recovery)')),
+              ),
             if (updates.nightlySupported)
               SwitchListTile(
                 key: const ValueKey('settings-nightly-updates'),
