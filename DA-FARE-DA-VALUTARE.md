@@ -57,6 +57,19 @@ Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io
 4. Web app: l'utente la vuole, ma **dopo** conflitti e build prova, così in caso di problemi si sa dove cercare. Niente è stato fatto.
 5. Le novità di Ben arrivate dopo `f5efa6e5` (es. scorciatoia Ctrl/Cmd+Shift+X) si lasciano stare finché l'utente non dice altrimenti.
 
+#### Aggiornamenti a patch (dal build #345): come funzionano e cosa non rompere
+
+Regola dell'utente (paletto 14 in `CONFLITTI-FUSIONE.md`): sul telefono si scarica solo la differenza; l'APK completo si carica nella release solo come nuova base. **Non rimettere l'APK completo a ogni build e non cambiare il formato dei file senza cambiare insieme i due lati.**
+
+- **Strumento:** `tool/apk_patch.py` (con i test `tool/test_apk_patch.py`). Formato `DPAT1`: gzip di un elenco di COPIA dall'APK vecchio e INSERISCI byte nuovi, con SHA-256 del vecchio e del nuovo. Comandi `make`, `apply`, `sha`, `plan`.
+- **Workflow (`build.yml`, job `release`):** il passo `plan` scarica l'elenco `patches.json` e ricostruisce l'APK precedente (base + catena), calcola `patch-X-Y.dpat` e decide se pubblicare anche l'APK completo. Carica sempre `patches.json` e la patch, e cancella le patch fuori elenco. Variabile `SOLO_PATCH` (ora `'true'`): con `'false'` l'APK completo si carica sempre. `[completo]` nel messaggio del commit, o l'opzione `completo` di "Run workflow", forza una nuova base. Se il piano fallisce, si pubblica l'APK completo.
+- **Quando diventa completo (automatico):** nessun elenco o APK precedente non ricostruibile, patch più grande di metà dell'APK, catena di 29 patch, `[completo]`.
+- **`patches.json`:** `base` (APK completo nella release), `current` (ultima build), `patches` (una per ogni passo da una build alla successiva, con `from_sha` e `to_sha`). Si tengono al massimo 30 patch.
+- **App (Android):** `patch_manifest.dart` sceglie la strada (patch dalla versione installata o base + patch), `dpat_apply.dart` applica la patch a blocchi e controlla lo SHA-256, `patch_runner_io.dart` scarica solo i pezzi che servono, `patch_update_io.dart` fa da raccordo (cartella `updates` della cache, percorso dell'APK installato con il metodo `installedApkPath` di `MainActivity.kt`). Il flusso è in `update_install_flow.dart`: prima le patch, se non c'è strada o qualcosa non torna si scarica l'APK completo come prima. Android chiede sempre la conferma di installazione.
+- **Ripristino:** il pulsante "Reinstalla tutto (ripristino)" in Impostazioni > Aggiornamenti riparte dall'APK base e applica tutte le patch, senza guardare cosa c'è sul telefono.
+- **Prove:** `app/test/patch_update_test.dart` con i file di `app/test/data/dpat/` (creati dallo strumento Python, per controllare che i due lati leggano lo stesso formato).
+- **Da fare:** togliere i font dall'APK degli aggiornamenti (si salvano la prima volta sul telefono); per ora i font nuovi entrano nell'APK e dopo si pubblica una base completa con `[completo]`.
+
 #### Numeri build separati: cosa c'è nel workflow (`.github/workflows/build.yml`)
 
 Ogni ramo conta da solo. Il numero è quello scritto nelle note della **propria** release (`<!-- app-build: N -->`) più 1. Non guarda mai l'altra release.
