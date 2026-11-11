@@ -12,6 +12,7 @@ Questo file sta nel repo (`dart-pdf-riferimenti.md`, senza token): l'assistente 
 - **Il file `.md` si dà prima di cominciare.** Per ogni lavoro, prima di eseguire qualsiasi comando, l'assistente dà subito all'utente questo file aggiornato con quello che sta per fare, e solo dopo esegue. Se il lavoro è un solo comando non si fa; da due comandi in su sì.
 - **Ogni richiesta dell'utente è un paletto.** Una richiesta dell'utente va nei paletti e non si cambia, non si aggira e non si reinterpreta senza una richiesta esplicita dell'utente: nemmeno lui la cambia per sbaglio, serve che lo chieda in modo esplicito. L'assistente non la cambia mai di sua iniziativa. I paletti stanno in `CONFLITTI-FUSIONE.md`.
 - **File `.md` nel progetto: uno solo per Da fare e Da valutare** (`DA-FARE-DA-VALUTARE.md`), più questo file dei riferimenti, quelli che servono all'assistente per capire cosa fare (i paletti in `CONFLITTI-FUSIONE.md`) e quelli che servono davvero alla build o alla licenza. Gli altri non si tengono e non se ne creano di nuovi.
+- **Prima di modificare: pull e controllo.** L'utente può lavorare anche da altre chat e scaricare build per conto suo. Prima di ogni modifica, e prima di continuare con release e patch, l'assistente fa `git pull` e guarda gli ultimi commit e la release (build corrente, patch presenti, APK) e riparte da lì, senza dare per scontato quello che ricorda.
 - **Se sta aspettando, lo dice prima.** Se per un motivo vero l'assistente deve aspettare qualcosa, lo scrive prima di cominciare, così l'utente sa che non è fermo.
 
 ## Il tuo repo
