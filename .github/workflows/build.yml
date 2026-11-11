@@ -55,7 +55,7 @@ env:
   # sempre e le patch si aggiungono; true: l'APK completo si carica solo quando
   # serve una nuova base (parte nativa cambiata, patch troppo grande, catena
   # lunga, primo avvio o [completo] nel messaggio del commit).
-  SOLO_PATCH: 'false'
+  SOLO_PATCH: 'true'
   FORCE_FULL: ${{ contains(github.event.head_commit.message, '[completo]') || inputs.completo == true }}
 
 jobs:
