@@ -10,9 +10,11 @@ import 'package:pdf_graphics/pdf_graphics.dart'
     show
         PdfDecodedPixels,
         PdfExtractedRun,
+        PdfFilledRect,
         PdfPageShapes,
         PdfReflowBlock,
         PdfReflowImage,
+        PdfRuleLine,
         PdfTextExtractor,
         decodePdfImage,
         pdfImageFilters;
