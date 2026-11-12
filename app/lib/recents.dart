@@ -87,7 +87,15 @@ class RecentsStore extends ChangeNotifier {
   RecentsStore({CachedPdfKeyResolver? resolveCacheKey})
       : _resolveCacheKey = resolveCacheKey ?? resolveCachedPdfKey;
 
-  static const _key = 'dart_pdf_editor_app.recents';
+  // Formato vecchio: un solo testo con tutto l'elenco. Si legge solo per
+  // passare al formato nuovo (una chiave per file) e poi si toglie.
+  static const _legacyKey = 'dart_pdf_editor_app.recents';
+
+  // Formato nuovo: una chiave per ogni file recente, cosi' a ogni modifica si
+  // scrive solo la voce che cambia.
+  static const _entryPrefix = 'dart_pdf_editor_app.recents.e.';
+
+  static String _entryKey(String id) => '$_entryPrefix${Uri.encodeComponent(id)}';
 
   final CachedPdfKeyResolver _resolveCacheKey;
   final List<RecentFile> _items = [];
@@ -122,17 +130,34 @@ class RecentsStore extends ChangeNotifier {
     _loaded = true;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key);
-      if (raw == null) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      final loaded = [
-        for (final m in decoded.whereType<Map>())
-          RecentFile.fromJson(m.cast<String, dynamic>()),
-      ];
+      final loaded = <RecentFile>[];
+      var migrated = false;
+      for (final key in prefs.getKeys().where((k) => k.startsWith(_entryPrefix))) {
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        try {
+          final m = jsonDecode(raw);
+          if (m is Map) loaded.add(RecentFile.fromJson(m.cast<String, dynamic>()));
+        } catch (_) {
+          // Voce rovinata: si salta, le altre restano.
+        }
+      }
+      final legacy = prefs.getString(_legacyKey);
+      if (legacy != null) {
+        final decoded = jsonDecode(legacy);
+        if (decoded is List) {
+          final known = {for (final e in loaded) e.id};
+          for (final m in decoded.whereType<Map>()) {
+            final entry = RecentFile.fromJson(m.cast<String, dynamic>());
+            if (known.add(entry.id)) loaded.add(entry);
+          }
+        }
+        migrated = true;
+      }
+      if (loaded.isEmpty && !migrated) return;
       // An app update can move the private snapshot store (iOS changes the
       // data container path), so re-anchor each snapshot before trusting it.
-      var rebased = false;
+      final rebasedEntries = <RecentFile>[];
       for (var i = 0; i < loaded.length; i++) {
         final entry = loaded[i];
         final cachePath = entry.cachePath;
@@ -148,7 +173,7 @@ class RecentsStore extends ChangeNotifier {
           bookmark: entry.bookmark,
           openedAt: entry.openedAt,
         );
-        rebased = true;
+        rebasedEntries.add(loaded[i]);
       }
       _items
         ..clear()
@@ -157,7 +182,12 @@ class RecentsStore extends ChangeNotifier {
       notifyListeners();
       AppLog.instance
           .ok('Recenti', 'Caricati ${loaded.length} file recenti');
-      if (rebased) await _persist();
+      if (migrated) {
+        await _writeEntries(loaded, 'Passati al formato nuovo (una voce per file)');
+        await prefs.remove(_legacyKey);
+      } else if (rebasedEntries.isNotEmpty) {
+        await _writeEntries(rebasedEntries, 'Percorso della copia aggiornato');
+      }
     } catch (e) {
       AppLog.instance.error('Recenti', 'Caricamento non riuscito: $e');
       // No storage (tests) - keep the in-memory list.
@@ -180,17 +210,21 @@ class RecentsStore extends ChangeNotifier {
       bookmark: bookmark,
       openedAt: DateTime.now().millisecondsSinceEpoch,
     );
+    final existed = _items.any((e) => e.id == entry.id);
     _items.removeWhere((e) => e.id == entry.id);
     _items.insert(0, entry);
     notifyListeners();
-    await _persist();
+    await _writeEntries([entry],
+        existed ? 'Spostato in cima: ${entry.title}' : 'Aggiunto: ${entry.title}');
   }
 
   Future<void> remove(String id) async {
     await load();
+    final before = _items.length;
     _items.removeWhere((e) => e.id == id);
     notifyListeners();
-    await _persist();
+    if (_items.length == before) return;
+    await _deleteEntries([id], 'Tolto dall\'elenco');
   }
 
   /// Updates a document's display/share name, preserving its source and order.
@@ -208,14 +242,18 @@ class RecentsStore extends ChangeNotifier {
       openedAt: entry.openedAt,
     );
     notifyListeners();
-    await _persist();
+    final renamed = _items[index];
+    // Se l'identita' e' il titolo, cambia anche la chiave: si toglie la vecchia.
+    if (renamed.id != id) await _deleteEntries([id], null);
+    await _writeEntries([renamed], 'Rinominato: ${renamed.title}');
   }
 
   Future<void> clear() async {
     await load();
+    final ids = [for (final e in _items) e.id];
     _items.clear();
     notifyListeners();
-    await _persist();
+    await _deleteEntries(ids, 'Elenco svuotato');
   }
 
   /// Reconciles only the keys inspected by the caller, so a concurrent add
@@ -223,7 +261,7 @@ class RecentsStore extends ChangeNotifier {
   Future<void> updateCachedAvailability(
       Set<String> checked, Set<String> available) async {
     if (_disposed) return;
-    var changed = false;
+    final changedEntries = <RecentFile>[];
     for (var i = 0; i < _items.length; i++) {
       final entry = _items[i];
       if (!checked.contains(entry.cachePath)) continue;
@@ -236,25 +274,45 @@ class RecentsStore extends ChangeNotifier {
           cacheAvailable: exists,
           bookmark: entry.bookmark,
           openedAt: entry.openedAt);
-      changed = true;
+      changedEntries.add(_items[i]);
     }
-    if (!changed) return;
+    if (changedEntries.isEmpty) return;
     notifyListeners();
-    await _persist();
+    await _writeEntries(
+        changedEntries, 'Disponibilita\' della copia aggiornata');
   }
 
   void _sort() => _items.sort((a, b) => b.openedAt.compareTo(a.openedAt));
 
-  Future<void> _persist() async {
+  /// Scrive solo le voci indicate (una chiave ciascuna), senza toccare le altre.
+  Future<void> _writeEntries(List<RecentFile> entries, String what) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-          _key, jsonEncode(_items.map((e) => e.toJson()).toList()));
-      AppLog.instance
-          .ok('Recenti', 'Elenco salvato (${_items.length} file)');
+      for (final e in entries) {
+        await prefs.setString(_entryKey(e.id), jsonEncode(e.toJson()));
+      }
+      AppLog.instance.ok('Recenti', '$what (${entries.length} voce salvata, '
+          '${_items.length} in elenco)');
     } catch (e) {
       AppLog.instance.error('Recenti', 'Salvataggio non riuscito: $e');
       // No storage - nothing to persist.
+      AppDevTools.instance
+          .addLog('recents persist failed: $e', level: DevLogLevel.error);
+    }
+  }
+
+  Future<void> _deleteEntries(List<String> ids, String? what) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final id in ids) {
+        await prefs.remove(_entryKey(id));
+      }
+      if (what != null) {
+        AppLog.instance.ok('Recenti', '$what (${ids.length} voci tolte, '
+            '${_items.length} in elenco)');
+      }
+    } catch (e) {
+      AppLog.instance.error('Recenti', 'Salvataggio non riuscito: $e');
       AppDevTools.instance
           .addLog('recents persist failed: $e', level: DevLogLevel.error);
     }

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_log.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
 import 'patch_update_stub.dart' if (dart.library.io) 'patch_update_io.dart';
@@ -54,6 +55,10 @@ Future<void> startUpdateInstall(
 
   UpdateInstallOutcome? outcome;
   Object? failure;
+  AppLog.instance.info(
+      'Aggiornamenti',
+      'Inizio aggiornamento: dalla build ${updates.currentBuildNumber} '
+      'alla ${updates.latest?.buildNumber ?? "?"}');
   try {
     // Android: prima la strada leggera (solo le patch); se non c'e' o qualcosa
     // non torna, si scarica l'APK completo come sempre.
@@ -84,6 +89,7 @@ Future<void> startUpdateInstall(
     }
   } on UpdateCancelledException {
     // User cancelled - close the dialog quietly, no toast.
+    AppLog.instance.info('Aggiornamenti', 'Aggiornamento annullato dall\'utente');
   } catch (e) {
     failure = e;
   }
@@ -99,6 +105,7 @@ Future<void> startUpdateInstall(
   if (failure != null) {
     final message =
         failure is UpdateInstallException ? failure.message : '$failure';
+    AppLog.instance.error('Aggiornamenti', 'Aggiornamento non riuscito: $message');
     messenger.showSnackBar(SnackBar(
       key: const ValueKey('update-install-failed'),
       content: Text(l10n.updateFailed(message)),
@@ -112,6 +119,8 @@ Future<void> startUpdateInstall(
   }
 
   if (outcome == UpdateInstallOutcome.handedOff) {
+    AppLog.instance.ok('Aggiornamenti',
+        'Aggiornamento scaricato e passato all\'installazione di Android');
     messenger.showSnackBar(SnackBar(
       key: const ValueKey('update-handed-off'),
       content: Text(l10n.updateHandedOff),
