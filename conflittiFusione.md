@@ -331,3 +331,5 @@ Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog d
 - Web app: l'utente vuole una web app per non dover aggiornare l'app Windows. Se ne è solo parlato; niente è stato fatto né deciso. Vercel (strumenti connessi alla chat) e il target hosting `tesonepdf-dart-pdf` esistono; non verificato che funzionino. Da fare dopo i conflitti, salvo diversa decisione.
 - Le vecchie release `build-N` e `prova-N` (tag `prova-59`, `prova-60`, `prova-65`, `prova-67` e le `build-N`) sono rimaste su GitHub: cancellarle solo se lo chiede l'utente.
 - Le due build lanciate col cambio di workflow (#76 main riuscita, #77 prova fallita) non hanno ancora convertito il tag della prova da pre-release a release normale, perché la build prova non è arrivata allo step di pubblicazione.
+
+20. **Togli spazio vuoto: annulla/ripeti e file salvato (richiesta dell'utente, 12/11).** La scheda nuova parte come copia dell'originale e il taglio (pagina sistemata al posto di quella vecchia) è una sola modifica, quindi le frecce Annulla e Ripeti restano attive. La copia si salva subito come file (recenti, accanto all'originale). L'originale non cambia.

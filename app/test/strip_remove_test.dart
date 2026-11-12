@@ -78,6 +78,24 @@ void main() {
       expect(PdfTextExtractor.extract(doc, 0).text, contains('Hello'));
     });
 
+    test('la pagina sistemata prende il posto di quella vecchia', () {
+      // Come fa l'app: una sola modifica, cosi' Annulla e Ripeti funzionano.
+      final adjusted = PdfDocument.open(removePageStrip(
+          source: source,
+          page: 0,
+          strip: const Rect.fromLTRB(0.25, 0, 0.75, 1),
+          gap: 0));
+      final doc = PdfDocument.open(buildClassicPdf());
+      final before = doc.pageCount;
+      PdfEditor(doc)
+        ..appendPagesFrom(adjusted, at: 1, outlines: false)
+        ..removePage(0);
+      expect(doc.pageCount, before);
+      final p = doc.page(0);
+      final s = pdfRegionDisplaySize(p.cropBox, p.rotation);
+      expect(s.width, closeTo(size.width * 0.5, 0.5));
+    });
+
     test('se non resta niente lo dice', () {
       expect(
         () => removePageStrip(
