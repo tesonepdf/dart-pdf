@@ -3269,6 +3269,8 @@ class _PdfEditingToolbarState extends State<PdfEditingToolbar> {
     final result = <_ToolGroup>[
       for (final kind in order)
         ...groups.where((g) => g.kind == kind),
+      // I gruppi aggiunti dall'app (senza tipo proprio) vanno in fondo.
+      ...groups.where((g) => g.kind == null),
     ];
     return result.isEmpty ? groups : result;
   }

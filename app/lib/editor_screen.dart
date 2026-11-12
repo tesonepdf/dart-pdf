@@ -6656,6 +6656,7 @@ class _EditorScreenState extends State<EditorScreen>
         undoRedo: !_usesAppMenuSheet(context),
         autoHideChrome: false,
       ),
+      toolGroups: [...pdfToolGroups, _pagesToolGroup(tab)],
       documentId: tab.documentId,
       controller: tab.session,
       viewerController: tab.viewer,
@@ -6818,6 +6819,37 @@ class _EditorScreenState extends State<EditorScreen>
     await _readAloud(text);
   }
 
+  /// Il gruppo "Pagine" della griglia strumenti, accanto a Marcatura e
+  /// Forme: inserire pagine, numerarle, filigrana, togliere spazio vuoto.
+  PdfToolGroup _pagesToolGroup(DocumentTab tab) {
+    PdfToolEntry entry(String id, IconData icon, String label,
+            Future<void> Function() run) =>
+        PdfToolEntry.command(PdfCommand(
+          id: 'pages-$id',
+          icon: icon,
+          label: (_) => label,
+          invoke: (_) => run(),
+        ));
+    return PdfToolGroup(
+      'pages',
+      Icons.auto_stories_outlined,
+      [
+        entry('insert-document', Icons.post_add_outlined,
+            'Inserisci PDF', () => _insertDocument(tab)),
+        if (_canScan)
+          entry('insert-scan', Icons.add_a_photo_outlined,
+              'Inserisci scansione', () => _insertScan(tab)),
+        entry('number', Icons.format_list_numbered, 'Numera le pagine',
+            () => _numberPages(tab)),
+        entry('watermark', Icons.water_drop_outlined, 'Filigrana',
+            () => _addWatermark(tab)),
+        entry('remove-strip', Icons.compress, 'Togli spazio vuoto',
+            () => _removePageStrip(tab)),
+      ],
+      labelBuilder: (_) => 'Pagine',
+    );
+  }
+
   Future<void> _showAppMenuSheet(DocumentTab? tab) async {
     final l = appL10n(context);
     final hasDocument = tab?.session != null;
@@ -6841,10 +6873,7 @@ class _EditorScreenState extends State<EditorScreen>
           'sign',
         'compare' ||
         'insert-document' ||
-        'insert-scan' ||
-        'number-pages' ||
-        'remove-strip' ||
-        'watermark' =>
+        'insert-scan' =>
           'pages',
         'import-form-data' => 'forms',
         _ => null,
@@ -6875,9 +6904,18 @@ class _EditorScreenState extends State<EditorScreen>
       for (final action in documentActions)
         if (action.sheet == _SheetPlacement.formData) action,
     ];
+    // Le voci sulle pagine ora stanno nel gruppo "Pagine" della griglia
+    // strumenti, non piu' nel menu.
+    const pagesToolIds = {
+      'number-pages',
+      'remove-strip',
+      'watermark',
+    };
     final plainDocumentActions = [
       for (final action in documentActions)
-        if (action.sheet != _SheetPlacement.formData) action,
+        if (action.sheet != _SheetPlacement.formData &&
+            !pagesToolIds.contains(action.id))
+          action,
     ];
     final appActions = _appActions();
     final action = await showAppMenuSheet(
