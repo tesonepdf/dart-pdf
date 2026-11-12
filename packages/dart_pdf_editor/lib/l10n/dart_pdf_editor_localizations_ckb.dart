@@ -815,6 +815,12 @@ class DartPdfEditorLocalizationsCkb extends DartPdfEditorLocalizations {
   String get propSectionInThisDocument => 'لەم بەڵگەنامەیەدا';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => 'شوێن و قەبارە (pt)';
 
   @override

@@ -8,6 +8,10 @@ Tre parti: **1. Da fare**, **2. Da valutare** (file di Ben da decidere uno alla 
 
 Per l'assistente che riprende il lavoro. Leggere prima `conflittiFusione.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
 
+#### Aggiornamento 2026-11-12
+
+- **Font consigliato (paletto 15):** fatto nel menu "Carattere". Da fare: tradurre i due testi nuovi (`propSectionSuggested`, `propSuggestedNoLimits`) nelle 21 lingue diverse da italiano e inglese: ora sono in inglese in tutti i file `.arb` (la CI controlla solo che le chiavi ci siano). Da provare sul telefono con un PDF di Word (Times New Roman incorporato): deve comparire "Consigliato" con Tinos.
+
 #### Aggiornamento 2026-11-06
 
 - **Menu dell'app (da sistemare più avanti):** l'utente ha notato che il menu appare diverso quando non c'è un PDF aperto rispetto a quando il PDF è aperto. Non vuole che il menu cambi in base al documento aperto; per ora non modificare il comportamento, da riprendere su sua richiesta.

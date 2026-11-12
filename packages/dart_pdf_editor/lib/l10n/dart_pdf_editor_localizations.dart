@@ -1614,6 +1614,18 @@ abstract class DartPdfEditorLocalizations {
   /// **'In this document'**
   String get propSectionInThisDocument;
 
+  /// Font picker section header over the full font suggested in place of a document font with limited characters.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested'**
+  String get propSectionSuggested;
+
+  /// Subtitle of the suggested replacement font: it can type any character.
+  ///
+  /// In en, this message translates to:
+  /// **'No character limits'**
+  String get propSuggestedNoLimits;
+
   /// Section header for the position and size fields; 'pt' means PDF points (the unit).
   ///
   /// In en, this message translates to:

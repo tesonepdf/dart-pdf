@@ -276,6 +276,8 @@
   "propSectionComments": "Коментарі",
   "propSectionFormField": "Поле форми",
   "propSectionInThisDocument": "У цьому документі",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Позиція та розмір (pt)",
   "propSectionSelection": "Виділення",
   "propSectionText": "Текст",

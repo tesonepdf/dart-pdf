@@ -276,6 +276,8 @@
   "propSectionComments": "評論",
   "propSectionFormField": "表單欄位",
   "propSectionInThisDocument": "此文件中",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "位置與大小 (pt)",
   "propSectionSelection": "選取範圍",
   "propSectionText": "文字",

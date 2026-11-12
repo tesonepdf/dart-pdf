@@ -811,6 +811,12 @@ class DartPdfEditorLocalizationsZh extends DartPdfEditorLocalizations {
   String get propSectionInThisDocument => '本文档中';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => '位置和大小（pt）';
 
   @override
@@ -3375,6 +3381,12 @@ class DartPdfEditorLocalizationsZhHant extends DartPdfEditorLocalizationsZh {
 
   @override
   String get propSectionInThisDocument => '此文件中';
+
+  @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
 
   @override
   String get propSectionPositionSize => '位置與大小 (pt)';

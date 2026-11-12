@@ -276,6 +276,8 @@
   "propSectionComments": "Opmerkingen",
   "propSectionFormField": "Formulierveld",
   "propSectionInThisDocument": "In dit document",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Positie & grootte (pt)",
   "propSectionSelection": "Selectie",
   "propSectionText": "Tekst",

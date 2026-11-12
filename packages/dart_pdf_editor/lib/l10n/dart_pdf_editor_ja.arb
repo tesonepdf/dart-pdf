@@ -276,6 +276,8 @@
   "propSectionComments": "コメント",
   "propSectionFormField": "フォームフィールド",
   "propSectionInThisDocument": "このドキュメント内",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "位置とサイズ (pt)",
   "propSectionSelection": "選択",
   "propSectionText": "テキスト",

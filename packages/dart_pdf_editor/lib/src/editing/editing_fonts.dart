@@ -6,6 +6,7 @@ import 'package:pdf_document/pdf_document.dart';
 
 import '../design/editor_presenter.dart';
 import '../design/material_host.dart';
+import '../font_substitution.dart';
 import '../search_field_style.dart';
 import 'editing_controller.dart';
 import 'text_prompt.dart';
@@ -642,6 +643,55 @@ class _PdfFontPickerDialogState extends State<_PdfFontPickerDialog> {
   }
 }
 
+/// Il font incluso più simile a [fontName], il nome di un font del PDF: quello
+/// da consigliare al posto di un font del documento "limitato" (vedi
+/// [PdfFontCatalogEntry.limited]), che non ha tutte le lettere.
+///
+/// I font inclusi portano tra parentesi il font che imitano ("Tinos (Times New
+/// Roman)"), con le stesse larghezze: si cerca prima il nome del font del PDF
+/// lì dentro, senza badare a maiuscole, spazi, trattini, al prefisso del
+/// sottoinsieme (`ABCDEF+`) né allo stile (`TimesNewRomanPS-BoldMT` trova
+/// Times New Roman). Se non c'è, si usa la scelta automatica che l'app già fa
+/// leggendo i font non incorporati ([pdfBundledSubstituteFor]): Times, Arial,
+/// Courier o Calibri. Null se [bundled] non ha un candidato.
+PdfBundledFont? pdfSuggestedBundledFont(
+    String? fontName, List<PdfBundledFont> bundled) {
+  String key(String text) =>
+      text.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  PdfBundledFont? imitating(String name) {
+    final wanted = key(name);
+    if (wanted.length < 4) return null;
+    for (final font in bundled) {
+      final open = font.label.indexOf('(');
+      final close = font.label.lastIndexOf(')');
+      if (open < 0 || close <= open) continue;
+      final imitated = key(font.label.substring(open + 1, close));
+      if (imitated.length >= 4 &&
+          (wanted.contains(imitated) || imitated.contains(wanted))) {
+        return font;
+      }
+    }
+    return null;
+  }
+
+  var name = fontName ?? '';
+  if (name.trim().isEmpty) return null;
+  if (name.indexOf('+') == 6) name = name.substring(7);
+  final byName = imitating(name);
+  if (byName != null) return byName;
+  final automatic = pdfBundledSubstituteFor(name);
+  if (automatic == PdfBundledSubstitute.termes) {
+    return imitating('Times New Roman');
+  }
+  if (automatic == PdfBundledSubstitute.heros) return imitating('Arial');
+  if (automatic == PdfBundledSubstitute.cursor) {
+    return imitating('Courier New');
+  }
+  if (automatic == PdfBundledSubstitute.carlito) return imitating('Calibri');
+  return null;
+}
+
 /// Pops a font menu anchored at [context]'s widget and applies the pick:
 /// the standard families, the fonts already embedded in the open document
 /// ([documentFonts], defaulting to [PdfEditingController.documentFonts]),
@@ -684,6 +734,32 @@ Future<void> showPdfFontMenu({
   ]);
   if (!context.mounted) return;
 
+  // Per ogni font del documento "limitato", il font incluso più simile e senza
+  // limiti, consigliato in una sezione sotto "In questo documento". Più font
+  // limitati che portano allo stesso consiglio ne danno una riga sola.
+  final suggested = <PdfFontCatalogEntry>[];
+  final suggestedLabels = <String>{};
+  for (var i = 0; i < inDocument.length; i++) {
+    if (!limited[i]) continue;
+    final font =
+        pdfSuggestedBundledFont(inDocument[i].displayName, bundledFonts);
+    if (font == null || !suggestedLabels.add(font.label)) continue;
+    suggested.add(PdfFontCatalogEntry(
+      key: ValueKey('pdf-font-suggested-${suggested.length}'),
+      label: font.label,
+      subtitle: pdfL10n(context).propSuggestedNoLimits,
+      // Vuoto: la riga non compare nelle ricerche, dove c'è già quella in
+      // "Tutti i caratteri".
+      searchText: '',
+      choice: PdfBundledFontChoice(font),
+      fontFamily: _bundledPreviewFamilies.contains(font.label)
+          ? font.label
+          : null,
+      bundledFont: font,
+      section: pdfL10n(context).propSectionSuggested,
+    ));
+  }
+
   final entries = <PdfFontCatalogEntry>[
     // Document fonts head the catalogue in their own "In this document"
     // section, previewed in their own face and shown by their real family
@@ -703,6 +779,7 @@ Future<void> showPdfFontMenu({
         section: pdfL10n(context).propSectionInThisDocument,
         limited: limited[i],
       ),
+    ...suggested,
     PdfFontCatalogEntry(
       key: const ValueKey('pdf-font-std-sans'),
       label: 'Sans (Helvetica)',

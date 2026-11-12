@@ -246,6 +246,8 @@
   "propSectionComments": "Comments",
   "propSectionFormField": "Form field",
   "propSectionInThisDocument": "In this document",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Position & size (pt)",
   "propSectionSelection": "Selection",
   "propSectionText": "Text",

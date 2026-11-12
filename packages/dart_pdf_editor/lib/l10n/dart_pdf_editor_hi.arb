@@ -276,6 +276,8 @@
   "propSectionComments": "टिप्पणियाँ",
   "propSectionFormField": "फ़ॉर्म फ़ील्ड",
   "propSectionInThisDocument": "इस दस्तावेज़ में",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "स्थिति और आकार (pt)",
   "propSectionSelection": "चयन",
   "propSectionText": "टेक्स्ट",

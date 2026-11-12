@@ -276,6 +276,8 @@
   "propSectionComments": "Komentar",
   "propSectionFormField": "Bidang formulir",
   "propSectionInThisDocument": "Dalam dokumen ini",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Posisi & ukuran (pt)",
   "propSectionSelection": "Pilihan",
   "propSectionText": "Teks",

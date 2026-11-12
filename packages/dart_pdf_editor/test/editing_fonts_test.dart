@@ -552,4 +552,59 @@ void main() {
       expect(c.fontFamily.family, PdfStandardFontFamily.serif);
     });
   });
+
+  group('pdfSuggestedBundledFont', () {
+    const bundled = [
+      PdfBundledFont('Carlito (Calibri)', 'a'),
+      PdfBundledFont('Arimo (Arial)', 'b'),
+      PdfBundledFont('Tinos (Times New Roman)', 'c'),
+      PdfBundledFont('Cousine (Courier New)', 'd'),
+      PdfBundledFont('EB Garamond (Garamond)', 'e'),
+      PdfBundledFont('Gelasio (Georgia)', 'f'),
+      PdfBundledFont('DejaVu Serif', 'g'),
+    ];
+    String? suggest(String? name) =>
+        pdfSuggestedBundledFont(name, bundled)?.label;
+
+    test('Times New Roman, in tutte le sue scritture, porta a Tinos', () {
+      for (final name in [
+        'Times New Roman',
+        'TimesNewRoman',
+        'ABCDEF+TimesNewRomanPS-BoldMT',
+        'TimesNewRomanPSMT',
+        'Times-Roman',
+      ]) {
+        expect(suggest(name), 'Tinos (Times New Roman)', reason: name);
+      }
+    });
+
+    test('Arial, Calibri, Courier, Garamond e Georgia hanno il loro', () {
+      expect(suggest('Arial-BoldMT'), 'Arimo (Arial)');
+      expect(suggest('ArialNarrow'), 'Arimo (Arial)');
+      expect(suggest('Calibri-Italic'), 'Carlito (Calibri)');
+      expect(suggest('CourierNewPSMT'), 'Cousine (Courier New)');
+      expect(suggest('Courier'), 'Cousine (Courier New)');
+      expect(suggest('GaramondPremrPro'), 'EB Garamond (Garamond)');
+      expect(suggest('Georgia'), 'Gelasio (Georgia)');
+    });
+
+    test('un nome sconosciuto segue la scelta automatica della lettura', () {
+      // Un font con le grazie senza un clone suo: Times.
+      expect(suggest('MinionPro-Regular'), 'Tinos (Times New Roman)');
+      // Senza grazie: Arial.
+      expect(suggest('Frutiger-Roman'), 'Arimo (Arial)');
+      // A spaziatura fissa: Courier.
+      expect(suggest('SomethingMono'), 'Cousine (Courier New)');
+    });
+
+    test('nessun nome o nessun candidato dà null', () {
+      expect(suggest(null), isNull);
+      expect(suggest(''), isNull);
+      expect(
+          pdfSuggestedBundledFont('Times New Roman',
+              const [PdfBundledFont('DejaVu Serif', 'g')]),
+          isNull);
+      expect(pdfSuggestedBundledFont('Arial', const []), isNull);
+    });
+  });
 }

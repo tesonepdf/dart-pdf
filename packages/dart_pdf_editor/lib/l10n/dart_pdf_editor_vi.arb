@@ -276,6 +276,8 @@
   "propSectionComments": "Bình luận",
   "propSectionFormField": "Trường biểu mẫu",
   "propSectionInThisDocument": "Trong tài liệu này",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Vị trí & kích thước (pt)",
   "propSectionSelection": "Lựa chọn",
   "propSectionText": "Văn bản",

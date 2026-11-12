@@ -276,6 +276,8 @@
   "propSectionComments": "Comentarios",
   "propSectionFormField": "Campo de formulario",
   "propSectionInThisDocument": "En este documento",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Posición y tamaño (pt)",
   "propSectionSelection": "Selección",
   "propSectionText": "Texto",
