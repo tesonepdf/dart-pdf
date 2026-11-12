@@ -716,6 +716,14 @@ List<Widget> _appInformationChildren(BuildContext context) {
         onPressed: () => launchUrl(Uri.parse(AppInfo.sourceUrl),
             mode: LaunchMode.externalApplication),
       ),
+      TextButton.icon(
+        key: const ValueKey('updates-info-view-actions'),
+        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        icon: const Icon(Icons.play_circle_outline, size: 18),
+        label: const Text('Visualizza Actions'),
+        onPressed: () => launchUrl(Uri.parse('${AppInfo.sourceUrl}/actions'),
+            mode: LaunchMode.externalApplication),
+      ),
       ListTile(
         key: const ValueKey('updates-info-report-issue'),
         contentPadding: EdgeInsets.zero,
