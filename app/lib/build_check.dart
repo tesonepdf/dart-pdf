@@ -190,6 +190,20 @@ Future<BuildCheck> fetchLatestWorkflowCheck(
   }
 }
 
+/// Le ultime run di un flusso di `main` (risposta grezza dell'API di GitHub),
+/// o null se GitHub non risponde. Usa la stessa memoria e gli stessi limiti
+/// delle altre letture, per il Log dei flussi.
+Future<String?> fetchWorkflowRunsBody(
+  String workflow, {
+  http.Client? client,
+}) =>
+    _githubBody(
+      '/repos/${AppInfo.repositoryOwner}/${AppInfo.repositoryName}'
+      '/actions/workflows/$workflow/runs',
+      const {'branch': 'main', 'per_page': '10'},
+      client: client,
+    );
+
 /// Dove sta la compilazione dell'app (la build su GitHub Actions): in coda, in
 /// corso (con il passo a cui è arrivata), finita bene, fallita o annullata.
 ///

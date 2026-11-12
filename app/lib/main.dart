@@ -17,6 +17,7 @@ import 'app.dart' deferred as app;
 import 'app_info.dart' deferred as app_info;
 import 'window_support.dart';
 import 'windows_file_dialogs.dart';
+import 'workflow_log.dart';
 
 /// The git commit this build was compiled from, or `unknown` for a build that
 /// did not pass one. Supplied by the build scripts as
@@ -35,6 +36,11 @@ Future<void> main(List<String> args) async {
   // PackageInfo (loaded below) needs the binding; ensure it before awaiting.
   WidgetsFlutterBinding.ensureInitialized();
   unawaited(AppLog.instance.install());
+  // Dopo l'avvio, build, CI e secret scan di GitHub entrano nel Log.
+  unawaited(Future<void>.delayed(
+    const Duration(seconds: 8),
+    () => syncWorkflowLog(),
+  ));
   PdfEditingPreferences.onWriteError = (e, s) => AppLog.instance
       .error('Salvataggio scelte degli strumenti (colore, spessore...)', e, s);
 

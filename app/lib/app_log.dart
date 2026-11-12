@@ -51,6 +51,7 @@ enum AppLogType {
   ocr('OCR'),
   aggiornamenti('Aggiornamenti'),
   invioStampa('Invio e stampa'),
+  workflows('Workflows'),
   app('App');
 
   const AppLogType(this.label);
@@ -62,13 +63,17 @@ enum AppLogType {
 /// A quale tipo appartiene una voce, a partire dal suo argomento (`context`).
 AppLogType appLogTypeOf(String context) {
   final c = context.toLowerCase();
+  if (c == 'workflows' || c == 'commit e push') return AppLogType.workflows;
   if (c.contains('aggiorn')) return AppLogType.aggiornamenti;
   if (c.contains('ocr')) return AppLogType.ocr;
   if (c.contains('recent')) return AppLogType.recenti;
   if (c.contains('whatsapp') || c.contains('stampa') || c.contains('invio')) {
     return AppLogType.invioStampa;
   }
-  if (c == 'salvataggio documento' || c.contains('cartella di salvataggio')) {
+  if (c == 'salvataggio documento' ||
+      c == 'apertura documento' ||
+      c == 'chiusura documento' ||
+      c.contains('cartella di salvataggio')) {
     return AppLogType.documenti;
   }
   return AppLogType.app;
@@ -163,6 +168,35 @@ final List<_Say> _says = [
   _Say('OCR', RegExp(r'^"(.*)": testo preso dalla memoria'),
       (m) => 'Per "${m[1]}" ho riusato il testo già riconosciuto: scansione '
           'non rifatta.'),
+  // Apertura e chiusura documenti
+  _Say('Apertura documento', RegExp(r'^Aperto "(.*)" \(sessione precedente\)$'),
+      (m) => 'Il documento "${m[1]}" è stato riaperto dalla sessione '
+          'precedente.'),
+  _Say('Apertura documento', RegExp(r'^Aperto "(.*)"$'),
+      (m) => 'Il documento "${m[1]}" è stato aperto.'),
+  _Say('Apertura documento', RegExp(r'^Apertura non riuscita: (.*)$'),
+      (m) => 'Non sono riuscito ad aprire il documento.'),
+  _Say('Chiusura documento', RegExp(r'^Chiuso "(.*)" senza salvare'),
+      (m) => 'Il documento "${m[1]}" è stato chiuso senza salvare le '
+          'modifiche.'),
+  _Say('Chiusura documento', RegExp(r'^Chiuso "(.*)"$'),
+      (m) => 'Il documento "${m[1]}" è stato chiuso.'),
+  // Commit, push e workflows di GitHub
+  _Say('Commit e push', RegExp(r'^Push riuscito su (\S+): (\S+) (.*)$'),
+      (m) => 'Il commit ${m[2]} "${m[3]}" è stato pubblicato su ${m[1]} '
+          '(commit e push riusciti).'),
+  _Say('Workflows', RegExp(r'^Build #(\d+): success'),
+      (m) => 'La build #${m[1]} su GitHub è finita bene: l\'APK è pronto.'),
+  _Say('Workflows', RegExp(r'^CI #(\d+): success'),
+      (m) => 'I test automatici (CI #${m[1]}) sono passati.'),
+  _Say('Workflows', RegExp(r'^Secret scan #(\d+): success'),
+      (m) => 'La scansione dei segreti (#${m[1]}) non ha trovato nulla.'),
+  _Say('Workflows', RegExp(r'^Build #(\d+): (\S+)'),
+      (m) => 'La build #${m[1]} su GitHub non è riuscita.'),
+  _Say('Workflows', RegExp(r'^CI #(\d+): (\S+)'),
+      (m) => 'I test automatici (CI #${m[1]}) non sono passati.'),
+  _Say('Workflows', RegExp(r'^Secret scan #(\d+): (\S+)'),
+      (m) => 'La scansione dei segreti (#${m[1]}) ha dato un problema.'),
   // Salvataggio e cartella
   _Say('Salvataggio documento', RegExp(r'^Salvato "(.*)"$'),
       (m) => 'Il documento "${m[1]}" è stato salvato.'),
@@ -209,6 +243,8 @@ const Map<String, String> _errorByContext = {
   'Stampa': 'La stampa non è riuscita.',
   'Aggiornamenti': 'L\'aggiornamento non è riuscito.',
   'Recenti': 'C\'è stato un problema con l\'elenco dei file recenti.',
+  'Apertura documento': 'Non sono riuscito ad aprire il documento.',
+  'Workflows': 'Un flusso di GitHub (build, test o scansione) è fallito.',
   'Errore interno': 'L\'app ha avuto un errore interno.',
   'Errore dell\'app': 'L\'app ha avuto un errore imprevisto.',
   'Errore non gestito': 'L\'app ha avuto un errore imprevisto.',
@@ -347,6 +383,17 @@ final List<_Rule> _rules = [
 
 /// Spiega in italiano un errore a partire dal testo tecnico.
 ErrorExplanation explainError(String message, String context) {
+  if (context == 'Workflows') {
+    return const ErrorExplanation(
+      'Su GitHub un flusso automatico (la build dell\'APK, i test della CI o '
+          'la scansione dei segreti) si è fermato con un errore.',
+      'Il documento e l\'app installata sul telefono non cambiano: la '
+          'versione nuova però potrebbe non essere pronta o non essere '
+          'sicura da installare.',
+      'Apri la pagina della run (nel dettaglio tecnico) e guarda quale passo '
+          'è rosso. Chi sistema l\'app riparte da lì.',
+    );
+  }
   final text = message.toLowerCase();
   for (final rule in _rules) {
     if (rule.test.hasMatch(text)) return rule.explanation;
@@ -457,6 +504,31 @@ class AppLog extends ChangeNotifier {
   void error(String context, Object error, [StackTrace? stack]) {
     final text = stack == null ? '$error' : '$error\n$stack';
     _add(AppLogLevel.errore, context, text);
+  }
+
+  /// Come [ok] o [error], ma con l'ora in cui e' davvero successo (serve per
+  /// i flussi di GitHub, che finiscono prima che l'app li legga). La voce
+  /// va al suo posto nell'elenco, dalla piu' vecchia alla piu' recente.
+  void addAt(
+    AppLogLevel level,
+    String context,
+    String message,
+    DateTime time,
+  ) {
+    final entry = AppLogEntry(
+      time: time,
+      level: level,
+      context: context,
+      message: message,
+    );
+    var at = _entries.length;
+    while (at > 0 && _entries[at - 1].time.isAfter(time)) {
+      at--;
+    }
+    _entries.insert(at, entry);
+    _trim();
+    notifyListeners();
+    _scheduleSave();
   }
 
   void clear() {
