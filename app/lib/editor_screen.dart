@@ -4975,8 +4975,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// Toglie (o allarga) una striscia verticale vuota di una pagina: si disegna
   /// il rettangolo sulla parte vuota, con un cursore si sceglie quanto spazio
   /// lasciare, e la parte a sinistra e quella a destra si avvicinano. Il
-  /// risultato e' una pagina nuova, piu' stretta, in una scheda nuova: il
-  /// documento di partenza non cambia.
+  /// risultato e' una pagina nuova, piu' stretta, che prende il posto di
+  /// quella scelta in una copia del documento, aperta in una scheda nuova e
+  /// salvata come file. Il taglio e' una sola modifica: con le frecce Annulla
+  /// e Ripeti si toglie e si rimette. Il documento di partenza non cambia.
   Future<void> _removePageStrip(DocumentTab tab) async {
     final session = tab.session;
     if (session == null) return;
@@ -5000,13 +5002,29 @@ class _EditorScreenState extends State<EditorScreen>
       );
       if (!mounted) return;
       _readOnly = false;
-      _addTab(DocumentTab.document(
+      // La scheda nuova parte come copia dell'originale e il taglio e' una
+      // modifica sua: cosi' Annulla riporta la pagina com'era e Ripeti la
+      // rifa'.
+      final copy = DocumentTab.document(
         title: stripTabTitle(tab.title, choice.page),
-        bytes: result,
+        bytes: bytes,
         preferences: _prefs,
         initiallyDirty: true,
-      ));
-      _toast('Pagina ${choice.page + 1} sistemata, aperta in una scheda nuova.');
+      );
+      final copySession = copy.session;
+      if (copySession == null) {
+        throw StateError('scheda della copia senza sessione');
+      }
+      final adjusted = PdfDocument.open(result);
+      copySession.apply((editor) {
+        editor.appendPagesFrom(adjusted, at: choice.page + 1, outlines: false);
+        editor.removePage(choice.page);
+      });
+      _addTab(copy);
+      _toast('Pagina ${choice.page + 1} sistemata. Annulla e Ripeti sono attivi.');
+      // Il file nuovo si salva subito, cosi' compare nei recenti accanto
+      // all'originale.
+      await _save(copy);
     } on FormatException catch (e) {
       if (mounted) _toast('Spazio non tolto: ${e.message}.');
     } catch (e) {
