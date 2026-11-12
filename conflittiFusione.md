@@ -333,3 +333,8 @@ Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog d
 - Le due build lanciate col cambio di workflow (#76 main riuscita, #77 prova fallita) non hanno ancora convertito il tag della prova da pre-release a release normale, perché la build prova non è arrivata allo step di pubblicazione.
 
 20. **Togli spazio vuoto: annulla/ripeti e file salvato (richiesta dell'utente, 12/11).** La scheda nuova parte come copia dell'originale e il taglio (pagina sistemata al posto di quella vecchia) è una sola modifica, quindi le frecce Annulla e Ripeti restano attive. La copia si salva subito come file (recenti, accanto all'originale). L'originale non cambia.
+
+21. **`prova-sviluppatore` e l'originale di Ben (richiesta dell'utente, 12/11).**
+    - `prova-sviluppatore` è stata una prova andata male: non si usa, non si ricrea e non si cita più nei documenti nuovi. Esiste solo `main`.
+    - Per `ben-milanko/dart-pdf` c'è solo il **controllo della versione**: si cercano le novità e si **avvisa** l'utente. Non si unisce, non si importa e non si modifica niente dell'originale.
+    - I **branch non sono ancora stati attuati**: l'utente ci sta pensando e se ne parla con calma. Fino ad allora non si creano branch.
