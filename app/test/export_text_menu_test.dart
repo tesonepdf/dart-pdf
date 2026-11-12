@@ -45,10 +45,12 @@ void main() {
     expect(
         find.byKey(const ValueKey('menu-export-excel-zone')), findsOneWidget);
     expect(find.text('Esporta una zona come Excel (.xlsx)…'), findsOneWidget);
-    // Le voci sulle pagine stanno nel gruppo "Pagine" della griglia strumenti.
-    expect(find.byKey(const ValueKey('menu-number-pages')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-watermark')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-remove-strip')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-number-pages')), findsOneWidget);
+    expect(find.text('Numera le pagine…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-watermark')), findsOneWidget);
+    expect(find.text('Filigrana…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-remove-strip')), findsOneWidget);
+    expect(find.text('Togli spazio vuoto…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-open-comic')), findsOneWidget);
     expect(find.text('Apri un fumetto (.cbz)…'), findsOneWidget);
