@@ -50,6 +50,8 @@ Future<void> startUpdateInstall(
     builder: (context) => _UpdateProgressDialog(
       progress: progress,
       onCancel: () => cancelled = true,
+      headline: 'Aggiorno dalla build ${updates.currentBuildNumber} '
+          'alla ${updates.latest?.buildNumber ?? "?"}',
     ),
   );
 
@@ -78,7 +80,8 @@ Future<void> startUpdateInstall(
         isCancelled: () => cancelled,
         onProgress: (received, total) {
           progress.value = _UpdateProgress(
-              fraction: (total != null && total > 0) ? received / total : null);
+              fraction: (total != null && total > 0) ? received / total : null,
+              detail: "scarico l'aggiornamento completo");
         },
         // The AppImage path relaunches immediately after applying; show a
         // "restarting" state so the dialog isn't frozen at 100% before exit.
@@ -163,7 +166,10 @@ Future<_PatchStep> _tryPatched({
     installedBuild: installed,
     forceFull: forceFull,
     isCancelled: isCancelled,
-    onProgress: (f) => progress.value = _UpdateProgress(fraction: f),
+    onProgress: (f) => progress.value =
+        _UpdateProgress(fraction: f, detail: progress.value.detail),
+    onLog: (m) => progress.value =
+        _UpdateProgress(fraction: progress.value.fraction, detail: m),
   );
   final apk = result.apkPath;
   if (apk != null) {
@@ -201,6 +207,8 @@ Future<void> startReinstallAll(
     builder: (context) => _UpdateProgressDialog(
       progress: progress,
       onCancel: () => cancelled = true,
+      headline: 'Aggiorno dalla build ${updates.currentBuildNumber} '
+          'alla ${updates.latest?.buildNumber ?? "?"}',
     ),
   );
 
@@ -257,16 +265,23 @@ Future<void> _openInBrowser(
 /// or [applying] once the download is done and the update is being applied
 /// (the AppImage restart).
 class _UpdateProgress {
-  const _UpdateProgress({this.fraction, this.applying = false});
+  const _UpdateProgress({this.fraction, this.applying = false, this.detail});
   final double? fraction;
   final bool applying;
+
+  /// Cosa sta facendo l'aggiornamento in questo momento (testo in italiano).
+  final String? detail;
 }
 
 /// Modal progress dialog for an in-app update download, with a cancel button.
 class _UpdateProgressDialog extends StatelessWidget {
-  const _UpdateProgressDialog({required this.progress, required this.onCancel});
+  const _UpdateProgressDialog(
+      {required this.progress, required this.onCancel, this.headline});
 
   final ValueListenable<_UpdateProgress> progress;
+
+  /// Cosa si sta aggiornando, per esempio "dalla build 120 alla 125".
+  final String? headline;
   final VoidCallback onCancel;
 
   @override
@@ -288,7 +303,16 @@ class _UpdateProgressDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (headline != null) ...[
+                Text(headline!,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+              ],
               Text(label),
+              if (value.detail != null) ...[
+                const SizedBox(height: 4),
+                Text(value.detail!),
+              ],
               const SizedBox(height: 16),
               // Indeterminate bar (null value) while applying/restarting.
               LinearProgressIndicator(

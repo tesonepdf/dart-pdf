@@ -24,6 +24,7 @@ Future<PatchRunResult> buildPatchedApk({
   bool forceFull = false,
   void Function(double? fraction)? onProgress,
   bool Function()? isCancelled,
+  void Function(String message)? onLog,
   http.Client Function()? clientFactory,
 }) async {
   if (!assets.containsKey(kPatchManifestName)) {
@@ -51,6 +52,7 @@ Future<PatchRunResult> buildPatchedApk({
       log: (m) {
         debugPrint('Aggiornamento con patch: $m');
         AppLog.instance.info('Aggiornamenti', m);
+        onLog?.call(m);
       },
       download: (url, path, {expectedSize, required onBytes}) =>
           _downloadToFile(factory, url, path,
