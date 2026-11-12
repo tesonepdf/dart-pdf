@@ -136,6 +136,7 @@ Future<PatchRunResult> runPatchPlan({
       var currentIsTemp = false;
       if (plan.useBase) {
         final basePath = '${workDir.path}/base.apk';
+        log?.call('scarico l\'APK base');
         await download(assets[plan.base.asset]!, basePath,
             expectedSize: plan.base.size, onBytes: bump);
         if (await sha256OfFile(basePath) != plan.base.sha256) {
@@ -155,9 +156,12 @@ Future<PatchRunResult> runPatchPlan({
         }
         final edge = plan.edges[i];
         final patchPath = '${workDir.path}/patch-${edge.from}-${edge.to}.dpat';
+        log?.call('scarico la patch ${i + 1} di ${plan.edges.length} '
+            '(build ${edge.from} -> ${edge.to})');
         await download(assets[edge.asset]!, patchPath,
             expectedSize: edge.size, onBytes: bump);
         onProgress?.call(null);
+        log?.call('applico la patch ${i + 1} di ${plan.edges.length} (ricostruisco l\'APK)');
         final out = i == plan.edges.length - 1
             ? finalPath
             : '${workDir.path}/step-$i.apk';
