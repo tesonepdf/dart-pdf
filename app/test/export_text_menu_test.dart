@@ -49,6 +49,8 @@ void main() {
     expect(find.text('Numera le pagine…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-watermark')), findsOneWidget);
     expect(find.text('Filigrana…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-remove-strip')), findsOneWidget);
+    expect(find.text('Togli spazio vuoto…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-photos-to-pdf')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-open-comic')), findsOneWidget);
     expect(find.text('Apri un fumetto (.cbz)…'), findsOneWidget);
