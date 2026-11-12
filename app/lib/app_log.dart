@@ -44,6 +44,191 @@ class AppLogEntry {
       );
 }
 
+/// Tipo di una voce del Log, per filtrare l'elenco.
+enum AppLogType {
+  documenti('Documenti'),
+  recenti('Recenti'),
+  ocr('OCR'),
+  aggiornamenti('Aggiornamenti'),
+  invioStampa('Invio e stampa'),
+  app('App');
+
+  const AppLogType(this.label);
+
+  /// Il nome mostrato nel filtro.
+  final String label;
+}
+
+/// A quale tipo appartiene una voce, a partire dal suo argomento (`context`).
+AppLogType appLogTypeOf(String context) {
+  final c = context.toLowerCase();
+  if (c.contains('aggiorn')) return AppLogType.aggiornamenti;
+  if (c.contains('ocr')) return AppLogType.ocr;
+  if (c.contains('recent')) return AppLogType.recenti;
+  if (c.contains('whatsapp') || c.contains('stampa') || c.contains('invio')) {
+    return AppLogType.invioStampa;
+  }
+  if (c == 'salvataggio documento' || c.contains('cartella di salvataggio')) {
+    return AppLogType.documenti;
+  }
+  return AppLogType.app;
+}
+
+/// Scelte del filtro per data.
+enum AppLogDateRange { tutte, oggi, ieri, ultimi7, giorno }
+
+/// Vero se [time] cade nell'intervallo scelto. Con [AppLogDateRange.giorno]
+/// conta il giorno indicato in [day].
+bool appLogInDateRange(
+  DateTime time,
+  AppLogDateRange range,
+  DateTime now, {
+  DateTime? day,
+}) {
+  final today = DateTime(now.year, now.month, now.day);
+  final d = DateTime(time.year, time.month, time.day);
+  switch (range) {
+    case AppLogDateRange.tutte:
+      return true;
+    case AppLogDateRange.oggi:
+      return d == today;
+    case AppLogDateRange.ieri:
+      return d == DateTime(today.year, today.month, today.day - 1);
+    case AppLogDateRange.ultimi7:
+      final first = DateTime(today.year, today.month, today.day - 6);
+      return !d.isBefore(first) && !d.isAfter(today);
+    case AppLogDateRange.giorno:
+      return day != null && d == DateTime(day.year, day.month, day.day);
+  }
+}
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+/// Quando e' successo, in forma breve: "Oggi 11:25:13", "Ieri 09:02:40",
+/// oppure "10/11 18:30:05".
+String appLogWhen(DateTime t, DateTime now) {
+  final hms = '${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
+  final today = DateTime(now.year, now.month, now.day);
+  final d = DateTime(t.year, t.month, t.day);
+  if (d == today) return 'Oggi $hms';
+  if (d == DateTime(today.year, today.month, today.day - 1)) {
+    return 'Ieri $hms';
+  }
+  return '${_two(t.day)}/${_two(t.month)} $hms';
+}
+
+class _Say {
+  const _Say(this.context, this.pattern, this.build);
+
+  final String context;
+  final RegExp pattern;
+  final String Function(RegExpMatch m) build;
+}
+
+final List<_Say> _says = [
+  // Recenti
+  _Say('Recenti', RegExp(r'^Caricati (\d+) file recenti'),
+      (m) => 'All\'apertura dell\'app ho caricato l\'elenco dei file recenti '
+          '(${m[1]}).'),
+  _Say('Recenti', RegExp(r'^Spostato in cima: (.*) \(\d+ vo'),
+      (m) => '"${m[1]}" è tornato in cima ai file recenti.'),
+  _Say('Recenti', RegExp(r'^Aggiunto: (.*) \(\d+ vo'),
+      (m) => '"${m[1]}" è stato aggiunto ai file recenti.'),
+  _Say('Recenti', RegExp(r'^Rinominato: (.*) \(\d+ vo'),
+      (m) => 'Nei file recenti un documento è stato rinominato "${m[1]}".'),
+  _Say('Recenti', RegExp(r'^Tolto dall.elenco'),
+      (m) => 'Un file è stato tolto dai file recenti.'),
+  _Say('Recenti', RegExp(r'^Elenco svuotato'),
+      (m) => 'L\'elenco dei file recenti è stato svuotato.'),
+  _Say('Recenti', RegExp(r'^Passati al formato nuovo'),
+      (m) => 'L\'elenco dei file recenti è stato convertito nel formato '
+          'nuovo, che salva un file alla volta.'),
+  _Say('Recenti', RegExp(r'^Percorso della copia aggiornato'),
+      (m) => 'Dopo un aggiornamento dell\'app ho ricollegato la copia di un '
+          'file recente.'),
+  _Say('Recenti', RegExp(r'^Disponibilit.{1,2} della copia aggiornata'),
+      (m) => 'Ho controllato quali copie dei file recenti sono ancora '
+          'disponibili.'),
+  _Say('Recenti', RegExp(r'^Caricamento non riuscito'),
+      (m) => 'Non sono riuscito a leggere l\'elenco dei file recenti.'),
+  _Say('Recenti', RegExp(r'^Salvataggio non riuscito'),
+      (m) => 'Non sono riuscito a salvare l\'elenco dei file recenti.'),
+  // OCR
+  _Say('OCR', RegExp(r'^"(.*)": ha gi.{1,2} un livello di testo'),
+      (m) => 'Il documento "${m[1]}" ha già un livello di testo: non serviva '
+          'fare l\'OCR.'),
+  _Say('OCR', RegExp(r'^"(.*)": non in memoria'),
+      (m) => 'Per "${m[1]}" il testo OCR non era in memoria: parte la '
+          'scansione del documento.'),
+  _Say('OCR', RegExp(r'^"(.*)": testo preso dalla memoria'),
+      (m) => 'Per "${m[1]}" ho riusato il testo già riconosciuto: scansione '
+          'non rifatta.'),
+  // Salvataggio e cartella
+  _Say('Salvataggio documento', RegExp(r'^Salvato "(.*)"$'),
+      (m) => 'Il documento "${m[1]}" è stato salvato.'),
+  _Say('Salvataggio documento',
+      RegExp(r'^Non riuscito sul file originale "(.*)":'),
+      (m) => 'Non sono riuscito a salvare "${m[1]}" sul file originale.'),
+  _Say('Salvataggio documento', RegExp(r'^Scritto "(.*)" nella cartella "(.*)"$'),
+      (m) => '"${m[1]}" è stato salvato nella cartella "${m[2]}".'),
+  _Say('Cartella di salvataggio', RegExp(r'^Impostata: (.*)$'),
+      (m) => 'Hai scelto "${m[1]}" come cartella di salvataggio.'),
+  _Say('Cartella di salvataggio', RegExp(r'^Rimossa$'),
+      (m) => 'Hai tolto la cartella di salvataggio.'),
+  // Stampa
+  _Say('Stampa', RegExp(r'^Fogli stampati come a schermo'),
+      (m) => 'I fogli sono stati preparati per la stampa così come li vedi a '
+          'schermo (300 dpi).'),
+  _Say('Stampa', RegExp(r'^Immagine non riuscita'),
+      (m) => 'Non sono riuscito a preparare i fogli per la stampa.'),
+  // Aggiornamenti
+  _Say('Aggiornamenti',
+      RegExp(r'^Inizio aggiornamento: dalla build (\S+) alla (\S+)'),
+      (m) => 'È iniziato l\'aggiornamento dalla build ${m[1]} alla ${m[2]}.'),
+  _Say('Aggiornamenti', RegExp(r'^Aggiornamento annullato'),
+      (m) => 'Hai annullato l\'aggiornamento.'),
+  _Say('Aggiornamenti', RegExp(r'^Aggiornamento scaricato e passato'),
+      (m) => 'L\'aggiornamento è stato scaricato ed è passato '
+          'all\'installazione di Android.'),
+  _Say('Aggiornamenti', RegExp(r'^Aggiornamento (con patch )?non riuscito'),
+      (m) => 'L\'aggiornamento non è riuscito.'),
+  // WhatsApp
+  _Say('Contatti WhatsApp', RegExp(r'^Salvati (\d+) contatti'),
+      (m) => 'Ho salvato ${m[1]} contatti WhatsApp.'),
+  _Say('Invio WhatsApp', RegExp(r'^"(.*)" inviato a (.*)$'),
+      (m) => '"${m[1]}" è stato inviato a ${m[2]} su WhatsApp.'),
+];
+
+/// Cosa e' successo quando una voce di errore non ha una frase sua, in base
+/// all'argomento.
+const Map<String, String> _errorByContext = {
+  'Invio WhatsApp': 'L\'invio su WhatsApp non è riuscito.',
+  'Salvataggio documento': 'Non sono riuscito a salvare il documento.',
+  'Cartella di salvataggio':
+      'Non sono riuscito a impostare la cartella di salvataggio.',
+  'Stampa': 'La stampa non è riuscita.',
+  'Aggiornamenti': 'L\'aggiornamento non è riuscito.',
+  'Recenti': 'C\'è stato un problema con l\'elenco dei file recenti.',
+  'Errore interno': 'L\'app ha avuto un errore interno.',
+  'Errore dell\'app': 'L\'app ha avuto un errore imprevisto.',
+  'Errore non gestito': 'L\'app ha avuto un errore imprevisto.',
+};
+
+/// Una frase in italiano che dice cosa e' successo in una voce del Log.
+String describeLogEntry(AppLogEntry e) {
+  final first = e.message.split('\n').first.trim();
+  for (final say in _says) {
+    if (say.context != e.context) continue;
+    final m = say.pattern.firstMatch(first);
+    if (m != null) return say.build(m);
+  }
+  if (e.level == AppLogLevel.errore) {
+    return _errorByContext[e.context] ??
+        'Si è verificato un problema durante "${e.context}".';
+  }
+  return first.isEmpty ? e.context : first;
+}
+
 /// Spiegazione in italiano semplice di un errore.
 class ErrorExplanation {
   const ErrorExplanation(this.cosaSuccede, this.perIDati, this.cosaFare);
@@ -290,6 +475,7 @@ class AppLog extends ChangeNotifier {
         AppLogLevel.errore => 'ERRORE',
       };
       b.writeln('[${e.time.toIso8601String()}] $mark - ${e.context}');
+      b.writeln('Cosa è successo: ${describeLogEntry(e)}');
       b.writeln(e.message);
       if (e.level == AppLogLevel.errore) {
         final x = explainError(e.message, e.context);
