@@ -70,7 +70,7 @@ Non iniziato: il contesto della chat era finito, così non si è lasciato niente
 3. **Elenco dei recenti: non salvare tutto di continuo.** Nel log compare ripetuto "Elenco salvato (83 file)" (`recents.dart`, riga del `_persist`, circa la 254): a ogni modifica si riscrive l'intero elenco e all'apertura lo si rilegge tutto, ed è lento. Da fare: salvare solo la voce che cambia (con scritto nel log cosa è cambiato: aperto, aggiunto, tolto, spostato) e tenere il resto in cache, senza rileggerlo e senza riscriverlo.
 4. **OCR che riparte a ogni apertura.** Probabile causa, da verificare: l'elenco riscritto fa sembrare i file "nuovi" (nuova data o nuova firma) e l'OCR li rifà. Da fare: tenere in cache l'esito dell'OCR per file e rifarlo solo se il contenuto è davvero cambiato (controllare dimensione e data di modifica del file, non l'elenco dei recenti). Dipende dal punto 3.
 
-Ordine consigliato: 3, poi 4, poi 2, poi 1.
+Ordine consigliato: **3, poi 4, poi 1, poi 2.** Il punto 1 scrive le sue voci sotto l'argomento "Aggiornamenti" anche prima che esista la divisione per argomento; il punto 2 poi le raggruppa. Per chi riparte da una chat nuova: `git pull`, leggere `conflittiFusione.md` e `dartPdfRiferimenti.md`, controllare la release e partire dal punto 3.
 
 #### DA FARE: spiegazione e tipo (patch o completa) a ogni aggiornamento (richiesta dell'utente, 12/11)
 
