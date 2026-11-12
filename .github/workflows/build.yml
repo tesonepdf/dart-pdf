@@ -335,6 +335,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0 # serve la storia per scrivere cosa cambia nelle note
           persist-credentials: false
 
       - uses: actions/download-artifact@v8
@@ -405,6 +406,31 @@ jobs:
               if [[ -f "$f" ]]; then assets+=("$f"); fi
             done
             echo "Si caricano: ${assets[*]}"
+
+            # Note della release: cosa cambia (messaggi dei commit dalla build
+            # precedente) e se l'aggiornamento e' una patch o completo. Si
+            # scrivono DOPO il piano, perche' il tipo si sa solo ora.
+            prev_sha="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- main-sha: \([0-9a-f]\{7,40\}\) -->.*/\1/p' | head -n1 || true)"
+            changes=""
+            if [[ -n "$prev_sha" ]]; then
+              changes="$(git log --format='%s' "$prev_sha..$GITHUB_SHA" 2>/dev/null | sed -E 's/^#[0-9]+ +//; s/ *\[completo\]//g' | head -n 15 | sed 's/^/- /' || true)"
+            fi
+            if [[ -z "$changes" ]]; then
+              changes="- $(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^#[0-9]+ +//; s/ *\[completo\]//g')"
+            fi
+            if [[ "$(jq -r .full plan/decision.json)" == "true" ]]; then
+              kind="full"
+              apk_mb="$(( $(stat -c %s DartPDF-Android.apk) / 1048576 ))"
+              kind_line="Aggiornamento: completo, circa ${apk_mb} MB, perche' $(jq -r '.reason // "serve l'"'"'APK intero"' plan/decision.json)"
+            else
+              kind="patch"
+              patch_bytes=0
+              for f in plan/patch-*.dpat; do
+                if [[ -f "$f" ]]; then patch_bytes=$(( patch_bytes + $(stat -c %s "$f") )); fi
+              done
+              kind_line="Aggiornamento: patch, circa $(( (patch_bytes + 1048575) / 1048576 )) MB"
+            fi
+            android_notes="$(printf 'Build #%s%s\nCosa cambia:\n%s\n%s\n<!-- update-kind: %s -->\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$changes" "$kind_line" "$kind" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             if gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               gh release upload "$android_tag" \
