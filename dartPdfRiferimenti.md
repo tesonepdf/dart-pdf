@@ -59,6 +59,10 @@ Già presenti prima nell'app (non serviva rifarli): riordino pagine, taglia, cop
 - **EPUB:** il corsivo vale solo per paragrafi interi in corsivo, non per singole parole; cinese e giapponese diventano `?`; cirillico e greco sono traslitterati, non scritti con i glifi originali; i libri con protezione (DRM) non si leggono; un libro molto lungo può essere lento (non toccato); GIF, SVG e WebP non si portano.
 - **Moduli (fusione con Ben):** la riga delle proprietà dei moduli va guardata sul telefono.
 
+## In corso (12/11)
+
+- **Font consigliato quando si scrive in un PDF.** Richiesta dell'utente (paletto 15 in `conflittiFusione.md`): quando il font di un PDF è "limitato" (triangolo nel menu "Carattere"), il menu consiglia il font completo più simile, per esempio Tinos al posto di Times New Roman. Leggendo, la scelta resta automatica. Fatto dopo il pull al `#353`: funzione `pdfSuggestedBundledFont` e sezione "Consigliato" in `editing_fonts.dart`, due testi nuovi in tutte le lingue (italiano vero, le altre in inglese), test. Un commit. Da provare sul telefono.
+
 ## Da fare
 
 In ordine:

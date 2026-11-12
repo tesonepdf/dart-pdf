@@ -276,6 +276,8 @@
   "propSectionComments": "التعليقات",
   "propSectionFormField": "حقل النموذج",
   "propSectionInThisDocument": "في هذا المستند",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "الموضع والحجم (pt)",
   "propSectionSelection": "التحديد",
   "propSectionText": "النص",

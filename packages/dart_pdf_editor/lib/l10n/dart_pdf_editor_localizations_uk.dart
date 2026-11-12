@@ -825,6 +825,12 @@ class DartPdfEditorLocalizationsUk extends DartPdfEditorLocalizations {
   String get propSectionInThisDocument => 'У цьому документі';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => 'Позиція та розмір (pt)';
 
   @override

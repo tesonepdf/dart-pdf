@@ -813,6 +813,12 @@ class DartPdfEditorLocalizationsTh extends DartPdfEditorLocalizations {
   String get propSectionInThisDocument => 'ในเอกสารนี้';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => 'ตำแหน่งและขนาด (pt)';
 
   @override

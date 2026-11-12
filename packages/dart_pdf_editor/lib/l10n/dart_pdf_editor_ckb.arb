@@ -246,6 +246,8 @@
   "propSectionComments": "لێدوانەکان",
   "propSectionFormField": "خانەی فۆرم",
   "propSectionInThisDocument": "لەم بەڵگەنامەیەدا",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "شوێن و قەبارە (pt)",
   "propSectionSelection": "دیاریکراو",
   "propSectionText": "دەق",

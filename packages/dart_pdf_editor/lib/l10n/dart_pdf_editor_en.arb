@@ -1048,6 +1048,14 @@
   "@propSectionInThisDocument": {
     "description": "Font picker section header grouping fonts already embedded in the open document."
   },
+  "propSectionSuggested": "Suggested",
+  "@propSectionSuggested": {
+    "description": "Font picker section header over the full font suggested in place of a document font with limited characters."
+  },
+  "propSuggestedNoLimits": "No character limits",
+  "@propSuggestedNoLimits": {
+    "description": "Subtitle of the suggested replacement font: it can type any character."
+  },
   "propSectionPositionSize": "Position & size (pt)",
   "@propSectionPositionSize": {
     "description": "Section header for the position and size fields; 'pt' means PDF points (the unit)."

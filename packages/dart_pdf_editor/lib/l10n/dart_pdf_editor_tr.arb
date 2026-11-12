@@ -276,6 +276,8 @@
   "propSectionComments": "Yorumlar",
   "propSectionFormField": "Form alanı",
   "propSectionInThisDocument": "Bu belgede",
+  "propSectionSuggested": "Suggested",
+  "propSuggestedNoLimits": "No character limits",
   "propSectionPositionSize": "Konum ve boyut (pt)",
   "propSectionSelection": "Seçim",
   "propSectionText": "Metin",

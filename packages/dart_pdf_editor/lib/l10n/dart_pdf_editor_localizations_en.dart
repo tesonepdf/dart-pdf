@@ -813,6 +813,12 @@ class DartPdfEditorLocalizationsEn extends DartPdfEditorLocalizations {
   String get propSectionInThisDocument => 'In this document';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => 'Position & size (pt)';
 
   @override
@@ -3425,6 +3431,12 @@ class DartPdfEditorLocalizationsEnAu extends DartPdfEditorLocalizationsEn {
   String get propSectionInThisDocument => 'In this document';
 
   @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
+
+  @override
   String get propSectionPositionSize => 'Position & size (pt)';
 
   @override
@@ -6035,6 +6047,12 @@ class DartPdfEditorLocalizationsEnGb extends DartPdfEditorLocalizationsEn {
 
   @override
   String get propSectionInThisDocument => 'In this document';
+
+  @override
+  String get propSectionSuggested => 'Suggested';
+
+  @override
+  String get propSuggestedNoLimits => 'No character limits';
 
   @override
   String get propSectionPositionSize => 'Position & size (pt)';
