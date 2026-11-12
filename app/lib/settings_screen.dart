@@ -742,6 +742,14 @@ List<Widget> _appInformationChildren(BuildContext context) {
         onTap: () => showWhatsNew(context),
       ),
       ListTile(
+        key: const ValueKey('updates-info-note-da-fare'),
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.checklist_outlined),
+        title: const Text('Note da fare'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showNoteDaFare(context),
+      ),
+      ListTile(
         key: const ValueKey('updates-info-licenses'),
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.article_outlined),
@@ -1779,6 +1787,88 @@ class _BuildRunTileState extends State<_BuildRunTile> {
           : (run?.state == BuildRunState.failed && run?.url != null)
               ? () => launchUrl(run!.url!, mode: LaunchMode.externalApplication)
               : _load,
+    );
+  }
+}
+
+const _noteDaFareKey = 'dart_pdf_editor_app.note_da_fare';
+
+/// Note libere (cose da fare). Salvate in automatico mentre si scrive, sul
+/// dispositivo, come le altre impostazioni.
+Future<void> showNoteDaFare(BuildContext context) {
+  return showPdfDialog<void>(
+    context: context,
+    builder: (context) => const _NoteDaFareDialog(),
+  );
+}
+
+class _NoteDaFareDialog extends StatefulWidget {
+  const _NoteDaFareDialog();
+
+  @override
+  State<_NoteDaFareDialog> createState() => _NoteDaFareDialogState();
+}
+
+class _NoteDaFareDialogState extends State<_NoteDaFareDialog> {
+  final _controller = TextEditingController();
+  bool _caricato = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _carica();
+  }
+
+  Future<void> _carica() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _controller.text = prefs.getString(_noteDaFareKey) ?? '';
+    } catch (_) {
+      // Non bloccante: la finestra resta vuota.
+    }
+    if (mounted) setState(() => _caricato = true);
+  }
+
+  Future<void> _salva(String testo) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_noteDaFareKey, testo);
+    } catch (_) {
+      // Non bloccante.
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Note da fare'),
+      content: SizedBox(
+        width: 480,
+        child: TextField(
+          key: const ValueKey('note-da-fare-campo'),
+          controller: _controller,
+          enabled: _caricato,
+          minLines: 6,
+          maxLines: 14,
+          onChanged: _salva,
+          decoration: const InputDecoration(
+            hintText: 'Scrivi qui le cose da fare...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Chiudi'),
+        ),
+      ],
     );
   }
 }
