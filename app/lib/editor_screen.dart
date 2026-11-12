@@ -35,6 +35,7 @@ import 'file_io.dart';
 import 'image_clipboard.dart';
 import 'image_export.dart';
 import 'standard_sizes.dart';
+import 'strip_remove.dart';
 import 'image_to_pdf.dart';
 import 'image_source_picker.dart';
 import 'incoming_file.dart';
@@ -4971,6 +4972,50 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Toglie (o allarga) una striscia verticale vuota di una pagina: si disegna
+  /// il rettangolo sulla parte vuota, con un cursore si sceglie quanto spazio
+  /// lasciare, e la parte a sinistra e quella a destra si avvicinano. Il
+  /// risultato e' una pagina nuova, piu' stretta, in una scheda nuova: il
+  /// documento di partenza non cambia.
+  Future<void> _removePageStrip(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      session.finishInk();
+      final bytes = Uint8List.fromList(session.bytes);
+      final document = session.document.openAppended(bytes);
+      final choice = await pickPageStrip(
+        context,
+        name: tab.title,
+        bytes: bytes,
+        document: document,
+        initialPage: tab.viewer?.currentPage ?? 0,
+      );
+      if (choice == null || !mounted) return;
+      final result = removePageStrip(
+        source: document,
+        page: choice.page,
+        strip: choice.strip,
+        gap: choice.gap,
+      );
+      if (!mounted) return;
+      _readOnly = false;
+      _addTab(DocumentTab.document(
+        title: stripTabTitle(tab.title, choice.page),
+        bytes: result,
+        preferences: _prefs,
+        initiallyDirty: true,
+      ));
+      _toast('Pagina ${choice.page + 1} sistemata, aperta in una scheda nuova.');
+    } on FormatException catch (e) {
+      if (mounted) _toast('Spazio non tolto: ${e.message}.');
+    } catch (e) {
+      AppDevTools.instance.addLog('strip remove failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast('Spazio non tolto: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Scrive il numero su ogni pagina (o dalla pagina scelta in poi), come una
   /// sola modifica che si può annullare.
   Future<void> _numberPages(DocumentTab tab) async {
@@ -5709,6 +5754,16 @@ class _EditorScreenState extends State<EditorScreen>
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_numberPages(tab));
+        },
+      ),
+      _MenuAction(
+        id: 'remove-strip',
+        requiresDocument: true,
+        icon: Icons.compress,
+        title: 'Togli spazio vuoto…',
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_removePageStrip(tab));
         },
       ),
       _MenuAction(
@@ -6788,6 +6843,7 @@ class _EditorScreenState extends State<EditorScreen>
         'insert-document' ||
         'insert-scan' ||
         'number-pages' ||
+        'remove-strip' ||
         'watermark' =>
           'pages',
         'import-form-data' => 'forms',

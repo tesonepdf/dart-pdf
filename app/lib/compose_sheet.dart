@@ -660,6 +660,48 @@ Future<SheetCrop?> pickPageZone(
   );
 }
 
+/// La scelta fatta in [pickPageStrip]: la pagina (da 0), la striscia in
+/// frazioni della pagina vista (0..1, origine in alto a sinistra) e lo spazio
+/// che deve restare al suo posto, in punti.
+class StripChoice {
+  const StripChoice({
+    required this.page,
+    required this.strip,
+    required this.gap,
+  });
+
+  final int page;
+  final Rect strip;
+  final double gap;
+}
+
+/// Fa scegliere una striscia verticale di una pagina di [document]: si disegna
+/// il rettangolo sulla parte vuota (con i quadratini su angoli e lati per
+/// correggerlo) e con un cursore si decide quanto spazio lasciare, da zero
+/// (la striscia sparisce) fino a piu' della sua larghezza (si allarga).
+/// Restituisce la scelta, o null se si torna indietro.
+Future<StripChoice?> pickPageStrip(
+  BuildContext context, {
+  required String name,
+  required Uint8List bytes,
+  required PdfDocument document,
+  int initialPage = 0,
+}) {
+  return Navigator.of(context).push<StripChoice>(
+    MaterialPageRoute<StripChoice>(
+      builder: (_) => _CropPickerScreen(
+        name: name,
+        bytes: bytes,
+        document: document,
+        initialPage: initialPage,
+        pickOnce: true,
+        stripMode: true,
+        onAdd: (_) {},
+      ),
+    ),
+  );
+}
+
 /// Mostra una pagina del PDF e fa disegnare il rettangolo da ritagliare.
 class _CropPickerScreen extends StatefulWidget {
   const _CropPickerScreen({
@@ -669,12 +711,17 @@ class _CropPickerScreen extends StatefulWidget {
     required this.onAdd,
     this.initialPage = 0,
     this.pickOnce = false,
+    this.stripMode = false,
   });
 
   final String name;
   final Uint8List bytes;
   final PdfDocument document;
   final void Function(SheetCrop crop) onAdd;
+
+  /// Vero quando si sceglie una striscia da togliere o allargare: invece della
+  /// zona la schermata si chiude con una [StripChoice].
+  final bool stripMode;
 
   /// Vero quando serve una sola zona (per esempio da esportare in Excel): la
   /// schermata si chiude con la zona scelta invece di raccogliere più ritagli.
@@ -703,6 +750,10 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
   /// La parte scelta, in frazioni della pagina (0..1, origine in alto a sinistra).
   Rect? _sel;
   Rect? _selBefore;
+
+  /// Solo in modalita' striscia: lo spazio da lasciare al posto della
+  /// striscia, in punti.
+  double _gap = 4;
 
   /// Ingrandimento e spostamento dalla posizione centrata, in pixel.
   double _zoom = 1;
@@ -987,6 +1038,84 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
     });
   }
 
+  // ---- striscia -------------------------------------------------------
+
+  double get _pageWidthPt {
+    final page = widget.document.page(_page);
+    return pdfRegionDisplaySize(page.cropBox, page.rotation).width;
+  }
+
+  double get _stripWidthPt => _sel == null ? 0 : _sel!.width * _pageWidthPt;
+
+  /// Fino a dove arriva il cursore: il doppio della striscia (almeno 40 pt).
+  double get _gapMax => math.max(_stripWidthPt * 2, 40.0);
+
+  double get _gapNow => _gap.clamp(0.0, _gapMax).toDouble();
+
+  void _applyStrip() {
+    final sel = _sel;
+    if (sel == null || !_selOk) return;
+    Navigator.of(context).pop(StripChoice(
+      page: _page,
+      strip: sel,
+      gap: _gapNow,
+    ));
+  }
+
+  List<Widget> _stripControls() {
+    String mm(double pt) => (pt * 25.4 / 72).round().toString();
+    final ok = _selOk;
+    final now = _gapNow;
+    final before = _stripWidthPt;
+    final what = now < before - 0.5
+        ? 'riduci'
+        : now > before + 0.5
+            ? 'espandi'
+            : 'invariato';
+    return [
+      Text(
+        ok
+            ? 'Spazio ora: ${mm(before)} mm. Dopo: ${mm(now)} mm ($what).'
+            : 'Disegna il rettangolo sulla parte vuota.',
+        textAlign: TextAlign.center,
+      ),
+      Row(
+        children: [
+          const Text('Riduci'),
+          Expanded(
+            child: Slider(
+              key: const ValueKey('strip-gap'),
+              value: now,
+              min: 0,
+              max: _gapMax,
+              onChanged: ok ? (v) => setState(() => _gap = v) : null,
+            ),
+          ),
+          const Text('Espandi'),
+        ],
+      ),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              key: const ValueKey('strip-remove-all'),
+              onPressed: ok ? () => setState(() => _gap = 0) : null,
+              child: const Text('Togli tutto'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              key: const ValueKey('strip-apply'),
+              onPressed: ok ? _applyStrip : null,
+              child: const Text('Applica'),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
   Widget _workArea() {
     if (_error != null) return Center(child: Text('Pagina non disegnata: $_error'));
     if (_png == null) return const Center(child: CircularProgressIndicator());
@@ -1052,11 +1181,15 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              widget.pickOnce
-                  ? 'Trascina per scegliere la zona da portare in Excel. Con '
-                      'due dita ingrandisci; trascina i bordi per correggerla.'
-                  : 'Trascina per scegliere la parte. Con due dita ingrandisci; '
-                      'trascina i bordi per correggerla.',
+              widget.stripMode
+                  ? 'Disegna un rettangolo sulla parte vuota. Trascina i '
+                      'quadratini su angoli e lati per sistemarlo, con due dita '
+                      'ingrandisci. Poi scegli quanto spazio lasciare.'
+                  : widget.pickOnce
+                      ? 'Trascina per scegliere la zona da portare in Excel. Con '
+                          'due dita ingrandisci; trascina i bordi per correggerla.'
+                      : 'Trascina per scegliere la parte. Con due dita ingrandisci; '
+                          'trascina i bordi per correggerla.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -1121,6 +1254,9 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ),
+                  if (widget.stripMode)
+                    ..._stripControls()
+                  else
                   Row(
                     children: [
                       Expanded(
