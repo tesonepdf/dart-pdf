@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dart_pdf_editor_app/recents.dart';
 
 void main() {
+  recentsPerEntryTests();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('add inserts most-recent-first and dedupes by id', () async {
@@ -122,5 +123,49 @@ void main() {
     await reloaded.load();
     expect(reloaded.items.map((e) => e.cachePath),
         contains('/new/recent_pdfs/m.pdf'));
+  });
+}
+
+// Salvataggio per voce: a ogni modifica si scrive solo la voce che cambia.
+void recentsPerEntryTests() {
+  group('RecentsStore: una chiave per file', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    Future<List<String>> entryKeys() async => (await SharedPreferences.getInstance())
+        .getKeys()
+        .where((k) => k.startsWith('dart_pdf_editor_app.recents.e.'))
+        .toList();
+
+    test('add scrive una sola chiave per file', () async {
+      final store = RecentsStore();
+      await store.add(title: 'a.pdf', path: '/a.pdf');
+      await store.add(title: 'b.pdf', path: '/b.pdf');
+      expect((await entryKeys()).length, 2);
+      expect(store.items.first.title, 'b.pdf');
+      store.dispose();
+    });
+
+    test('remove toglie solo la sua chiave', () async {
+      final store = RecentsStore();
+      await store.add(title: 'a.pdf', path: '/a.pdf');
+      await store.add(title: 'b.pdf', path: '/b.pdf');
+      await store.remove('/a.pdf');
+      expect((await entryKeys()).length, 1);
+      store.dispose();
+    });
+
+    test('il vecchio formato si converte e poi sparisce', () async {
+      SharedPreferences.setMockInitialValues({
+        'dart_pdf_editor_app.recents':
+            '[{"t":"old.pdf","p":"/old.pdf","o":5}]',
+      });
+      final store = RecentsStore();
+      await store.load();
+      expect(store.items.single.title, 'old.pdf');
+      expect((await entryKeys()).length, 1);
+      expect((await SharedPreferences.getInstance())
+          .containsKey('dart_pdf_editor_app.recents'), isFalse);
+      store.dispose();
+    });
   });
 }

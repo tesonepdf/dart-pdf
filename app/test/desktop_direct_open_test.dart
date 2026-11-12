@@ -273,10 +273,13 @@ void main() {
       expect(log, isNot(contains('full read complete')));
       expect(counts(), (sparse: 1, whole: 1, generations: 1, page0: 1));
       // The recent is recorded, as a preview's first paint records it.
-      final stored = (await SharedPreferences.getInstance())
-          .getString('dart_pdf_editor_app.recents');
-      final recents = jsonDecode(stored!) as List;
-      expect(recents.map((r) => (r as Map)['p']), [path]);
+      final prefs = await SharedPreferences.getInstance();
+      final recents = [
+        for (final k in prefs.getKeys()
+            .where((k) => k.startsWith('dart_pdf_editor_app.recents.e.')))
+          jsonDecode(prefs.getString(k)!) as Map,
+      ];
+      expect(recents.map((r) => r['p']), [path]);
     });
   });
 

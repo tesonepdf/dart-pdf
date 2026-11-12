@@ -25,7 +25,10 @@ class _AppLogDialog extends StatefulWidget {
 }
 
 class _AppLogDialogState extends State<_AppLogDialog> {
-  bool _onlyErrors = false;
+  // Filtro attivo: null = tutto, _errorsFilter = solo errori, altrimenti
+  // l'argomento (la voce "context" del Log, es. Aggiornamenti, Recenti, OCR).
+  static const _errorsFilter = '\u0000errori';
+  String? _filter;
 
   @override
   Widget build(BuildContext context) {
@@ -34,10 +37,30 @@ class _AppLogDialogState extends State<_AppLogDialog> {
       listenable: log,
       builder: (context, _) {
         final all = log.entries.reversed.toList();
-        final shown = _onlyErrors
-            ? [for (final e in all) if (e.level == AppLogLevel.errore) e]
-            : all;
+        final shown = switch (_filter) {
+          null => all,
+          _errorsFilter => [
+              for (final e in all)
+                if (e.level == AppLogLevel.errore) e
+            ],
+          final topic => [
+              for (final e in all)
+                if (e.context == topic) e
+            ],
+        };
         final errors = all.where((e) => e.level == AppLogLevel.errore).length;
+        // Argomenti presenti nel Log, con "Aggiornamenti" sempre per primo.
+        final counts = <String, int>{};
+        for (final e in all) {
+          counts[e.context] = (counts[e.context] ?? 0) + 1;
+        }
+        counts.putIfAbsent('Aggiornamenti', () => 0);
+        final topics = counts.keys.toList()
+          ..sort((a, b) {
+            if (a == 'Aggiornamenti') return -1;
+            if (b == 'Aggiornamenti') return 1;
+            return a.compareTo(b);
+          });
         return AlertDialog(
           key: const ValueKey('app-log-dialog'),
           title: const Text('Log e problemi'),
@@ -60,14 +83,21 @@ class _AppLogDialogState extends State<_AppLogDialog> {
                   children: [
                     ChoiceChip(
                       label: Text('Tutto (${all.length})'),
-                      selected: !_onlyErrors,
-                      onSelected: (_) => setState(() => _onlyErrors = false),
+                      selected: _filter == null,
+                      onSelected: (_) => setState(() => _filter = null),
                     ),
                     ChoiceChip(
                       label: Text('Solo errori ($errors)'),
-                      selected: _onlyErrors,
-                      onSelected: (_) => setState(() => _onlyErrors = true),
+                      selected: _filter == _errorsFilter,
+                      onSelected: (_) =>
+                          setState(() => _filter = _errorsFilter),
                     ),
+                    for (final topic in topics)
+                      ChoiceChip(
+                        label: Text('$topic (${counts[topic]})'),
+                        selected: _filter == topic,
+                        onSelected: (_) => setState(() => _filter = topic),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),

@@ -100,6 +100,17 @@ Future<PatchRunResult> runPatchPlan({
         }
       }
 
+      final mb = (plan.downloadBytes / (1024 * 1024)).toStringAsFixed(1);
+      if (plan.useBase) {
+        log?.call('tipo: completa (parte dall\'APK base e applica '
+            '${plan.edges.length} patch), da scaricare circa $mb MB, '
+            'dalla build $installedBuild alla ${m.current.build}');
+      } else {
+        log?.call('tipo: patch (${plan.edges.length} '
+            '${plan.edges.length == 1 ? "passo" : "passi"}), da scaricare '
+            'circa $mb MB, dalla build $installedBuild alla ${m.current.build}');
+      }
+
       final names = [
         if (plan.useBase) plan.base.asset,
         for (final e in plan.edges) e.asset,
@@ -165,11 +176,13 @@ Future<PatchRunResult> runPatchPlan({
         await File(current).rename(finalPath);
       }
 
+      log?.call('APK ricostruito, controllo dell\'impronta in corso');
       if (await sha256OfFile(finalPath) != plan.target.sha256) {
         log?.call("l'APK ricostruito non coincide con quello pubblicato");
         await cleanUp();
         return (path: null, retry: true);
       }
+      log?.call('APK ricostruito e controllato: aggiornamento pronto da installare');
       return (path: finalPath, retry: false);
     } on PatchCancelledException {
       await cleanUp();

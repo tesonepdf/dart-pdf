@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import 'app_log.dart';
 import 'dpat_apply.dart';
 import 'patch_manifest.dart';
 import 'patch_runner_io.dart';
@@ -47,7 +48,10 @@ Future<PatchRunResult> buildPatchedApk({
       forceFull: forceFull,
       onProgress: onProgress,
       isCancelled: isCancelled,
-      log: (m) => debugPrint('Aggiornamento con patch: $m'),
+      log: (m) {
+        debugPrint('Aggiornamento con patch: $m');
+        AppLog.instance.info('Aggiornamenti', m);
+      },
       download: (url, path, {expectedSize, required onBytes}) =>
           _downloadToFile(factory, url, path,
               expectedSize: expectedSize,
@@ -58,6 +62,7 @@ Future<PatchRunResult> buildPatchedApk({
     throw const UpdateCancelledException();
   } catch (e) {
     debugPrint('Aggiornamento con patch non riuscito: $e');
+    AppLog.instance.error('Aggiornamenti', 'Aggiornamento con patch non riuscito: $e');
     // Non si sa com'e' fatta la release: meglio non installare un APK che
     // potrebbe essere una base piu' vecchia.
     return const PatchRunResult.failed(plainApkIsCurrent: false);

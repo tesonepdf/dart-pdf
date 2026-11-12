@@ -3792,10 +3792,16 @@ class _EditorScreenState extends State<EditorScreen>
         tab.autoOcrChecked = false;
         return;
       }
-      if (!pdfDocumentLooksScanned(controller.document)) return;
+      if (!pdfDocumentLooksScanned(controller.document)) {
+        AppLog.instance.info('OCR',
+            '"${tab.title}": ha gia\' un livello di testo, OCR non necessario');
+        return;
+      }
       // Già letto in passato? Il testo si rimette subito dalla memoria, senza
       // rifare la scansione e senza far aspettare.
       if (!await _applyCachedOcr(tab, controller)) {
+        AppLog.instance.info('OCR',
+            '"${tab.title}": non in memoria (${controller.bytes.length} byte), parte la scansione');
         await _runAutoOcr(tab, controller);
       }
       // Another tab may have been passed over while this job ran.
@@ -3873,6 +3879,8 @@ class _EditorScreenState extends State<EditorScreen>
     if (written != null && written > 0) tab.preOcrBytes = original;
     AppDevTools.instance
         .addLog('OCR dalla memoria: "${tab.title}" (${written ?? 0} testi)');
+    AppLog.instance.ok('OCR',
+        '"${tab.title}": testo preso dalla memoria, scansione non rifatta (${written ?? 0} testi)');
     return true;
   }
 
