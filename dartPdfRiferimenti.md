@@ -2,7 +2,7 @@
 
 Aggiornato il 10/11/2026. Ultimo commit sul `main`: `#330` (`2a482f6`).
 
-Questo file sta nel repo (`dart-pdf-riferimenti.md`, senza token): l'assistente lo legge da lì o dall'allegato.
+Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo legge da lì o dall'allegato.
 
 ## Regole di lavoro (da rispettare sempre)
 
@@ -10,8 +10,8 @@ Questo file sta nel repo (`dart-pdf-riferimenti.md`, senza token): l'assistente 
 - **Un errore rosso può essere falso.** Se la CI o la build dà errore, spesso basta rilanciare la pubblicazione e passa. Prima si rilancia; solo se resta rosso si legge il messaggio e si corregge il codice. Non si modifica il codice sulla base di un solo rosso.
 - **Il token non sta nel file, lo incolla l'utente.** L'assistente lo chiede ogni volta che prende questo file e non ricorda di revocarlo né lo segnala a ogni messaggio. Non lo scrive mai in un file del repo.
 - **Il file `.md` si dà prima di cominciare.** Per ogni lavoro, prima di eseguire qualsiasi comando, l'assistente dà subito all'utente questo file aggiornato con quello che sta per fare, e solo dopo esegue. Se il lavoro è un solo comando non si fa; da due comandi in su sì.
-- **Ogni richiesta dell'utente è un paletto.** Una richiesta dell'utente va nei paletti e non si cambia, non si aggira e non si reinterpreta senza una richiesta esplicita dell'utente: nemmeno lui la cambia per sbaglio, serve che lo chieda in modo esplicito. L'assistente non la cambia mai di sua iniziativa. I paletti stanno in `CONFLITTI-FUSIONE.md`.
-- **File `.md` nel progetto: uno solo per Da fare e Da valutare** (`DA-FARE-DA-VALUTARE.md`), più questo file dei riferimenti, quelli che servono all'assistente per capire cosa fare (i paletti in `CONFLITTI-FUSIONE.md`) e quelli che servono davvero alla build o alla licenza. Gli altri non si tengono e non se ne creano di nuovi.
+- **Ogni richiesta dell'utente è un paletto.** Una richiesta dell'utente va nei paletti e non si cambia, non si aggira e non si reinterpreta senza una richiesta esplicita dell'utente: nemmeno lui la cambia per sbaglio, serve che lo chieda in modo esplicito. L'assistente non la cambia mai di sua iniziativa. I paletti stanno in `conflittiFusione.md`.
+- **File `.md` nel progetto: uno solo per Da fare e Da valutare** (`DaFare.md`), più questo file dei riferimenti, quelli che servono all'assistente per capire cosa fare (i paletti in `conflittiFusione.md`) e quelli che servono davvero alla build o alla licenza. Gli altri non si tengono e non se ne creano di nuovi.
 - **Prima di modificare: pull e controllo.** L'utente può lavorare anche da altre chat e scaricare build per conto suo. Prima di ogni modifica, e prima di continuare con release e patch, l'assistente fa `git pull` e guarda gli ultimi commit e la release (build corrente, patch presenti, APK) e riparte da lì, senza dare per scontato quello che ricorda.
 - **Se sta aspettando, lo dice prima.** Se per un motivo vero l'assistente deve aspettare qualcosa, lo scrive prima di cominciare, così l'utente sa che non è fermo.
 
@@ -45,7 +45,7 @@ Ogni punto ha avuto commit e push. La CI risulta andata a buon fine fino a `#326
 | **EPUB migliorato:** copertina come prima pagina; immagini PNG e JPEG nel testo; corsivo (aggiunto `italic` a `PdfStamp.text`) per i paragrafi interamente in corsivo; note spostate in fondo al capitolo; indice come segnalibri; cirillico e greco traslitterati in lettere latine | `#329` | pubblicato, CI da verificare, da provare sul telefono |
 | **Moduli:** etichetta del font su una sola riga con puntini, per la riga delle proprietà sugli schermi stretti | `#330` | pubblicato, CI da verificare, da guardare sul telefono |
 
-Documenti (11/11): nel repo restano 6 file `.md`. `DA-FARE-DA-VALUTARE.md` è l'unico file di lavoro (Da fare, Da valutare e inventario dei riferimenti allo sviluppatore, uniti da `DA-FARE.md`, `DA-VALUTARE/README.md` e `RIFERIMENTI-SVILUPPATORE.md`). Gli altri cinque servono: `CONFLITTI-FUSIONE.md` (i paletti, letto anche da `tools/confronta-ben.sh`), `UPSTREAM.md` (provenienza), `README.md` (nota sulla licenza), `app/CHANGELOG.md` (l'app lo include come risorsa: senza, la build non parte) e la `LICENSE.md` di libjpeg-turbo. Tolti: `FUSIONE-UFFICIALE.md` (`#339`) e altri 65 file (README e CHANGELOG dei pacchetti, note di sviluppo, guide di pubblicazione, le copie `.md` di Ben in `DA-VALUTARE/ben`). Restano commenti nel codice che citano file tolti (per esempio `doc/dev-log/...`): sono solo promemoria, non rompono niente.
+Documenti (11/11): nel repo restano 6 file `.md`. `DaFare.md` è l'unico file di lavoro (Da fare, Da valutare e inventario dei riferimenti allo sviluppatore, uniti da `DA-FARE.md`, `DA-VALUTARE/README.md` e `RIFERIMENTI-SVILUPPATORE.md`). Gli altri cinque servono: `conflittiFusione.md` (i paletti, letto anche da `tools/confronta-ben.sh`), `UPSTREAM.md` (provenienza), `README.md` (nota sulla licenza), `app/CHANGELOG.md` (l'app lo include come risorsa: senza, la build non parte) e la `LICENSE.md` di libjpeg-turbo. Tolti: `FUSIONE-UFFICIALE.md` (`#339`) e altri 65 file (README e CHANGELOG dei pacchetti, note di sviluppo, guide di pubblicazione, le copie `.md` di Ben in `DA-VALUTARE/ben`). Restano commenti nel codice che citano file tolti (per esempio `doc/dev-log/...`): sono solo promemoria, non rompono niente.
 
 Nel `#329` ho cambiato un test esistente: una pagina con la sola immagine ora dà un blocco immagine invece di nessun blocco.
 
@@ -80,7 +80,7 @@ Solo se serve, più avanti: altre idee da Stirling-PDF, da scrivere a mano nel t
 
 - Repo: https://github.com/ben-milanko/dart-pdf (Apache 2.0).
 - Letto fino a `7ad17e6e`, preso con `#325` (conflitto nel pulsante del font risolto tenendo il tuo "originale → equivalente" e il nome vero di Ben). Per vedere se ci sono novità: `tools/confronta-ben.sh` (non modifica il progetto; `--copia-puliti` copia i file che si fondono da soli, `--segna` aggiorna lo stato dopo la decisione).
-- Prima di prendere qualcosa da Ben si controllano i paletti in `CONFLITTI-FUSIONE.md`: se una sua modifica cambia una funzione tua, ci si ferma e si chiede a te.
+- Prima di prendere qualcosa da Ben si controllano i paletti in `conflittiFusione.md`: se una sua modifica cambia una funzione tua, ci si ferma e si chiede a te.
 
 ## Gli altri repo (tutti pubblici)
 

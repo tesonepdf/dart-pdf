@@ -1,12 +1,12 @@
 # Da fare e da valutare
 
-Unico file `.md` di lavoro del progetto (11/11/2026). Per l'assistente che riprende il lavoro: leggere prima `CONFLITTI-FUSIONE.md` (i paletti dell'utente, da non cambiare senza una sua richiesta esplicita). Le regole di lavoro stanno nel file dei riferimenti che l'utente allega a ogni chat.
+Unico file `.md` di lavoro del progetto (11/11/2026). Per l'assistente che riprende il lavoro: leggere prima `conflittiFusione.md` (i paletti dell'utente, da non cambiare senza una sua richiesta esplicita). Le regole di lavoro stanno nel file dei riferimenti che l'utente allega a ogni chat.
 
 Tre parti: **1. Da fare**, **2. Da valutare** (file di Ben da decidere uno alla volta) e **3. Da valutare: riferimenti allo sviluppatore** (inventario dei nomi da decidere).
 
 ## 1. DA FARE
 
-Per l'assistente che riprende il lavoro. Leggere prima `CONFLITTI-FUSIONE.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
+Per l'assistente che riprende il lavoro. Leggere prima `conflittiFusione.md` (regole dell'utente e stato dei conflitti). Aggiornato il 2026-11-06.
 
 #### Aggiornamento 2026-11-06
 
@@ -47,7 +47,7 @@ Piano a 4 punti (repo `tesonepdf/dart-pdf`, due rami paralleli):
 | 3. Flusso: l'ufficiale di Ben si unisce nel ramo prova, l'utente prova, poi merge in `main` | Concordato, in corso |
 | 4. Contatore aggiornamenti legge la release ufficiale | Il codice lo fa già e funziona anche con release normale. **Non provato su un telefono** |
 
-Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo") 4 e 5 (`update_test.dart`, `update_settings_test.dart`: restano i test dell'utente) 6 (`editor_screen.dart`: restano le funzioni dell'utente), 7 e 8 (`file_io.dart`, `web_file_picker.dart`: restano le tue) e 9 (`editing_overlay.dart`: restano le tue funzioni, frecce da tastiera tolte); **12 applicato** (menu dell'utente ripristinato, voci di Ben in "Da organizzare"), build da verificare. **Il prossimo è il 10: `app/lib/l10n/app_it.arb`** (testi italiani), solo se l'utente lo conferma. Stato dettagliato di ognuno in `CONFLITTI-FUSIONE.md`. Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `CONFLITTI-FUSIONE.md`.
+Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io.dart`, `update_distribution_stub.dart`, tutti "tuo") 4 e 5 (`update_test.dart`, `update_settings_test.dart`: restano i test dell'utente) 6 (`editor_screen.dart`: restano le funzioni dell'utente), 7 e 8 (`file_io.dart`, `web_file_picker.dart`: restano le tue) e 9 (`editing_overlay.dart`: restano le tue funzioni, frecce da tastiera tolte); **12 applicato** (menu dell'utente ripristinato, voci di Ben in "Da organizzare"), build da verificare. **Il prossimo è il 10: `app/lib/l10n/app_it.arb`** (testi italiani), solo se l'utente lo conferma. Stato dettagliato di ognuno in `conflittiFusione.md`. Dal 4 al 14 vanno letti uno per uno prima di parlarne. Dettagli in `conflittiFusione.md`.
 
 #### Ordine di lavoro
 
@@ -73,7 +73,7 @@ Piano:
 
 #### Aggiornamenti a patch (dal build #345): come funzionano e cosa non rompere
 
-Regola dell'utente (paletto 14 in `CONFLITTI-FUSIONE.md`): sul telefono si scarica solo la differenza; l'APK completo si carica nella release solo come nuova base. **Non rimettere l'APK completo a ogni build e non cambiare il formato dei file senza cambiare insieme i due lati.**
+Regola dell'utente (paletto 14 in `conflittiFusione.md`): sul telefono si scarica solo la differenza; l'APK completo si carica nella release solo come nuova base. **Non rimettere l'APK completo a ogni build e non cambiare il formato dei file senza cambiare insieme i due lati.**
 
 - **Strumento:** `tool/apk_patch.py` (con i test `tool/test_apk_patch.py`). Formato `DPAT1`: gzip di un elenco di COPIA dall'APK vecchio e INSERISCI byte nuovi, con SHA-256 del vecchio e del nuovo. Comandi `make`, `apply`, `sha`, `plan`.
 - **Workflow (`build.yml`, job `release`):** il passo `plan` scarica l'elenco `patches.json` e ricostruisce l'APK precedente (base + catena), calcola `patch-X-Y.dpat` e decide se pubblicare anche l'APK completo. Carica sempre `patches.json` e la patch, e cancella le patch fuori elenco. Variabile `SOLO_PATCH` (ora `'true'`): con `'false'` l'APK completo si carica sempre. `[completo]` nel messaggio del commit, o l'opzione `completo` di "Run workflow", forza una nuova base. Se il piano fallisce, si pubblica l'APK completo.

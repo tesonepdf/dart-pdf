@@ -193,7 +193,7 @@ Ultima build del ramo prova verificata verde: #10030 (`1986af0`). #10031 (`c4dad
 - Il token GitHub non va mai scritto in file, commit o risposte. Se serve, lo dà lui nella chat.
 
 - **Niente file nuovi per le funzioni dell'utente e niente codice nei paletti, solo descrizioni** (deciso il 07/11). La sezione PALETTI qui sotto dice cosa non si tocca; se una novità di Ben la cambia, scatta l'allarme.
-- **Gli appunti di lavoro si scrivono solo in questo file (`CONFLITTI-FUSIONE.md`), non in `DA-FARE.md`** (deciso dall'utente il 07/11). `DA-FARE.md` è stato riportato com'era prima delle note del 07/11.
+- **Gli appunti di lavoro si scrivono solo in questo file (`conflittiFusione.md`), non in `DA-FARE.md`** (deciso dall'utente il 07/11). `DA-FARE.md` è stato riportato com'era prima delle note del 07/11.
 
 ## Il progetto
 
@@ -223,7 +223,7 @@ Per rivedere un file: aggiungere il remote `upstream` (https://github.com/ben-mi
 
 ## I 14 conflitti di codice
 
-**Stato al 30/10: tutti e 14 i conflitti sono chiusi sul ramo prova.** Restano: provare "DartPDF Prova" sul telefono, e solo con l'ok dell'utente il merge in `main`. I file `CONFLITTI-FUSIONE.md` e `DA-FARE.md` su `main` sono rimasti indietro rispetto a questi del ramo prova (e in parte sbagliati): al merge vanno presi quelli del ramo prova.
+**Stato al 30/10: tutti e 14 i conflitti sono chiusi sul ramo prova.** Restano: provare "DartPDF Prova" sul telefono, e solo con l'ok dell'utente il merge in `main`. I file `conflittiFusione.md` e `DA-FARE.md` su `main` sono rimasti indietro rispetto a questi del ramo prova (e in parte sbagliati): al merge vanno presi quelli del ramo prova.
 
 Legenda stato: **CHIUSO** = deciso e applicato · **DA FARE** = va letto e deciso con l'utente · **IN CORSO** = applicato, build non ancora verificata.
 Percorsi relativi alla radice. Dopo ogni conflitto: commit, push su `prova-sviluppatore`, build.
