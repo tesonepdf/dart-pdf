@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app_log.dart';
+import 'build_check.dart' show refreshBuildStatus;
+import 'workflow_log.dart';
 
 /// Apre il Log a schermo intero (Impostazioni > Log e problemi).
 Future<void> showAppLog(BuildContext context) =>
@@ -27,7 +31,11 @@ String _rangeName(AppLogDateRange r) => switch (r) {
 /// Schermata "Log e problemi": due scelte in alto (Log ed Errori) e, sotto,
 /// una sola riga con i filtri per data e per tipo, che si aprono a menu.
 class AppLogScreen extends StatefulWidget {
-  const AppLogScreen({super.key});
+  const AppLogScreen({super.key, this.syncWorkflows = true});
+
+  /// Quando si apre, rilegge da GitHub build, CI e secret scan. Spento nei
+  /// test, che non vanno in rete.
+  final bool syncWorkflows;
 
   @override
   State<AppLogScreen> createState() => _AppLogScreenState();
@@ -38,6 +46,12 @@ class _AppLogScreenState extends State<AppLogScreen> {
   AppLogDateRange _range = AppLogDateRange.tutte;
   DateTime? _day;
   AppLogType? _type;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.syncWorkflows) unawaited(syncWorkflowLog());
+  }
 
   bool get _filtering => _range != AppLogDateRange.tutte || _type != null;
 
@@ -128,10 +142,18 @@ class _AppLogScreenState extends State<AppLogScreen> {
                 key: const ValueKey('app-log-menu'),
                 tooltip: 'Altro',
                 onSelected: (v) {
+                  if (v == 'refresh') {
+                    refreshBuildStatus();
+                    unawaited(syncWorkflowLog());
+                  }
                   if (v == 'copy') _copyAll();
                   if (v == 'clear') log.clear();
                 },
                 itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: 'refresh',
+                    child: Text('Aggiorna da GitHub'),
+                  ),
                   PopupMenuItem<String>(
                     value: 'copy',
                     enabled: all.isNotEmpty,

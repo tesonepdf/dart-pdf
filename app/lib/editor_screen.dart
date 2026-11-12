@@ -1677,6 +1677,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// at the end and stays the one on screen, whichever order the two
   /// asynchronous sources happen to resolve in.
   void _addTab(DocumentTab tab, {bool restored = false}) {
+    if (!tab.isLoading) _logOpened(tab, restored: restored);
     setState(() {
       // A new tab shrinks the others to fit; drop any close-streak width hold.
       _heldTabWidth = null;
@@ -1719,6 +1720,21 @@ class _EditorScreenState extends State<EditorScreen>
     return tab;
   }
 
+  /// Scrive nel Log che un documento e' stato aperto.
+  void _logOpened(DocumentTab tab, {bool restored = false}) {
+    if (tab.error != null) {
+      AppLog.instance.error(
+        'Apertura documento',
+        'Apertura non riuscita: "${tab.title}" - ${tab.error}',
+      );
+      return;
+    }
+    AppLog.instance.info(
+      'Apertura documento',
+      'Aperto "${tab.title}"${restored ? ' (sessione precedente)' : ''}',
+    );
+  }
+
   bool _replaceLoadingTab(DocumentTab loading, DocumentTab replacement) {
     final index = _tabs.indexOf(loading);
     if (index == -1) {
@@ -1730,6 +1746,7 @@ class _EditorScreenState extends State<EditorScreen>
     // behind the file the OS launched us with - stealing focus here would undo
     // the ordering _addTab just got right.
     setState(() => _tabs[index] = replacement);
+    _logOpened(replacement);
     loading.dispose();
     unawaited(_persistSession());
     return true;
@@ -3967,6 +3984,14 @@ class _EditorScreenState extends State<EditorScreen>
         appL10n(context).editorUnsavedChangesCount(dirty),
       );
       if (!ok || !mounted) return;
+    }
+    for (final tab in targets) {
+      AppLog.instance.info(
+        'Chiusura documento',
+        tab.isDirty
+            ? 'Chiuso "${tab.title}" senza salvare le modifiche'
+            : 'Chiuso "${tab.title}"',
+      );
     }
     _removeTabs(targets);
   }
