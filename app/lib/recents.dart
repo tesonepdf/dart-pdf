@@ -203,12 +203,19 @@ class RecentsStore extends ChangeNotifier {
       String? cachePath,
       String? bookmark}) async {
     await load();
+    // Sempre maggiore di quello della voce piu' recente: due aperture nello
+    // stesso millisecondo non devono avere lo stesso istante, altrimenti
+    // l'ordine al ricaricamento dipenderebbe dall'ordine delle chiavi salvate.
+    var openedAt = DateTime.now().millisecondsSinceEpoch;
+    if (_items.isNotEmpty && _items.first.openedAt >= openedAt) {
+      openedAt = _items.first.openedAt + 1;
+    }
     final entry = RecentFile(
       title: title,
       path: path,
       cachePath: cachePath,
       bookmark: bookmark,
-      openedAt: DateTime.now().millisecondsSinceEpoch,
+      openedAt: openedAt,
     );
     final existed = _items.any((e) => e.id == entry.id);
     _items.removeWhere((e) => e.id == entry.id);
