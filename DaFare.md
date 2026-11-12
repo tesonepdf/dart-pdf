@@ -57,6 +57,17 @@ Conflitti di codice (14): chiusi 1, 2, 3 (`update.dart`, `update_distribution_io
 4. Web app: l'utente la vuole, ma **dopo** conflitti e build prova, così in caso di problemi si sa dove cercare. Niente è stato fatto.
 5. Le novità di Ben arrivate dopo `f5efa6e5` (es. scorciatoia Ctrl/Cmd+Shift+X) si lasciano stare finché l'utente non dice altrimenti.
 
+#### DA FARE: log per argomento, descrizione degli aggiornamenti, elenco dei recenti e OCR (richiesta dell'utente, 12/11)
+
+Non iniziato: il contesto della chat era finito, così non si è lasciato niente a metà. Si parte da `git pull` e dal controllo della release (regola in `dartPdfRiferimenti.md`).
+
+1. **Descrizione di ogni aggiornamento, in italiano.** Ad ogni aggiornamento l'app scrive cosa è successo (da quale build a quale, patch o completa, quanto ha scaricato, se è andata bene o l'errore) e la spiega all'utente; la stessa descrizione va nel log. Si lega al punto qui sotto ("spiegazione e tipo a ogni aggiornamento"): una sola descrizione, usata nell'avviso e nel log. Punti di partenza: `update_install_flow.dart`, `patch_runner_io.dart` (ha già un `log`), `app_log.dart`.
+2. **Log diviso per argomento.** Nel log (Impostazioni > Log e problemi: oggi "Tutto (500)" e "Solo errori (45)") le voci hanno già un argomento (es. "Recenti"). Aggiungere la divisione per argomento nella schermata, con una sezione **Aggiornamenti** (e le altre: Recenti, OCR, Salvataggio, ...), oltre ai filtri Tutto e Solo errori. Punto di partenza: `app_log.dart`.
+3. **Elenco dei recenti: non salvare tutto di continuo.** Nel log compare ripetuto "Elenco salvato (83 file)" (`recents.dart`, riga del `_persist`, circa la 254): a ogni modifica si riscrive l'intero elenco e all'apertura lo si rilegge tutto, ed è lento. Da fare: salvare solo la voce che cambia (con scritto nel log cosa è cambiato: aperto, aggiunto, tolto, spostato) e tenere il resto in cache, senza rileggerlo e senza riscriverlo.
+4. **OCR che riparte a ogni apertura.** Probabile causa, da verificare: l'elenco riscritto fa sembrare i file "nuovi" (nuova data o nuova firma) e l'OCR li rifà. Da fare: tenere in cache l'esito dell'OCR per file e rifarlo solo se il contenuto è davvero cambiato (controllare dimensione e data di modifica del file, non l'elenco dei recenti). Dipende dal punto 3.
+
+Ordine consigliato: 3, poi 4, poi 2, poi 1.
+
 #### DA FARE: spiegazione e tipo (patch o completa) a ogni aggiornamento (richiesta dell'utente, 12/11)
 
 Ad ogni aggiornamento l'utente vuole vedere **cosa cambia** (una spiegazione) e **se è una patch o una release completa**. Non è ancora fatto: non è stato iniziato perché il contesto della chat era quasi esaurito, così non si è lasciato niente a metà.
