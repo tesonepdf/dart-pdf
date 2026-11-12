@@ -107,7 +107,10 @@ void main() {
       // 1,034 without. What remains is PdfEditorView's own preference
       // listener (a separate follow-up), so this ceiling only guards the
       // shell half.
-      expect(total ~/ ticks, lessThanOrEqualTo(1100),
+      // Tetto 1150: il gruppo "Pagine" della griglia strumenti aggiunge circa
+      // 20 elementi alla barra; la guardia sulla finestra resta nei due
+      // controlli a zero qui sopra.
+      expect(total ~/ ticks, lessThanOrEqualTo(1150),
           reason: 'element rebuilds per stroke-width tick');
 
       await tester.pumpWidget(const SizedBox());

@@ -86,7 +86,7 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 
 18. **Togli spazio vuoto (richiesta dell'utente, 12/11).** Voce "Togli spazio vuoto…" nel gruppo Pagine del menu. Si sceglie la pagina e si disegna un rettangolo sulla striscia vuota, con i quadratini su tutti gli angoli e su tutti i lati per correggerlo. Un cursore decide lo spazio che resta: da zero (la striscia sparisce, "Togli tutto") fino a più della sua larghezza (si allarga). "Applica" avvicina la parte a sinistra e quella a destra nella stessa pagina, con le righe alla stessa altezza, e apre il risultato in una scheda nuova; il documento di partenza non cambia e il testo resta selezionabile.
 
-19. **Gruppo "Pagine" negli strumenti (richiesta dell'utente, 12/11).** Nella griglia strumenti del telefono, accanto a Marcatura e Forme, c'è il gruppo \"Pagine\" (ultimo della griglia). Contiene: Inserisci PDF, Inserisci scansione, Numera le pagine, Filigrana, Togli spazio vuoto. Numera, Filigrana e Togli spazio vuoto non stanno più nel menu dell'app; Inserisci PDF e scansione restano anche nel menu.
+19. **Gruppo "Pagine" negli strumenti (richiesta dell'utente, 12/11).** Nella griglia strumenti del telefono, accanto a Marcatura e Forme, c'è il gruppo \"Pagine\" (ultimo della griglia). Contiene: Inserisci PDF, Inserisci scansione, Numera le pagine, Filigrana, Togli spazio vuoto. Numera, Filigrana e Togli spazio vuoto non stanno più nel menu del telefono (il menu a tendina del computer le ha ancora); Inserisci PDF e scansione restano anche nel menu.
 
 ## Aggiornamento 2026-11-06
 

@@ -135,7 +135,7 @@ void main() {
       return found;
     }
 
-    for (var i = 0; i < 25 && !groupFocused(); i++) {
+    for (var i = 0; i < 60 && !groupFocused(); i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
     }
