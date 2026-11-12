@@ -166,6 +166,23 @@ class ReleaseInfo {
   static final _versionMarker =
       RegExp(r'<!-- app-version: ([0-9A-Za-z.+-]+) -->');
   static final _buildMarker = RegExp(r'<!-- app-build: (\d+) -->');
+  static final _kindMarker = RegExp(r'<!-- update-kind: (patch|full) -->');
+  static final _anyMarker = RegExp(r'<!--.*?-->');
+
+  /// "patch" o "full", come scritto dalla build nelle note; null nelle note vecchie.
+  String? get updateKind => _kindMarker.firstMatch(notes)?.group(1);
+
+  /// Il testo leggibile delle note (cosa cambia e tipo di aggiornamento), senza
+  /// l'intestazione "Build #N" e senza i marcatori. Vuoto nelle note vecchie.
+  String get updateSummary {
+    if (!notes.contains('Cosa cambia:')) return '';
+    return notes
+        .replaceAll(_anyMarker, '')
+        .split('\n')
+        .where((l) => l.trim().isNotEmpty && !l.startsWith('Build #'))
+        .join('\n')
+        .trim();
+  }
 
   /// Builds a release from one element of the GitHub `/releases` array,
   /// returning null when the tag isn't a parseable version (so non-app tags

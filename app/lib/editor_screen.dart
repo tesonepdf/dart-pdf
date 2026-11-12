@@ -817,8 +817,23 @@ class _EditorScreenState extends State<EditorScreen>
         key: const ValueKey('update-available-dialog'),
         icon: const Icon(Icons.system_update_alt),
         // Versione nuova e versione installata, cosi' si vede da dove si parte.
-        content: Text(l10n.settingsUpdateAvailable(
-            release.displayVersion, AppInfo.displayVersion)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.settingsUpdateAvailable(
+                release.displayVersion, AppInfo.displayVersion)),
+            // Cosa cambia e se e' patch o completo (dalle note della release).
+            if (release.updateSummary.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Text(release.updateSummary),
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             key: const ValueKey('update-dialog-later'),
