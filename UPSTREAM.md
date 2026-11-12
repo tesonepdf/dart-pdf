@@ -22,8 +22,8 @@ Base della copia. Per vedere le novità: https://github.com/ben-milanko/dart-pdf
 ## Flusso di lavoro
 
 - **Modifiche normali**: solo su `main`, seguite da commit, push e build Actions.
-- **Release**: una sola release per canale, sempre normale (mai pre-release). `main` → tag `app-android-latest` (marcata "Latest"); `prova-sviluppatore` → tag `app-android-prova` (mai "Latest"). Nessuna release numerata a parte: a ogni build l'APK viene sostituito e il numero build è nel titolo (`#N`) e nelle note, dove l'app lo legge per il controllo aggiornamenti.
-- **Numero build**: il numero dopo il `#` non è il conteggio dei commit. Ufficiale: è il numero della run di GitHub Actions (run #105 → app #105). Prova: `10012 + numero della run` del suo workflow (run #4 → app #10016); lo stesso numero è scritto nel titolo di ogni run della prova (`PROVA #10016 - …`), perché GitHub numera da 1 ogni workflow e non si può cambiare. La tabella del titolo copre le prime 3000 run della prova.
-- **Aggiornamento dall'originale** (remote `upstream` = `ben-milanko/dart-pdf`): `upstream/main` si unisce in `prova-sviluppatore`, dove si risolvono i conflitti e si verifica che la fusione sia di gradimento. `prova-sviluppatore` è solo un banco di prova: non ha release, pre-release o canale proprio.
-- **Portare in `main`**: merge di `prova-sviluppatore` in `main`, mai rinomina del ramo né copia manuale dei file. Dopo il merge `prova-sviluppatore` non si considera più; alla fusione successiva si riparte da `main`.
-- Le modifiche alla struttura (workflow, release, canali) si fanno solo su `main`, mai da `prova-sviluppatore`.
+- **Release**: una sola release, sempre normale (mai pre-release), marcata "Latest" su `main`, tag `app-android-latest`. Nessuna release numerata a parte: a ogni build l'APK viene sostituito e il numero build è nel titolo (`#N`) e nelle note, dove l'app lo legge per il controllo aggiornamenti.
+- **Numero build**: il numero dopo il `#` non è il conteggio dei commit. È il numero della run di GitHub Actions (run #105 → app #105).
+- **Aggiornamento dall'originale** (`ben-milanko/dart-pdf`): si cercano solo le novità di Ben e si avvisa l'utente, senza unire, importare o modificare niente. Le novità si guardano in sola lettura (confronto con la base `3e0bd1b`) e si decide insieme cosa portare.
+- **Prima di ogni modifica**: si valutano i branch (`git fetch --all`, confronto con `main`) per vedere se ci sono modifiche parallele.
+- Le modifiche alla struttura (workflow, release, canali) si fanno solo su `main`.
