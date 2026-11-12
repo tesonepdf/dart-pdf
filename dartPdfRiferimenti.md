@@ -8,7 +8,7 @@ Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo
 
 - **Non aspettare la pubblicazione.** Dopo il push l'assistente non aspetta e non controlla in continuazione il commit, la build, la CI e il Secret scan: aspettare consuma solo token. Si ferma e scrive il numero del commit; la CI la guarda l'utente. L'assistente la legge solo se l'utente glielo chiede ("controlla la CI").
 - **Un errore rosso può essere falso.** Se la CI o la build dà errore, spesso basta rilanciare la pubblicazione e passa. Prima si rilancia; solo se resta rosso si legge il messaggio e si corregge il codice. Non si modifica il codice sulla base di un solo rosso.
-- **Il token non sta nel file, lo incolla l'utente.** L'assistente lo chiede ogni volta che prende questo file e non ricorda di revocarlo né lo segnala a ogni messaggio. Non lo scrive mai in un file del repo.
+- **Il token si chiede una sola volta, a inizio chat.** Non sta nel file (il repo è pubblico): l'utente lo incolla all'inizio della chat, o lo ha già nell'allegato che ricevi, e l'assistente lo tiene a mente per tutta la chat. Non lo richiede a ogni messaggio, non chiede di cambiarlo o di revocarlo e non lo segnala come poco sicuro. Non lo scrive mai in un file del repo.
 - **Il file `.md` si dà prima di cominciare.** Per ogni lavoro, prima di eseguire qualsiasi comando, l'assistente dà subito all'utente questo file aggiornato con quello che sta per fare, e solo dopo esegue. Se il lavoro è un solo comando non si fa; da due comandi in su sì.
 - **Ogni richiesta dell'utente è un paletto.** Una richiesta dell'utente va nei paletti e non si cambia, non si aggira e non si reinterpreta senza una richiesta esplicita dell'utente: nemmeno lui la cambia per sbaglio, serve che lo chieda in modo esplicito. L'assistente non la cambia mai di sua iniziativa. I paletti stanno in `conflittiFusione.md`.
 - **File `.md` nel progetto: uno solo per Da fare e Da valutare** (`DaFare.md`), più questo file dei riferimenti, quelli che servono all'assistente per capire cosa fare (i paletti in `conflittiFusione.md`) e quelli che servono davvero alla build o alla licenza. Gli altri non si tengono e non se ne creano di nuovi.
@@ -19,7 +19,7 @@ Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo
 
 - **Indirizzo:** https://github.com/tesonepdf/dart-pdf
 - **Ramo:** `main` (è l'unico)
-- **Chiave (token GitHub):** non sta in questo file, perché il file è nel repo pubblico. **Ogni volta che l'assistente legge questo file, chiede all'utente di incollare il token**, e lo usa solo per il push e per leggere la CI. Il token attuale scade il 25/11/2026 alle 22:24 UTC (23:24 in Italia): prima di quella data va rifatto.
+- **Chiave (token GitHub):** non sta in questo file, perché il file è nel repo pubblico. Si chiede una sola volta a inizio chat e si tiene a mente per tutta la chat (vedi le regole). Si usa per il push e per leggere la CI. Il token attuale scade il 25/11/2026 alle 22:24 UTC (23:24 in Italia): prima di quella data l'utente ne crea uno nuovo e lo dà all'inizio della chat successiva.
 - **Clonare:** `git clone https://github.com/tesonepdf/dart-pdf` (per leggere non serve la chiave). Per fare il push: `git push https://x-access-token:<CHIAVE>@github.com/tesonepdf/dart-pdf main`, mettendo il token al posto di `<CHIAVE>`.
 - **Numeri dei commit:** li scrive l'hook `.githooks/commit-msg`. In un clone nuovo si attiva con `git config core.hooksPath .githooks` e `chmod +x .githooks/commit-msg`.
 - **Compilare:** nell'ambiente dell'assistente non si può scaricare Flutter, quindi non si compila né si fanno girare i test in locale. L'unico controllo è la CI su GitHub Actions dopo il push, e la guarda l'utente.
@@ -76,7 +76,7 @@ In ordine:
 3. **Excel:** migliorare i PDF che non sono tabelle; formati dei numeri e delle date; colori di sfondo e bordi (richiedono di leggere i comandi di disegno della pagina, da aggiungere al motore).
 4. **EPUB:** corsivo e grassetto sulle singole parole; lentezza sui libri lunghi; alfabeti con glifi originali (serve un font incorporato con Unicode).
 5. **Provare sul telefono** quello che non è ancora provato: Word, Excel (intero e zona), numerazione, filigrana trasparente, CBZ con capitoli, EPUB (per esempio un libro di Project Gutenberg), un modulo con un font strano e la riga delle proprietà dei moduli.
-6. **Token:** non sta nel file; si chiede all'utente a ogni chat. Scade il 25/11/2026: prima va rifatto.
+6. **Token:** si chiede una sola volta a inizio chat e si tiene per tutta la chat. Scade il 25/11/2026: l'utente ne crea uno nuovo.
 
 Solo se serve, più avanti: altre idee da Stirling-PDF, da scrivere a mano nel tuo codice senza copiare codice AGPL o GPL.
 
