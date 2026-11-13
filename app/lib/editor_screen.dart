@@ -76,6 +76,7 @@ import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
 import 'whatsapp_send.dart';
+import 'open_file_external.dart';
 import 'open_with_rank.dart';
 import 'update_installer.dart';
 import 'update_platform.dart';
@@ -4902,6 +4903,36 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Converte il documento in Word (`.docx`, stesso motore di "Esporta come
+  /// Word") e lo apre subito con l'app scelta da Android, senza passare dal
+  /// foglio di condivisione. Il file resta nella cartella temporanea.
+  Future<void> _openInWord(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      _toast('Preparo il file Word…', duration: const Duration(seconds: 4));
+      final result = await pdfToDocx(session.document);
+      if (!mounted) return;
+      if (result.paragraphs == 0) {
+        await _offerOcrBeforeText();
+        return;
+      }
+      final problem = await OpenFileExternal.view(
+        result.bytes,
+        name: docxExportFileName(tab.title),
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        appName: 'Word',
+      );
+      if (!mounted) return;
+      if (problem != null) _toast(problem);
+    } catch (e) {
+      AppDevTools.instance.addLog('open in word failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
   /// Salva il documento come file Excel (`.xlsx`), una scheda per ogni pagina
   /// con del testo: righe dalla posizione verticale del testo, colonne dagli
   /// spazi larghi, numeri veri nelle celle. Prima versione, documento intero.
@@ -5744,6 +5775,17 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_exportWord(tab));
         },
       ),
+      if (OpenFileExternal.supported)
+        _MenuAction(
+          id: 'open-in-word',
+          requiresDocument: true,
+          icon: Icons.open_in_new,
+          title: 'Apri in Word…',
+          run: () {
+            final tab = _active;
+            if (tab != null) unawaited(_openInWord(tab));
+          },
+        ),
       _MenuAction(
         id: 'export-excel',
         requiresDocument: true,
@@ -6881,6 +6923,7 @@ class _EditorScreenState extends State<EditorScreen>
         'export-image' ||
         'export-text' ||
         'export-word' ||
+        'open-in-word' ||
         'export-excel' ||
         'export-excel-zone' =>
           'save',

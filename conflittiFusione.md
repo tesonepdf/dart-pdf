@@ -101,6 +101,8 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 
 24. **Flutter per provare i test prima del push (in corso, 12/11).** La CI diventa rossa a ogni modifica perché i test non girano prima del push. Per farli girare serve Flutter, che scarica Dart e le librerie da `storage.googleapis.com` e `pub.dev`: due indirizzi da sbloccare nelle impostazioni di rete. Fatto questo, prima di ogni push si lanciano i test toccati (`flutter test`) e `flutter analyze`.
 
+25. **Apri in Word (richiesta dell'utente, 13/11).** Voce "Apri in Word…" nel menu, accanto a "Esporta come Word", solo su Android: converte il PDF in Word e lo apre subito con l'app scelta da Android, senza passare dal foglio di condivisione. Se non c'è nessuna app che apre i file Word, un avviso lo dice. Il file resta nella cartella temporanea, non si salva. "Esporta come Word" non cambia.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
