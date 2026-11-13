@@ -230,6 +230,39 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                     result.error("whatsapp", e.message, null)
                 }
             }
+        // Apre un file (per esempio un .docx) con l'app scelta da Android.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/openfile")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "view") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                try {
+                    val bytes = call.argument<ByteArray>("bytes")
+                    val name = call.argument<String>("name")
+                    val mime = call.argument<String>("mime")
+                    if (bytes == null || name == null || mime == null) {
+                        result.error("args", "argomenti mancanti", null)
+                        return@setMethodCallHandler
+                    }
+                    val dir = File(cacheDir, "openwith").apply { mkdirs() }
+                    val file = File(dir, name.replace(Regex("[^A-Za-z0-9._ -]"), "_"))
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, mime)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    try {
+                        startActivity(intent)
+                        result.success("ok")
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        result.error("noapp", e.message, null)
+                    }
+                } catch (e: Exception) {
+                    result.error("openfile", e.message, null)
+                }
+            }
         // Apre l'elenco di sistema "Apri con" su un PDF minimo: scegliendo
         // DartPDF l'app sale in cima all'elenco delle app usate di recente.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.milanko.dartpdf/openwith")

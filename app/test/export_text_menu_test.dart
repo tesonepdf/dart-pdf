@@ -40,6 +40,9 @@ void main() {
     expect(find.text('Esporta come testo semplice (.txt)…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-export-word')), findsOneWidget);
     expect(find.text('Esporta come Word (.docx)…'), findsOneWidget);
+    // Su Android (la piattaforma di prova di Flutter) c'e' anche "Apri in Word".
+    expect(find.byKey(const ValueKey('menu-open-in-word')), findsOneWidget);
+    expect(find.text('Apri in Word…'), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-export-excel')), findsOneWidget);
     expect(find.text('Esporta come Excel (.xlsx)…'), findsOneWidget);
     expect(
