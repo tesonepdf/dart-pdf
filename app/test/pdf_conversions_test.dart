@@ -873,6 +873,42 @@ void main() {
       ]);
     });
 
+    test('un titolo largo non unisce due colonne', () {
+      final spans = columnSpans([
+        [
+          const PageCell(50, 190, 'Titolo del rapporto'),
+          const PageCell(230, 250, '2026'),
+        ],
+        [
+          const PageCell(50, 80, 'Voce'),
+          const PageCell(150, 170, 'Qta'),
+          const PageCell(220, 250, 'Importo'),
+        ],
+      ]);
+      expect(spans.length, 3);
+      expect(spans[0], (left: 50.0, right: 80.0));
+      expect(spans[1], (left: 150.0, right: 170.0));
+      expect(spans[2], (left: 220.0, right: 250.0));
+    });
+
+    test('la griglia con un titolo largo resta a tre colonne', () {
+      final grid = pageGrid([
+        run('Titolo del rapporto', 50, 190, 730),
+        run('2026', 230, 250, 730),
+        run('Voce', 50, 80, 700),
+        run('Qta', 150, 170, 700),
+        run('Importo', 220, 250, 700),
+        run('Pane', 50, 80, 685),
+        run('2', 155, 165, 685),
+        run('1,50', 225, 250, 685),
+      ]);
+      expect(grid, [
+        ['Titolo del rapporto', '', '2026'],
+        ['Voce', 'Qta', 'Importo'],
+        ['Pane', '2', '1,50'],
+      ]);
+    });
+
     test('parole vicine restano nella stessa cella', () {
       final grid = pageGrid([
         run('Costo', 50, 80, 700),
