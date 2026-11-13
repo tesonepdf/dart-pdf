@@ -103,6 +103,8 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 
 25. **Apri in Word (richiesta dell'utente, 13/11).** Voce "Apri in Word…" nel menu, accanto a "Esporta come Word", solo su Android: converte il PDF in Word e lo apre subito con l'app scelta da Android, senza passare dal foglio di condivisione. Se non c'è nessuna app che apre i file Word, un avviso lo dice. Il file resta nella cartella temporanea, non si salva. "Esporta come Word" non cambia.
 
+26. **Apri in Excel (richiesta dell'utente, 13/11).** Voce "Apri in Excel…" nel menu, accanto a "Esporta come Excel", solo Android, con lo stesso comportamento di "Apri in Word": converte l'intero documento in Excel e lo apre subito con l'app scelta da Android; se non c'è nessuna app che apre i file Excel un avviso lo dice; il file resta nella cartella temporanea. "Esporta come Excel" e "Esporta una zona come Excel" non cambiano.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
