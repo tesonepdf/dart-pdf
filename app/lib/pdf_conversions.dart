@@ -821,24 +821,36 @@ List<List<PageCell>> pageCellRows(Iterable<PdfExtractedRun> runs,
 /// sovrappongono (a sinistra, a destra o al centro) sono la stessa colonna,
 /// quindi funziona anche per i numeri allineati a destra. Se nessuna riga ha
 /// due celle, contano tutte.
+///
+/// Le celle si esaminano dalla più stretta alla più larga: una cella che
+/// toccherebbe due colonne già formate è un titolo largo e non conta per
+/// trovare le colonne, altrimenti le unirebbe in una sola. Il suo testo va poi
+/// nella colonna che copre di più.
 List<({double left, double right})> columnSpans(List<List<PageCell>> rows) {
   var source = <PageCell>[
     for (final r in rows)
       if (r.length >= 2) ...r,
   ];
   if (source.isEmpty) source = [for (final r in rows) ...r];
-  source.sort((a, b) => a.left.compareTo(b.left));
+  source.sort((a, b) => (a.right - a.left).compareTo(b.right - b.left));
   final spans = <({double left, double right})>[];
   for (final c in source) {
-    if (spans.isNotEmpty && c.left <= spans.last.right) {
-      spans[spans.length - 1] = (
-        left: spans.last.left,
-        right: math.max(spans.last.right, c.right),
-      );
-    } else {
+    final touched = <int>[
+      for (var i = 0; i < spans.length; i++)
+        if (c.left <= spans[i].right && c.right >= spans[i].left) i,
+    ];
+    if (touched.length >= 2) continue;
+    if (touched.isEmpty) {
       spans.add((left: c.left, right: c.right));
+    } else {
+      final i = touched.first;
+      spans[i] = (
+        left: math.min(spans[i].left, c.left),
+        right: math.max(spans[i].right, c.right),
+      );
     }
   }
+  spans.sort((a, b) => a.left.compareTo(b.left));
   return spans;
 }
 
