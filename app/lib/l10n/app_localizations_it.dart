@@ -1527,4 +1527,16 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get editorMenuFormData => 'Dati del modulo e commenti';
+
+  @override
+  String get paletteTermsReduceFileSize =>
+      'comprimi;riduci;rimpicciolisci;PDF più piccolo;comprimi PDF';
+
+  @override
+  String get paletteTermsAddText =>
+      'aggiungi testo;scrivi testo;casella di testo;inserisci testo';
+
+  @override
+  String get paletteTermsSignature =>
+      'firma;disegna firma;firma a mano;firma autografa';
 }
