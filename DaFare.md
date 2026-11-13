@@ -10,6 +10,10 @@ Per l'assistente che riprende il lavoro. Leggere prima `conflittiFusione.md` (re
 
 #### Aggiornamento 2026-11-12
 
+- **Rete per Flutter (da fare quando l'utente è al computer, 12/11):** dal telefono non c'è la lista dei domini aggiuntivi (nel menu Funzionalità c'è solo l'accesso ai gestori di pacchetti). Da fare dal computer: aprire la pagina delle funzionalità di `claude.ai` e aggiungere `storage.googleapis.com` e `pub.dev`; poi chiedere all'assistente come installare Flutter nella chat, così i test girano prima del push (paletto 24). Fino ad allora vale il paletto 22: push, controllo della CI con le API, correzione subito.
+- **Da capire cosa è rimasto a metà (12/11):** l'utente ricorda di aver lasciato l'ultimo cambiamento a metà ma non cosa mancasse. Candidati: (1) "Note da fare" (commit `8d499c6`, fatto in un'altra chat): senza test e senza numero `#` nel messaggio del commit, non scritto nei paletti; (2) "Togli spazio vuoto": il file nuovo si salva e va nei recenti, ma l'utente aveva chiesto "in tutti i sotto menu accanto all'originale" e non è provato sul telefono; (3) i due testi di "Consigliato" ancora in inglese nelle 21 lingue (voce qui sotto); (4) "Visualizza Actions" è scritto fisso in italiano, non nei file delle lingue. Da chiedere all'utente quale intendeva.
+- **Numeri dei paletti (12/11):** i paletti ora vanno da 1 a 24, in ordine e senza numeri uguali (20-24 spostati dopo il 19). Le altre liste numerate di `conflittiFusione.md` (da 1 che ricomincia: file di Ben da decidere, quattro scelte da rivedere, conflitti) sono liste a parte con rimandi tra loro: non rinumerate, da decidere con l'utente.
+
 - **Font consigliato (paletto 15):** fatto nel menu "Carattere". Da fare: tradurre i due testi nuovi (`propSectionSuggested`, `propSuggestedNoLimits`) nelle 21 lingue diverse da italiano e inglese: ora sono in inglese in tutti i file `.arb` (la CI controlla solo che le chiavi ci siano). Da provare sul telefono con un PDF di Word (Times New Roman incorporato): deve comparire "Consigliato" con Tinos.
 
 #### Aggiornamento 2026-11-06

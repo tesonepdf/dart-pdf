@@ -88,6 +88,19 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 
 19. **Gruppo "Pagine" negli strumenti (richiesta dell'utente, 12/11).** Nella griglia strumenti del telefono, accanto a Marcatura e Forme, c'è il gruppo \"Pagine\" (ultimo della griglia). Contiene: Inserisci PDF, Inserisci scansione, Numera le pagine, Filigrana, Togli spazio vuoto. Numera, Filigrana e Togli spazio vuoto non stanno più nel menu del telefono (il menu a tendina del computer le ha ancora); Inserisci PDF e scansione restano anche nel menu.
 
+20. **Togli spazio vuoto: annulla/ripeti e file salvato (richiesta dell'utente, 12/11).** La scheda nuova parte come copia dell'originale e il taglio (pagina sistemata al posto di quella vecchia) è una sola modifica, quindi le frecce Annulla e Ripeti restano attive. La copia si salva subito come file (recenti, accanto all'originale). L'originale non cambia.
+
+21. **`prova-sviluppatore` e l'originale di Ben (richiesta dell'utente, 12/11).**
+    - `prova-sviluppatore` è stata una prova andata male: non si usa, non si ricrea e non si cita più nei documenti nuovi. Esiste solo `main`.
+    - Per `ben-milanko/dart-pdf` c'è solo il **controllo della versione**: si cercano le novità e si **avvisa** l'utente. Non si unisce, non si importa e non si modifica niente dell'originale.
+    - I **branch non sono ancora stati attuati**: l'utente ci sta pensando e se ne parla con calma. Fino ad allora non si creano branch.
+
+22. **La CI si controlla sempre (richiesta dell'utente, 12/11, ripetuta più volte).** All'inizio di ogni lavoro, e prima di fare un nuovo push, si guarda con le API di GitHub l'esito della CI dell'ultimo commit (le annotazioni del job dicono quali test sono falliti). Se è rossa, si sistema **prima** di fare altro. Ogni volta che si cambia un menu, la barra strumenti o il numero di elementi sullo schermo, si rivedono i test sensibili ai conteggi: `form_data_exchange_menu_test` (Tab nel menu), `app_prefs_rebuild_test` (tetto dei ridisegni), `export_text_menu_test` (voci del menu a tendina). Il menu a tendina del computer e il foglio del telefono sono due liste diverse: i test usano quella del computer.
+
+23. **Gli errori della CI sono già nel log dell'app (richiesta dell'utente, 12/11).** Ogni flusso rosso su GitHub si registra in Log e problemi > Errori > filtro Workflows, con numero della CI, commit e link alla pagina della run. Quindi l'errore è sempre raggiungibile da lì e non serve ripeterlo. Il dettaglio dei test falliti si legge con le API (annotazioni del job).
+
+24. **Flutter per provare i test prima del push (in corso, 12/11).** La CI diventa rossa a ogni modifica perché i test non girano prima del push. Per farli girare serve Flutter, che scarica Dart e le librerie da `storage.googleapis.com` e `pub.dev`: due indirizzi da sbloccare nelle impostazioni di rete. Fatto questo, prima di ogni push si lanciano i test toccati (`flutter test`) e `flutter analyze`.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.
@@ -331,16 +344,3 @@ Altri conflitti, già risolti senza discussione: 25 file di versioni/changelog d
 - Web app: l'utente vuole una web app per non dover aggiornare l'app Windows. Se ne è solo parlato; niente è stato fatto né deciso. Vercel (strumenti connessi alla chat) e il target hosting `tesonepdf-dart-pdf` esistono; non verificato che funzionino. Da fare dopo i conflitti, salvo diversa decisione.
 - Le vecchie release `build-N` e `prova-N` (tag `prova-59`, `prova-60`, `prova-65`, `prova-67` e le `build-N`) sono rimaste su GitHub: cancellarle solo se lo chiede l'utente.
 - Le due build lanciate col cambio di workflow (#76 main riuscita, #77 prova fallita) non hanno ancora convertito il tag della prova da pre-release a release normale, perché la build prova non è arrivata allo step di pubblicazione.
-
-20. **Togli spazio vuoto: annulla/ripeti e file salvato (richiesta dell'utente, 12/11).** La scheda nuova parte come copia dell'originale e il taglio (pagina sistemata al posto di quella vecchia) è una sola modifica, quindi le frecce Annulla e Ripeti restano attive. La copia si salva subito come file (recenti, accanto all'originale). L'originale non cambia.
-
-21. **`prova-sviluppatore` e l'originale di Ben (richiesta dell'utente, 12/11).**
-    - `prova-sviluppatore` è stata una prova andata male: non si usa, non si ricrea e non si cita più nei documenti nuovi. Esiste solo `main`.
-    - Per `ben-milanko/dart-pdf` c'è solo il **controllo della versione**: si cercano le novità e si **avvisa** l'utente. Non si unisce, non si importa e non si modifica niente dell'originale.
-    - I **branch non sono ancora stati attuati**: l'utente ci sta pensando e se ne parla con calma. Fino ad allora non si creano branch.
-
-22. **La CI si controlla sempre (richiesta dell'utente, 12/11, ripetuta più volte).** All'inizio di ogni lavoro, e prima di fare un nuovo push, si guarda con le API di GitHub l'esito della CI dell'ultimo commit (le annotazioni del job dicono quali test sono falliti). Se è rossa, si sistema **prima** di fare altro. Ogni volta che si cambia un menu, la barra strumenti o il numero di elementi sullo schermo, si rivedono i test sensibili ai conteggi: `form_data_exchange_menu_test` (Tab nel menu), `app_prefs_rebuild_test` (tetto dei ridisegni), `export_text_menu_test` (voci del menu a tendina). Il menu a tendina del computer e il foglio del telefono sono due liste diverse: i test usano quella del computer.
-
-23. **Gli errori della CI sono già nel log dell'app (richiesta dell'utente, 12/11).** Ogni flusso rosso su GitHub si registra in Log e problemi > Errori > filtro Workflows, con numero della CI, commit e link alla pagina della run. Quindi l'errore è sempre raggiungibile da lì e non serve ripeterlo. Il dettaglio dei test falliti si legge con le API (annotazioni del job).
-
-24. **Flutter per provare i test prima del push (in corso, 12/11).** La CI diventa rossa a ogni modifica perché i test non girano prima del push. Per farli girare serve Flutter, che scarica Dart e le librerie da `storage.googleapis.com` e `pub.dev`: due indirizzi da sbloccare nelle impostazioni di rete. Fatto questo, prima di ogni push si lanciano i test toccati (`flutter test`) e `flutter analyze`.
