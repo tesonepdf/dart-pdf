@@ -107,6 +107,8 @@ Il numero ufficiale di un commit su `main` è **commit del ramo + 25**, lo stess
 
 26. **Apri in Excel (richiesta dell'utente, 13/11).** Voce "Apri in Excel…" nel menu, accanto a "Esporta come Excel", solo Android, con lo stesso comportamento di "Apri in Word": converte l'intero documento in Excel e lo apre subito con l'app scelta da Android; se non c'è nessuna app che apre i file Excel un avviso lo dice; il file resta nella cartella temporanea. "Esporta come Excel" e "Esporta una zona come Excel" non cambiano.
 
+27. **Menu uguale su Windows e su Android (richiesta dell'utente, 13/11).** Nel web app il menu deve essere lo stesso su Windows e su Android: stesse voci, stessi gruppi (File, Importa, Salva stampa esporta, Firma e OCR, Pagine, Moduli e dati, App), stesso ordine. Nel web app, su ogni piattaforma, si apre il foglio con i gruppi che usa Android; il menu a tendina del computer resta solo fuori dal web (Windows, Mac e Linux nativi). Ogni voce nuova va aggiunta una volta sola, nelle liste che alimentano il foglio, così i due menu non si separano di nuovo.
+
 ## Aggiornamento 2026-11-06
 
 Sul ramo `prova-sviluppatore` sono stati importati dal `main` di Ben (`66601339`) i 288 cambiamenti non sovrapposti rispetto alla base `f5efa6e5`. Le versioni di Ben per i 78 file sovrapposti sono state copiate in `DA-VALUTARE/ben/`; i file attivi non sono stati sostituiti. Altri 5 percorsi avevano lo stesso esito da entrambe le parti. Esaminare i file in `DA-VALUTARE/README.md` uno alla volta. Questo aggiornamento riguarda la nuova importazione; i 14 conflitti storici qui sotto erano stati chiusi nella precedente versione del ramo.

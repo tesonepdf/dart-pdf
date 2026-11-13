@@ -6874,8 +6874,16 @@ class _EditorScreenState extends State<EditorScreen>
   bool _usesAppMenuSheet(BuildContext context) =>
       !_usesCompactAppMenu && _isCompactWidth(context);
 
+  /// Nel web app il menu e' sempre il foglio con i gruppi (lo stesso di
+  /// Android), su ogni piattaforma: cosi' Windows e Android mostrano le
+  /// stesse voci, negli stessi gruppi e nello stesso ordine. Fuori dal web
+  /// resta la regola di prima (foglio solo su telefono, a tendina sul
+  /// computer). Riguarda solo il menu: la barra in alto non cambia.
+  bool _appMenuIsSheet(BuildContext context) =>
+      kIsWeb || _usesAppMenuSheet(context);
+
   Widget _buildAppMenu(DocumentTab? tab) {
-    if (!_usesAppMenuSheet(context)) return _buildAppMenuPopup(tab);
+    if (!_appMenuIsSheet(context)) return _buildAppMenuPopup(tab);
     return IconButton(
       key: const ValueKey('dartpdf-app-menu'),
       iconSize: _appMenuIconSize,
