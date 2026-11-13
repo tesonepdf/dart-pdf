@@ -105,6 +105,12 @@ const Duration _tabResizeDuration = Duration(milliseconds: 150);
 
 const double _appMenuLeadingWidth = 60;
 const double _appMenuIconSize = 24;
+/// Larghezza sotto la quale l'app usa il layout "telefono" (intestazione a
+/// due righe, pannello strumenti a tendina, menu a gruppi). Sul web e' 1100
+/// px, cosi' una finestra Windows stretta ha lo stesso layout di Android e la
+/// barra strumenti non viene piu' tagliata; piu' larga mostra i pannelli.
+/// Fuori dal web resta la soglia del motore (700 px).
+const double _appCompactWidth = kIsWeb ? 1100 : pdfShellCompactWidth;
 const double _compactAppMenuItemHeight = 36;
 const double _compactRecentMenuItemHeight = 48;
 const int _maxRecentMenuItems = 8;
@@ -6752,6 +6758,9 @@ class _EditorScreenState extends State<EditorScreen>
     }
     return PdfEditorView(
       key: ValueKey(tab),
+      // Stessa soglia "telefono" dell'app: la barra strumenti e i pannelli
+      // passano al layout compatto alla stessa larghezza dell'intestazione.
+      theme: const PdfEditorThemeData(compactWidth: _appCompactWidth),
       // The header with the page number stays on screen while reading: it is
       // not hidden by scrolling on a phone.
       features: PdfEditorFeatures(
@@ -6872,7 +6881,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Phones use the same menu sections as desktop, sized for touch targets.
   bool _usesAppMenuSheet(BuildContext context) =>
-      !_usesCompactAppMenu && _isCompactWidth(context);
+      (kIsWeb || !_usesCompactAppMenu) && _isCompactWidth(context);
 
   /// Nel web app il menu e' sempre il foglio con i gruppi (lo stesso di
   /// Android), su ogni piattaforma: cosi' Windows e Android mostrano le
@@ -6985,7 +6994,10 @@ class _EditorScreenState extends State<EditorScreen>
           'sign',
         'compare' ||
         'insert-document' ||
-        'insert-scan' =>
+        'insert-scan' ||
+        'number-pages' ||
+        'remove-strip' ||
+        'watermark' =>
           'pages',
         'import-form-data' => 'forms',
         _ => null,
@@ -7016,18 +7028,11 @@ class _EditorScreenState extends State<EditorScreen>
       for (final action in documentActions)
         if (action.sheet == _SheetPlacement.formData) action,
     ];
-    // Le voci sulle pagine ora stanno nel gruppo "Pagine" della griglia
-    // strumenti, non piu' nel menu.
-    const pagesToolIds = {
-      'number-pages',
-      'remove-strip',
-      'watermark',
-    };
+    // Tutte le voci stanno nel menu (anche Numera, Filigrana e Togli spazio
+    // vuoto, nel gruppo "Pagine"), uguale a Windows: nessuna voce manca.
     final plainDocumentActions = [
       for (final action in documentActions)
-        if (action.sheet != _SheetPlacement.formData &&
-            !pagesToolIds.contains(action.id))
-          action,
+        if (action.sheet != _SheetPlacement.formData) action,
     ];
     final appActions = _appActions();
     final action = await showAppMenuSheet(
@@ -7291,7 +7296,7 @@ class _EditorScreenState extends State<EditorScreen>
   // the editor's own compact breakpoint, so the app's tabs, devtools and
   // header switch layout at the same width as the editor's panels
   bool _isCompactWidth(BuildContext context) =>
-      MediaQuery.sizeOf(context).width < pdfShellCompactWidth;
+      MediaQuery.sizeOf(context).width < _appCompactWidth;
 
   /// Wraps the body in a passive [Listener] that feeds the devtools touch-input
   /// log. It is not a gesture recognizer, so it never joins the arena and
