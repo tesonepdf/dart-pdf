@@ -4933,6 +4933,37 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Converte il documento in Excel (`.xlsx`, stesso motore di "Esporta come
+  /// Excel", documento intero) e lo apre subito con l'app scelta da Android,
+  /// senza passare dal foglio di condivisione. Il file resta nella cartella
+  /// temporanea.
+  Future<void> _openInExcel(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      _toast('Preparo il file Excel…', duration: const Duration(seconds: 4));
+      final result = await pdfToXlsx(session.document);
+      if (!mounted) return;
+      if (result.cells == 0) {
+        await _offerOcrBeforeText();
+        return;
+      }
+      final problem = await OpenFileExternal.view(
+        result.bytes,
+        name: xlsxExportFileName(tab.title),
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        appName: 'Excel',
+      );
+      if (!mounted) return;
+      if (problem != null) _toast(problem);
+    } catch (e) {
+      AppDevTools.instance.addLog('open in excel failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast(appL10n(context).editorCouldNotExport(tab.title));
+    }
+  }
+
   /// Salva il documento come file Excel (`.xlsx`), una scheda per ogni pagina
   /// con del testo: righe dalla posizione verticale del testo, colonne dagli
   /// spazi larghi, numeri veri nelle celle. Prima versione, documento intero.
@@ -5796,6 +5827,17 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_exportExcel(tab));
         },
       ),
+      if (OpenFileExternal.supported)
+        _MenuAction(
+          id: 'open-in-excel',
+          requiresDocument: true,
+          icon: Icons.open_in_new,
+          title: 'Apri in Excel…',
+          run: () {
+            final tab = _active;
+            if (tab != null) unawaited(_openInExcel(tab));
+          },
+        ),
       _MenuAction(
         id: 'export-excel-zone',
         requiresDocument: true,
@@ -6925,6 +6967,7 @@ class _EditorScreenState extends State<EditorScreen>
         'export-word' ||
         'open-in-word' ||
         'export-excel' ||
+        'open-in-excel' ||
         'export-excel-zone' =>
           'save',
         'digital-signature' ||
