@@ -81,6 +81,7 @@ import 'epub_book.dart';
 import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
+import 'photo_source_store.dart';
 import 'whatsapp_send.dart';
 import 'open_file_external.dart';
 import 'open_with_rank.dart';
@@ -1509,6 +1510,8 @@ class _EditorScreenState extends State<EditorScreen>
       originBookmark: originBookmark,
     );
     photoTab.sourcePhoto = photo;
+    // La foto si ricorda: dopo un riavvio "Misura della foto" resta.
+    if (photo != null) unawaited(rememberPhotoSource(bytes, photo));
     _addTab(photoTab);
     _recents.add(title: title, path: originPath, bookmark: originBookmark);
   }
@@ -1840,7 +1843,14 @@ class _EditorScreenState extends State<EditorScreen>
               originPath: originPath,
               originBookmark: originBookmark,
             );
-      if (isPhoto) tab.sourcePhoto = rawBytes;
+      if (isPhoto) {
+        tab.sourcePhoto = rawBytes;
+        // La foto si ricorda: dopo un riavvio "Misura della foto" resta.
+        unawaited(rememberPhotoSource(bytes, rawBytes));
+      } else {
+        // Un PDF nato da una foto (riaperto dai recenti) ritrova la sua foto.
+        unawaited(_recallPhotoFor(tab, bytes));
+      }
       final opened = _replaceLoadingTab(loading, tab);
       AppDevTools.instance.addLog(
           'open-trace: "$title" tab ${opened ? "shown" : "replace-skipped"}');
@@ -5642,6 +5652,18 @@ class _EditorScreenState extends State<EditorScreen>
     ];
   }
 
+  /// Se questo PDF e' nato da una foto aperta in precedenza (stessi byte), la
+  /// ritrova e rimette "Misura della foto" nel menu.
+  Future<void> _recallPhotoFor(DocumentTab tab, Uint8List pdfBytes) async {
+    try {
+      final photo = await recallPhotoSource(pdfBytes);
+      if (photo == null || !mounted || !_tabs.contains(tab)) return;
+      if (tab.sourcePhoto != null) return;
+      tab.sourcePhoto = photo;
+      setState(() {});
+    } catch (_) {}
+  }
+
   /// "Misura della foto": rifa' la pagina di una foto aperta come documento
   /// con la misura scelta (predefinita o personalizzata): la foto resta a
   /// grandezza vera al centro del foglio.
@@ -5682,6 +5704,7 @@ class _EditorScreenState extends State<EditorScreen>
           StandardSizeGroup.other, choice.widthMm, choice.heightMm);
       final bytes = await imageBytesToPdfAsync(photo, size: size);
       if (!mounted || !_tabs.contains(tab)) return;
+      unawaited(rememberPhotoSource(bytes, photo));
       final replacement = DocumentTab.document(
         title: tab.title,
         bytes: bytes,
