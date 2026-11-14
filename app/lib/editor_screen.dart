@@ -1495,17 +1495,21 @@ class _EditorScreenState extends State<EditorScreen>
   /// Opens [bytes] in a brand-new tab and makes it active, recording a recent.
   void _openBytes(Uint8List bytes, String title,
       {String? originPath, String? originBookmark}) {
+    Uint8List? photo;
     if (!looksLikePdf(bytes)) {
+      photo = bytes;
       bytes = imageBytesToPdf(bytes, sizeId: kAutoPhotoSize);
       title = imageTitleAsPdf(title);
     }
-    _addTab(DocumentTab.document(
+    final photoTab = DocumentTab.document(
       title: title,
       bytes: bytes,
       preferences: _prefs,
       originPath: originPath,
       originBookmark: originBookmark,
-    ));
+    );
+    photoTab.sourcePhoto = photo;
+    _addTab(photoTab);
     _recents.add(title: title, path: originPath, bookmark: originBookmark);
   }
 
@@ -1836,6 +1840,7 @@ class _EditorScreenState extends State<EditorScreen>
               originPath: originPath,
               originBookmark: originBookmark,
             );
+      if (isPhoto) tab.sourcePhoto = rawBytes;
       final opened = _replaceLoadingTab(loading, tab);
       AppDevTools.instance.addLog(
           'open-trace: "$title" tab ${opened ? "shown" : "replace-skipped"}');
@@ -5637,6 +5642,63 @@ class _EditorScreenState extends State<EditorScreen>
     ];
   }
 
+  /// "Misura della foto": rifa' la pagina di una foto aperta come documento
+  /// con la misura scelta (predefinita o personalizzata): la foto resta a
+  /// grandezza vera al centro del foglio.
+  Future<void> _setPhotoSize(DocumentTab tab) async {
+    final photo = tab.sourcePhoto;
+    if (photo == null) return;
+    final session = tab.session;
+    if (session != null && session.revisionCount > 1) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Rifare la pagina?'),
+          content: const Text('La pagina si ricostruisce dalla foto con la '
+              'nuova misura: le modifiche fatte sul documento andranno perse.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(appL10n(context).cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Continua'),
+            ),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
+    final choice = await showApplyPhotoSizeDialog(
+      context,
+      title: 'Misura della foto',
+      allowExact: false,
+      pickStandard: _pickStandardSize,
+    );
+    if (choice == null || !mounted) return;
+    try {
+      final size = StandardSize('custom', 'Misura scelta',
+          StandardSizeGroup.other, choice.widthMm, choice.heightMm);
+      final bytes = await imageBytesToPdfAsync(photo, size: size);
+      if (!mounted || !_tabs.contains(tab)) return;
+      final replacement = DocumentTab.document(
+        title: tab.title,
+        bytes: bytes,
+        preferences: _prefs,
+        originPath: tab.originPath,
+        originBookmark: tab.originBookmark,
+      );
+      replacement.sourcePhoto = photo;
+      _replaceLoadingTab(tab, replacement);
+      _toast('Foto portata a ${choice.widthMm.toStringAsFixed(0)} × '
+          '${choice.heightMm.toStringAsFixed(0)} mm');
+    } catch (error, stack) {
+      AppLog.instance.error('Misura della foto', '$error', stack);
+      if (mounted) _toast('Misura non applicata: ${openErrorSummary(error)}');
+    }
+  }
+
   /// "Applica misura": porta la foto selezionata a una misura reale
   /// (predefinita o personalizzata), con lo stesso centro di prima.
   Future<void> _applySizeToSelection(PdfAnnotationMenuRequest request) async {
@@ -6183,6 +6245,18 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_addWatermark(tab));
         },
       ),
+      if (_active?.sourcePhoto != null)
+        _MenuAction(
+          id: 'photo-size',
+          requiresDocument: true,
+          icon: Icons.straighten,
+          title: 'Misura della foto…',
+          searchTerms: const ['misura', 'foto', 'grandezza', 'carta', '10x15'],
+          run: () {
+            final tab = _active;
+            if (tab != null) unawaited(_setPhotoSize(tab));
+          },
+        ),
       _MenuAction(
         id: 'import-form-data',
         requiresDocument: true,
@@ -7296,6 +7370,7 @@ class _EditorScreenState extends State<EditorScreen>
         'insert-scan' ||
         'number-pages' ||
         'remove-strip' ||
+        'photo-size' ||
         'watermark' =>
           'pages',
         'import-form-data' => 'forms',

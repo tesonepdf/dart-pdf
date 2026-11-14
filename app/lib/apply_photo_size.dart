@@ -80,9 +80,11 @@ const List<String> _kQuickSizes = [
 /// l'elenco completo delle misure e restituisce l'id scelto.
 Future<PhotoSizeChoice?> showApplyPhotoSizeDialog(
   BuildContext context, {
-  required double currentWidthMm,
-  required double currentHeightMm,
+  double? currentWidthMm,
+  double? currentHeightMm,
   required Future<String?> Function() pickStandard,
+  String title = 'Applica misura',
+  bool allowExact = true,
 }) {
   return showDialog<PhotoSizeChoice>(
     context: context,
@@ -90,6 +92,8 @@ Future<PhotoSizeChoice?> showApplyPhotoSizeDialog(
       currentWidthMm: currentWidthMm,
       currentHeightMm: currentHeightMm,
       pickStandard: pickStandard,
+      title: title,
+      allowExact: allowExact,
     ),
   );
 }
@@ -99,11 +103,18 @@ class _ApplyPhotoSizeDialog extends StatefulWidget {
     required this.currentWidthMm,
     required this.currentHeightMm,
     required this.pickStandard,
+    required this.title,
+    required this.allowExact,
   });
 
-  final double currentWidthMm;
-  final double currentHeightMm;
+  final double? currentWidthMm;
+  final double? currentHeightMm;
   final Future<String?> Function() pickStandard;
+  final String title;
+
+  /// Se offrire "Misura esatta" (deforma la foto). Senza, la foto entra
+  /// sempre nella misura mantenendo le proporzioni.
+  final bool allowExact;
 
   @override
   State<_ApplyPhotoSizeDialog> createState() => _ApplyPhotoSizeDialogState();
@@ -162,34 +173,46 @@ class _ApplyPhotoSizeDialogState extends State<_ApplyPhotoSizeDialog> {
     ];
     return AlertDialog(
       key: const ValueKey('apply-size-dialog'),
-      title: const Text('Applica misura'),
+      title: Text(widget.title),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Misura attuale: ${_mm(widget.currentWidthMm)} × '
-                '${_mm(widget.currentHeightMm)} mm'),
-            const SizedBox(height: 12),
-            SegmentedButton<bool>(
-              key: const ValueKey('apply-size-keep'),
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: true, label: Text('Stesse proporzioni')),
-                ButtonSegment(value: false, label: Text('Misura esatta')),
-              ],
-              selected: {_keep},
-              onSelectionChanged: (s) => setState(() => _keep = s.first),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 8),
-              child: Text(
-                _keep
-                    ? 'La foto entra nella misura senza deformarsi.'
-                    : 'La foto prende esattamente la misura, anche deformandosi.',
-                style: Theme.of(context).textTheme.bodySmall,
+            if (widget.currentWidthMm != null && widget.currentHeightMm != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text('Misura attuale: ${_mm(widget.currentWidthMm!)} × '
+                    '${_mm(widget.currentHeightMm!)} mm'),
               ),
-            ),
+            if (widget.allowExact) ...[
+              SegmentedButton<bool>(
+                key: const ValueKey('apply-size-keep'),
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: true, label: Text('Stesse proporzioni')),
+                  ButtonSegment(value: false, label: Text('Misura esatta')),
+                ],
+                selected: {_keep},
+                onSelectionChanged: (s) => setState(() => _keep = s.first),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  _keep
+                      ? 'La foto entra nella misura senza deformarsi.'
+                      : 'La foto prende esattamente la misura, anche deformandosi.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'La foto entra nella misura senza deformarsi e la pagina si rifà a grandezza vera.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             for (final size in quick)
               ListTile(
                 key: ValueKey('apply-size-${size.id}'),

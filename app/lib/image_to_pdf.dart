@@ -67,7 +67,8 @@ String imageTitleAsPdf(String name) {
 ///
 /// With [sizeId] (a [StandardSize] id) the page gets that real size instead:
 /// the photo fits inside it, turned to match the photo's orientation.
-Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
+Uint8List imageBytesToPdf(Uint8List bytes,
+    {String? sizeId, StandardSize? size}) {
   if (looksLikePdf(bytes)) return bytes;
   final decoded = img.decodeImage(bytes);
   if (decoded == null) {
@@ -90,13 +91,13 @@ Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
   if (sizeId == kAutoPhotoSize) {
     sizeId = detectPhotoSizeId(upright.width, upright.height);
   }
-  final dpi = photoDpi(upright.width, upright.height, sizeId);
+  final dpi = photoDpi(upright.width, upright.height, sizeId, size: size);
   // Con una misura reale la foto sta a grandezza naturale al centro di un
   // foglio A4 bianco, pronto per la stampa (se non ci sta, si riduce).
   PdfPageSize? page;
   var fit = PdfImageFit.contain;
   const margin = 28.35;
-  if (sizeId != null && standardSizeById(sizeId) != null) {
+  if (size != null || (sizeId != null && standardSizeById(sizeId) != null)) {
     final w = upright.width * 72 / dpi;
     final h = upright.height * 72 / dpi;
     const portrait = PdfPageSize.a4;
@@ -108,6 +109,11 @@ Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
       fit = PdfImageFit.none;
     } else if (fits(landscape)) {
       page = landscape;
+      fit = PdfImageFit.none;
+    } else if (size != null) {
+      // Una misura scelta a mano che non sta su un A4: il foglio si fa grande
+      // quanto serve, cosi' la foto resta a grandezza vera.
+      page = PdfPageSize(w + 2 * margin, h + 2 * margin);
       fit = PdfImageFit.none;
     } else {
       page = w > h ? landscape : portrait;
@@ -125,15 +131,18 @@ Uint8List imageBytesToPdf(Uint8List bytes, {String? sizeId}) {
 }
 
 /// [imageBytesToPdf] off the UI thread.
-Future<Uint8List> imageBytesToPdfAsync(Uint8List bytes, {String? sizeId}) =>
+Future<Uint8List> imageBytesToPdfAsync(Uint8List bytes,
+        {String? sizeId, StandardSize? size}) =>
     looksLikePdf(bytes)
         ? Future.value(bytes)
-        : compute((Uint8List b) => imageBytesToPdf(b, sizeId: sizeId), bytes);
+        : compute(
+            (Uint8List b) => imageBytesToPdf(b, sizeId: sizeId, size: size),
+            bytes);
 
 /// Dpi for a [width] x [height] pixel photo: about A4 wide when [sizeId] is
 /// null or unknown, otherwise so the photo fits the real size [sizeId].
-double photoDpi(int width, int height, String? sizeId) {
-  var size = sizeId == null ? null : standardSizeById(sizeId);
+double photoDpi(int width, int height, String? sizeId, {StandardSize? size}) {
+  size ??= sizeId == null ? null : standardSizeById(sizeId);
   if (size == null) return math.max(72.0, width * 72 / 595.28);
   if ((width > height) != (size.widthMm > size.heightMm) &&
       size.widthMm != size.heightMm) {

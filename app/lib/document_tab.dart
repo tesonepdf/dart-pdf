@@ -283,6 +283,11 @@ class DocumentTab {
   /// a questa scheda.
   Uint8List? preOcrBytes;
 
+  /// I byte della foto da cui nasce questa scheda (aperta come foto, non
+  /// come PDF), finche' l'app e' aperta: servono a rifare la pagina con
+  /// un'altra misura ("Misura della foto"). Null per i PDF.
+  Uint8List? sourcePhoto;
+
   /// The writable on-disk origin (desktop), when the document was opened from
   /// a real path. Save writes back here; updated when a Save As lands on a new
   /// path. Null means save-as only.
