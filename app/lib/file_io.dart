@@ -422,10 +422,19 @@ String ensurePdfExtension(String path) =>
 String ensureJsonExtension(String path) =>
     path.toLowerCase().endsWith('.json') ? path : '$path.json';
 
+/// Un nome di file valido ovunque: barre e caratteri non ammessi (`/ \\ : * ?
+/// " < > |`) diventano trattini, cosi' "contratto 14/11/2026" resta intero
+/// invece di ridursi a "2026". Spazi doppi e ai bordi si tolgono.
+String safeFileName(String name) => name
+    .replaceAll(RegExp(r'[/\\:*?"<>|]'), '-')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
 /// The outcome of a save, with a message suitable for a toast (null = the
 /// user cancelled, so say nothing).
 class SaveResult {
-  const SaveResult._(this.message, {this.path, this.succeeded = false});
+  const SaveResult._(this.message,
+      {this.path, this.succeeded = false, this.savedName});
 
   /// A user-visible confirmation, or null when the action was cancelled.
   final String? message;
@@ -433,6 +442,11 @@ class SaveResult {
   /// Where it landed on disk, when that's a stable writable path (desktop
   /// save dialog). Null for downloads / share-sheet / cancellation.
   final String? path;
+
+  /// Il nome del file scritto quando non c'e' un percorso (cartella scelta su
+  /// Android): la scheda lo adotta come titolo, cosi' il Salva successivo
+  /// aggiorna lo stesso file invece di riscriverne un altro.
+  final String? savedName;
 
   /// True when the document was actually written somewhere - the caller uses
   /// this to clear the dirty state and record a recent file.
@@ -448,7 +462,8 @@ class SaveResult {
   factory SaveResult.downloadedCount(int count) =>
       SaveResult._('Downloaded $count files', succeeded: true);
   factory SaveResult.savedInFolder(String folder, String name) =>
-      SaveResult._('Salvato in $folder: $name', succeeded: true);
+      SaveResult._('Salvato in $folder: $name',
+          succeeded: true, savedName: name);
   factory SaveResult.shared() => const SaveResult._('Shared', succeeded: true);
   factory SaveResult.failed(Object error) =>
       SaveResult._('Save failed: $error');
