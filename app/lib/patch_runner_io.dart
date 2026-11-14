@@ -156,8 +156,9 @@ Future<PatchRunResult> runPatchPlan({
         }
         final edge = plan.edges[i];
         final patchPath = '${workDir.path}/patch-${edge.from}-${edge.to}.dpat';
-        log?.call('scarico la patch ${i + 1} di ${plan.edges.length} '
-            '(build ${edge.from} -> ${edge.to})');
+        final patchMb = (edge.size / (1024 * 1024)).toStringAsFixed(1);
+        log?.call('scarico la patch ${i + 1} di ${plan.edges.length}: '
+            '$patchMb MB (build ${edge.from} -> ${edge.to})');
         await download(assets[edge.asset]!, patchPath,
             expectedSize: edge.size, onBytes: bump);
         onProgress?.call(null);
