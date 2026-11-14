@@ -83,6 +83,31 @@ class SaveFolder {
     return choose ?? false;
   }
 
+  /// Il nome con cui [suggestedName] finisce nella cartella: caratteri non
+  /// ammessi sistemati ([safeFileName]) ed estensione `.pdf`.
+  static String fileNameFor(String suggestedName) {
+    var name = safeFileName(suggestedName);
+    if (name.isEmpty) name = 'documento.pdf';
+    if (!name.toLowerCase().endsWith('.pdf')) name = '$name.pdf';
+    return name;
+  }
+
+  /// Se nella cartella scelta c'e' gia' un file con questo nome (quello che
+  /// [fileNameFor] ha dato). False se non c'e' una cartella o non si riesce a
+  /// leggerla.
+  static Future<bool> exists(String fileName) async {
+    final folder = await current();
+    if (folder == null) return false;
+    try {
+      return await _channel.invokeMethod<bool>(
+              'exists', {'treeUri': folder.uri, 'name': fileName}) ??
+          false;
+    } catch (e, s) {
+      AppLog.instance.error('Cartella di salvataggio', e, s);
+      return false;
+    }
+  }
+
   /// Salva [bytes] nella cartella scelta, chiedendola la prima volta.
   /// Un file con lo stesso nome viene sovrascritto.
   static Future<SaveResult> save(
@@ -95,9 +120,7 @@ class SaveFolder {
       folder = await pick();
       if (folder == null) return SaveResult.cancelled;
     }
-    var name = safeFileName(suggestedName);
-    if (name.isEmpty) name = 'documento.pdf';
-    if (!name.toLowerCase().endsWith('.pdf')) name = '$name.pdf';
+    final name = fileNameFor(suggestedName);
     try {
       await _channel.invokeMethod<String>('save', {
         'treeUri': folder.uri,

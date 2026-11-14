@@ -422,11 +422,15 @@ String ensurePdfExtension(String path) =>
 String ensureJsonExtension(String path) =>
     path.toLowerCase().endsWith('.json') ? path : '$path.json';
 
-/// Un nome di file valido ovunque: barre e caratteri non ammessi (`/ \\ : * ?
-/// " < > |`) diventano trattini, cosi' "contratto 14/11/2026" resta intero
-/// invece di ridursi a "2026". Spazi doppi e ai bordi si tolgono.
+/// Un nome di file valido ovunque. Android non ammette `/` in un nome (e la
+/// memoria condivisa rifiuta anche `\`): si usano due caratteri identici
+/// all'aspetto, "∕" (U+2215) e "＼" (U+FF3C), cosi' "contratto 14/11/2026"
+/// resta leggibile come l'hai scritto. Gli altri caratteri non ammessi
+/// (`: * ? " < > |`) diventano trattini. Spazi doppi e ai bordi si tolgono.
 String safeFileName(String name) => name
-    .replaceAll(RegExp(r'[/\\:*?"<>|]'), '-')
+    .replaceAll('/', '\u2215')
+    .replaceAll(r'\', '\uFF3C')
+    .replaceAll(RegExp(r'[:*?"<>|]'), '-')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
