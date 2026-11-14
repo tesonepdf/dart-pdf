@@ -28,6 +28,7 @@ import 'command_palette.dart';
 import 'deferred_print.dart';
 import 'deferred_print_screen.dart';
 import 'deferred_print_store.dart';
+import 'apply_photo_size.dart';
 import 'devtools.dart';
 import 'edit_history_keeper.dart';
 import 'edit_history_store.dart';
@@ -5607,9 +5608,24 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       ];
     }
-    final contents = request.primary?.contents;
-    if (contents == null || contents.isEmpty) return const [];
+    // Una foto (o un timbro) selezionata: gli si da' una misura reale.
+    final primary = request.primary;
+    final items = <PdfAnnotationMenuItem>[
+      if (primary != null &&
+          request.annotations.length == 1 &&
+          primary.subtype == 'Stamp' &&
+          request.controller.canResizeSelected)
+        PdfAnnotationMenuItem(
+          key: const ValueKey('app-menu-apply-size'),
+          label: 'Applica misura…',
+          icon: Icons.straighten,
+          onSelected: (request) => unawaited(_applySizeToSelection(request)),
+        ),
+    ];
+    final contents = primary?.contents;
+    if (contents == null || contents.isEmpty) return items;
     return [
+      ...items,
       PdfAnnotationMenuItem(
         label: appL10n(context).editorCopyText,
         icon: Icons.copy_outlined,
@@ -5619,6 +5635,31 @@ class _EditorScreenState extends State<EditorScreen>
         },
       ),
     ];
+  }
+
+  /// "Applica misura": porta la foto selezionata a una misura reale
+  /// (predefinita o personalizzata), con lo stesso centro di prima.
+  Future<void> _applySizeToSelection(PdfAnnotationMenuRequest request) async {
+    final editing = request.controller;
+    final annotation = request.primary;
+    if (annotation == null || request.slots.isEmpty) return;
+    final page = request.slots.last.$1;
+    final rotation = editing.pageAt(page).rotation;
+    final turned = rotation % 180 != 0;
+    final rect = annotation.rect;
+    final choice = await showApplyPhotoSizeDialog(
+      context,
+      currentWidthMm: pointsToMm(turned ? rect.height : rect.width),
+      currentHeightMm: pointsToMm(turned ? rect.width : rect.height),
+      pickStandard: _pickStandardSize,
+    );
+    if (choice == null || !mounted) return;
+    final target = resizedPhotoRect(
+        current: rect, pageRotation: rotation, choice: choice);
+    editing.resizeSelected(target);
+    final w = pointsToMm(turned ? target.height : target.width);
+    final h = pointsToMm(turned ? target.width : target.height);
+    _toast('Foto portata a ${w.toStringAsFixed(1)} × ${h.toStringAsFixed(1)} mm');
   }
 
   /// Sceglie un'immagine (galleria, fotocamera o file) e la mette al centro
