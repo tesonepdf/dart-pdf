@@ -20,12 +20,23 @@ import 'print_printer.dart';
 /// The source document and options confirmed for this print job.
 class PrintPreviewResult {
   const PrintPreviewResult(
-      {required this.document, required this.settings, this.destination});
+      {required this.document,
+      required this.settings,
+      this.destination,
+      this.action = PrintPreviewAction.print});
 
   final PdfDocument document;
   final PrintSettings settings;
   final PrintDestination? destination;
+
+  /// Cosa ha scelto l'utente: stampare subito, salvare i fogli in un PDF o
+  /// metterli nella stampa differita. Senza le etichette dei due pulsanti
+  /// extra e' sempre [PrintPreviewAction.print].
+  final PrintPreviewAction action;
 }
+
+/// Il pulsante con cui si chiude la finestra di stampa.
+enum PrintPreviewAction { print, pdf, deferred }
 
 /// Which pages a print job covers.
 enum PrintPageRange { all, current, selected, custom }
@@ -83,6 +94,8 @@ Future<PrintPreviewResult?> showPrintPreviewDialog(
   int currentPage = 0,
   List<int> selectedPages = const [],
   Future<List<PdfDocument>> Function()? addFiles,
+  String? pdfLabel,
+  String? deferLabel,
 }) {
   if (document.pageCount == 0) {
     throw ArgumentError.value(document, 'document', 'No printable pages');
@@ -96,6 +109,8 @@ Future<PrintPreviewResult?> showPrintPreviewDialog(
       currentPage: currentPage,
       selectedPages: selectedPages,
       addFiles: addFiles,
+      pdfLabel: pdfLabel,
+      deferLabel: deferLabel,
     ),
   );
 }
@@ -110,6 +125,8 @@ class PrintPreviewDialog extends StatefulWidget {
     this.currentPage = 0,
     this.selectedPages = const [],
     this.addFiles,
+    this.pdfLabel,
+    this.deferLabel,
   });
 
   final PdfDocument document;
@@ -117,6 +134,12 @@ class PrintPreviewDialog extends StatefulWidget {
   final int currentPage;
   final List<int> selectedPages;
   final Future<List<PdfDocument>> Function()? addFiles;
+
+  /// Testo del pulsante "Salva PDF" (assente se null).
+  final String? pdfLabel;
+
+  /// Testo del pulsante "Differita" (assente se null).
+  final String? deferLabel;
 
   @override
   State<PrintPreviewDialog> createState() => _PrintPreviewDialogState();
@@ -455,8 +478,11 @@ class _PrintPreviewDialogState extends State<PrintPreviewDialog> {
     }
   }
 
-  void _print() {
-    if (_loadingPreferences || !_printerReady) return;
+  void _print() => _finish(PrintPreviewAction.print);
+
+  void _finish(PrintPreviewAction action) {
+    if (_loadingPreferences) return;
+    if (action == PrintPreviewAction.print && !_printerReady) return;
     if (_settings.pages.isEmpty || _invalidNumbers.isNotEmpty) {
       setState(() => _rangeInvalid = _settings.pages.isEmpty);
       return;
@@ -472,7 +498,10 @@ class _PrintPreviewDialogState extends State<PrintPreviewDialog> {
       return;
     }
     Navigator.of(context).pop(PrintPreviewResult(
-        document: _document, settings: _settings, destination: _destination));
+        document: _document,
+        settings: _settings,
+        destination: action == PrintPreviewAction.print ? _destination : null,
+        action: action));
   }
 
   PdfDocument? _sheet() {
@@ -588,12 +617,31 @@ class _PrintPreviewDialogState extends State<PrintPreviewDialog> {
                             key: const ValueKey('print-options-defaults'),
                             onPressed: _loadingPreferences ? null : _defaults,
                             child: Text(l10n.printOptionsDefaults)),
-                        Row(mainAxisSize: MainAxisSize.min, children: [
+                        Wrap(
+                            alignment: WrapAlignment.end,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
                           TextButton(
                               key: const ValueKey('print-preview-cancel'),
                               onPressed: () => Navigator.of(context).pop(),
                               child: Text(l10n.cancel)),
-                          const SizedBox(width: 8),
+                          if (widget.pdfLabel != null)
+                            TextButton(
+                                key: const ValueKey('print-preview-pdf'),
+                                onPressed: _addingFiles || _loadingPreferences
+                                    ? null
+                                    : () => _finish(PrintPreviewAction.pdf),
+                                child: Text(widget.pdfLabel!)),
+                          if (widget.deferLabel != null)
+                            TextButton(
+                                key: const ValueKey('print-preview-defer'),
+                                onPressed: _addingFiles || _loadingPreferences
+                                    ? null
+                                    : () =>
+                                        _finish(PrintPreviewAction.deferred),
+                                child: Text(widget.deferLabel!)),
                           PdfDialogSubmit.action(
                               onSubmit: _addingFiles ||
                                       _loadingPreferences ||
