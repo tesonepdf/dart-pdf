@@ -29,6 +29,8 @@ import 'deferred_print.dart';
 import 'deferred_print_screen.dart';
 import 'deferred_print_store.dart';
 import 'devtools.dart';
+import 'edit_history_keeper.dart';
+import 'edit_history_store.dart';
 import 'devtools_panel.dart';
 import 'digital_signature.dart';
 import 'doc_scan.dart';
@@ -401,6 +403,7 @@ class _EditorScreenState extends State<EditorScreen>
   void _tickSessionState() {
     if (!mounted || !widget.ownsApplicationSession) return;
     _autosave.syncTracking(_tabs);
+    _history.syncTracking(_tabs);
     if (!_sessionLoaded) return;
     _applyPendingPages();
     final activeTab = _active;
@@ -462,6 +465,13 @@ class _EditorScreenState extends State<EditorScreen>
   // la svuota.
   late final AutosaveController _autosave = AutosaveController(
       store: widget.unsavedChangesStore ?? openUnsavedChangesStore());
+
+  // Annulla e ripeti restano con il documento anche dopo aver chiuso l'app:
+  // la cronologia si salva legata ai byte del file e si rimette alla
+  // riapertura. Con un archivio di prova iniettato (test) resta spento.
+  late final EditHistoryKeeper _history = EditHistoryKeeper(
+      store:
+          widget.unsavedChangesStore != null ? null : openEditHistoryStore());
 
   final _incoming = IncomingFileService();
   late final OnDeviceOcr _ocr = widget.ocr ?? OnDeviceOcr();
@@ -1058,6 +1068,7 @@ class _EditorScreenState extends State<EditorScreen>
     _prefs.removeListener(_onPrefsForMeasureScale);
     _stateTimer?.cancel();
     _autosave.dispose();
+    _history.dispose();
     unawaited(ReadAloud.instance.stop());
     for (final tab in _tabs) {
       tab.dispose();
@@ -1133,6 +1144,7 @@ class _EditorScreenState extends State<EditorScreen>
       }
       _tickSessionState();
       unawaited(_autosave.flushPending());
+      unawaited(_history.flushPending());
       unawaited(_refreshSnapshots());
     }
   }
@@ -1423,6 +1435,7 @@ class _EditorScreenState extends State<EditorScreen>
     // ahead of the session-load gate below: a document opened before the last
     // session has been read back still deserves its unsaved edits protected.
     _autosave.syncTracking(_tabs);
+    _history.syncTracking(_tabs);
     if (!widget.ownsApplicationSession || !_sessionLoaded) return;
     await _snapshotKeylessTabs();
     final documents = <SessionDocument>[];

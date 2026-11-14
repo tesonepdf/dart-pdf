@@ -16,6 +16,7 @@ import '../page_geometry.dart';
 import '../renderer.dart';
 import '../text_selection_geometry.dart';
 import 'digital_signature.dart';
+import 'edit_history_snapshot.dart';
 import 'editing_annotation_clipboard.dart';
 import 'editing_mode.dart';
 import 'editing_page_clipboard.dart';
@@ -1139,6 +1140,75 @@ class PdfEditingController extends ChangeNotifier {
   bool get canUndo =>
       hasPlacementDraft || hasPendingInk || _cursor > _undoFloor;
   bool get canRedo => _undoneInk.isNotEmpty || _cursor < _revisions.length - 1;
+
+  /// La cronologia annulla/ripeti da salvare, o null se non c'e' niente da
+  /// conservare (nessuna modifica, o una sessione con revisioni arrivate da
+  /// altri). Le revisioni fino alla corrente sono prefissi dei [bytes]; nella
+  /// copia entra solo la parte oltre la corrente, quella da ripetere.
+  PdfEditHistorySnapshot? get historySnapshot {
+    if (_revisions.length < 2 || _undoFloor != 0 || _hardModified) return null;
+    final current = _revisions[_cursor];
+    return PdfEditHistorySnapshot(
+      revisions: List<int>.unmodifiable(_revisions),
+      cursor: _cursor,
+      tail: Uint8List.fromList(
+          Uint8List.sublistView(_bytes, current, _revisions.last)),
+    );
+  }
+
+  /// Rimette una cronologia salvata con [historySnapshot]. Vale solo su una
+  /// sessione appena aperta, senza modifiche, i cui [bytes] sono la revisione
+  /// corrente della copia: se qualcosa non torna non cambia niente e
+  /// restituisce false. Annulla e ripeti riprendono da dove erano.
+  bool restoreHistory(PdfEditHistorySnapshot snapshot) {
+    if (_cursor != 0 || _revisions.length != 1 || _hardModified) return false;
+    if (hasPendingInk || hasPlacementDraft) return false;
+    final revisions = snapshot.revisions;
+    final count = revisions.length;
+    final current = _revisions[0];
+    if (count < 2 || snapshot.cursor < 0 || snapshot.cursor >= count) {
+      return false;
+    }
+    if (revisions[snapshot.cursor] != current) return false;
+    for (var i = 0; i < count; i++) {
+      if (revisions[i] <= 0 || (i > 0 && revisions[i] <= revisions[i - 1])) {
+        return false;
+      }
+    }
+    final total = current + snapshot.tail.length;
+    if (revisions.last != total) return false;
+    final opened = Uint8List.sublistView(_bytes, 0, current);
+    final buffer = Uint8List(total)
+      ..setRange(0, current, opened)
+      ..setRange(current, total, snapshot.tail);
+    final secrets = _revisionSecrets[0];
+    _bytes = buffer;
+    _used = total;
+    _revisions
+      ..clear()
+      ..addAll(revisions);
+    // Gli effetti delle revisioni non sono salvati: si assume il caso piu'
+    // largo (tutte le pagine, struttura cambiata), cosi' annulla e ripeti
+    // ridisegnano tutto in modo sicuro.
+    _revisionImpacts
+      ..clear()
+      ..add(PdfEditImpact.none);
+    for (var i = 1; i < count; i++) {
+      _revisionImpacts.add(PdfEditImpact.reported(
+        visualPages: null,
+        contentPages: null,
+        annotationPages: null,
+        pageStructureChanged: true,
+      ));
+    }
+    _revisionSecrets
+      ..clear()
+      ..addAll(List<Map<String, String>>.filled(count, secrets));
+    _cursor = snapshot.cursor;
+    _undoFloor = 0;
+    notifyListeners();
+    return true;
+  }
 
   /// Diagnostics: how many revisions the session buffer retains (every one is
   /// a byte prefix of the same grow-only buffer, so this is the undo/redo
