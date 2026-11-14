@@ -25,6 +25,9 @@ import 'measure_scale_setting.dart';
 import 'combine_incoming.dart';
 import 'compose_sheet.dart';
 import 'command_palette.dart';
+import 'deferred_print.dart';
+import 'deferred_print_screen.dart';
+import 'deferred_print_store.dart';
 import 'devtools.dart';
 import 'devtools_panel.dart';
 import 'digital_signature.dart';
@@ -4721,8 +4724,18 @@ class _EditorScreenState extends State<EditorScreen>
         currentPage: tab.viewer?.currentPage ?? 0,
         selectedPages: session.selectedPages,
         addFiles: _pickPrintFiles,
+        pdfLabel: 'Salva PDF',
+        deferLabel: 'Differita',
       );
       if (job == null || !mounted || !_tabs.contains(tab)) return;
+      if (job.action == PrintPreviewAction.pdf) {
+        await _printToPdf(tab, job);
+        return;
+      }
+      if (job.action == PrintPreviewAction.deferred) {
+        await _deferPrint(tab, job);
+        return;
+      }
       final bytes = preparePrintDocument(job.document, job.settings,
           twoSided: job.destination != null &&
               job.destination!.duplex != PrintDuplex.simplex);
@@ -4743,6 +4756,163 @@ class _EditorScreenState extends State<EditorScreen>
           'print failed: ${tab.title} - ${_describePrintError(error)}\n$stack',
           level: DevLogLevel.error);
       if (mounted) _toast(appL10n(context).editorCouldNotPrint(tab.title));
+    }
+  }
+
+  /// "Salva PDF" dalla finestra di stampa: i fogli composti (pagine scelte,
+  /// orientamento, pagine per foglio) in un PDF, senza passare dalla stampante.
+  Future<void> _printToPdf(DocumentTab tab, PrintPreviewResult job) async {
+    try {
+      final bytes = preparePrintDocument(job.document, job.settings);
+      final result = await _saveAsDocument(context, bytes, tab.title);
+      if (!mounted) return;
+      if (result.message != null && !result.succeeded) _toast(result.message!);
+    } catch (error, stack) {
+      AppLog.instance.error('Stampa su PDF', '$error', stack);
+      if (mounted) _toast('PDF non salvato: ${openErrorSummary(error)}');
+    }
+  }
+
+  static String _deferredOrientation(PrintOrientation o) => switch (o) {
+        PrintOrientation.portrait => 'Verticale',
+        PrintOrientation.landscape => 'Orizzontale',
+        PrintOrientation.auto => 'Orientamento automatico',
+      };
+
+  static String _deferredPaper(PrintPaperSize p) => switch (p) {
+        PrintPaperSize.auto => '',
+        PrintPaperSize.letter => 'Letter',
+        PrintPaperSize.legal => 'Legal',
+        PrintPaperSize.tabloid => 'Tabloid',
+        _ => p.name.toUpperCase(),
+      };
+
+  /// Chiede come stampare il gruppo (fronte/retro o solo fronte) e il nome.
+  /// Null se si annulla.
+  Future<({String name, bool twoSided})?> _askDeferredOptions(String title) {
+    var base = title.trim();
+    if (base.toLowerCase().endsWith('.pdf')) {
+      base = base.substring(0, base.length - 4).trim();
+    }
+    final controller = TextEditingController(text: base);
+    var twoSided = false;
+    return showDialog<({String name, bool twoSided})>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          void confirm() => Navigator.of(context)
+              .pop((name: controller.text.trim(), twoSided: twoSided));
+          return AlertDialog(
+            key: const ValueKey('deferred-print-options'),
+            title: const Text('Stampa differita'),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    key: const ValueKey('deferred-print-name'),
+                    controller: controller,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                    onSubmitted: (_) => confirm(),
+                  ),
+                  const SizedBox(height: 16),
+                  SegmentedButton<bool>(
+                    key: const ValueKey('deferred-print-sides'),
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Solo fronte')),
+                      ButtonSegment(value: true, label: Text('Fronte/retro')),
+                    ],
+                    selected: {twoSided},
+                    onSelectionChanged: (s) =>
+                        setState(() => twoSided = s.first),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(appL10n(context).cancel),
+              ),
+              FilledButton(
+                key: const ValueKey('deferred-print-add'),
+                onPressed: confirm,
+                child: const Text('Metti in coda'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// "Differita" dalla finestra di stampa: i fogli composti restano nella
+  /// coda della stampa differita finche' non li stampi.
+  Future<void> _deferPrint(DocumentTab tab, PrintPreviewResult job) async {
+    final options = await _askDeferredOptions(tab.title);
+    if (options == null || !mounted) return;
+    try {
+      final bytes = preparePrintDocument(job.document, job.settings,
+          twoSided: options.twoSided);
+      final sheets = PdfDocument.open(bytes).pageCount;
+      var name = options.name;
+      if (name.isEmpty) name = tab.title;
+      final item = DeferredPrintItem(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        summary: deferredSummary(
+          twoSided: options.twoSided,
+          orientation: _deferredOrientation(job.settings.orientation),
+          paper: _deferredPaper(job.settings.paperSize),
+        ),
+        pages: job.settings.pages.length,
+        sheets: sheets,
+        createdAt: DateTime.now(),
+        twoSided: options.twoSided,
+      );
+      await openDeferredPrintStore().add(item, bytes);
+      AppLog.instance.ok('Stampa differita', 'In coda: ${item.name}');
+      if (mounted) _toast('Messo in coda: ${item.name}');
+    } catch (error, stack) {
+      AppLog.instance.error('Stampa differita', '$error', stack);
+      if (mounted) {
+        _toast('Non messo in coda: ${openErrorSummary(error)}');
+      }
+    }
+  }
+
+  /// Apre la coda della stampa differita.
+  Future<void> _openDeferredPrint() {
+    return showDeferredPrint(
+      context,
+      store: openDeferredPrintStore(),
+      print: _printDeferredItem,
+      savePdf: (item, bytes) async {
+        final result = await _saveAsDocument(context, bytes, item.name);
+        if (!mounted) return;
+        if (result.message != null && !result.succeeded) {
+          _toast(result.message!);
+        }
+      },
+    );
+  }
+
+  /// Stampa un gruppo della coda: true se e' andato al sistema di stampa.
+  Future<bool> _printDeferredItem(
+      DeferredPrintItem item, Uint8List bytes) async {
+    try {
+      final result = await printPdfWithProgress(context,
+          bytes: await _asSeenOnScreen(bytes),
+          title: item.name,
+          useDocumentPageSize: true);
+      return result == PrintDialogResult.handedToSystem;
+    } catch (error, stack) {
+      AppLog.instance.error('Stampa differita', '$error', stack);
+      if (mounted) _toast('Stampa non riuscita: ${item.name}');
+      return false;
     }
   }
 
@@ -5664,6 +5834,13 @@ class _EditorScreenState extends State<EditorScreen>
           title: l.editorMenuScanDocument,
           run: () => unawaited(_newDocumentFromScan()),
         ),
+      _MenuAction(
+        id: 'deferred-print',
+        icon: Icons.schedule,
+        title: 'Stampa differita…',
+        searchTerms: const ['stampa', 'coda', 'differita', 'print queue'],
+        run: () => unawaited(_openDeferredPrint()),
+      ),
       _MenuAction(
         id: 'photos-one-sheet',
         icon: Icons.photo_library_outlined,
