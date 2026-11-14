@@ -95,7 +95,7 @@ class SaveFolder {
       folder = await pick();
       if (folder == null) return SaveResult.cancelled;
     }
-    var name = suggestedName.split(RegExp(r'[/\\]')).last.trim();
+    var name = safeFileName(suggestedName);
     if (name.isEmpty) name = 'documento.pdf';
     if (!name.toLowerCase().endsWith('.pdf')) name = '$name.pdf';
     try {

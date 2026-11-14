@@ -4261,6 +4261,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
     if (result.succeeded) {
       AppLog.instance.ok('Salvataggio documento', 'Salvato "${tab.title}"');
+      final titleBefore = tab.title;
       final path = result.path;
       final existingBookmark =
           path != null && path == tab.originPath ? tab.originBookmark : null;
@@ -4277,8 +4278,22 @@ class _EditorScreenState extends State<EditorScreen>
           // A stable Save As destination supersedes a private mobile/open
           // snapshot. Session restore and future Save now follow the new file.
           tab.cachePath = null;
+        } else if (result.savedName != null) {
+          // Android: il file e' nella cartella scelta, senza percorso. Il
+          // titolo diventa il nome appena salvato: il Salva dopo aggiorna
+          // quel file senza richiedere il nome, e "Salva con nome" non
+          // lascia piu' il vecchio titolo che riscriverebbe l'originale.
+          tab.title = result.savedName!;
         }
       });
+      if (path == null &&
+          result.savedName != null &&
+          tab.title != titleBefore) {
+        _autosave.noteMetadataChanged(tab);
+        unawaited(_persistSession());
+        unawaited(_recents.rename(
+            tab.originPath ?? tab.cachePath ?? titleBefore, tab.title));
+      }
       // Saving never touches the edit session, so nothing notifies the mirror -
       // tell it directly. The bytes are on the user's own disk now and the
       // recovery copy has nothing left to protect.
@@ -4362,7 +4377,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// Chiede il nome del file prima di salvare nella cartella scelta.
   /// Null se si annulla.
   Future<String?> _askFileName(String suggested) {
-    var base = suggested.split(RegExp(r'[/\\]')).last;
+    var base = safeFileName(suggested);
     if (base.toLowerCase().endsWith('.pdf')) {
       base = base.substring(0, base.length - 4);
     }
