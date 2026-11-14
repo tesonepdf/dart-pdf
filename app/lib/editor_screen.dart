@@ -4241,7 +4241,7 @@ class _EditorScreenState extends State<EditorScreen>
             bookmark: tab.originBookmark,
           )
         : await _saveAsDocument(context, bytes, tab.title,
-            askName: saveAs);
+            askName: saveAs, ownName: _savedFolderName[tab]);
     if (!mounted) return;
     if (inPlace && !result.succeeded) {
       // The origin couldn't be written (moved, read-only) - say so, then offer
@@ -4284,6 +4284,7 @@ class _EditorScreenState extends State<EditorScreen>
           // quel file senza richiedere il nome, e "Salva con nome" non
           // lascia piu' il vecchio titolo che riscriverebbe l'originale.
           tab.title = result.savedName!;
+          _savedFolderName[tab] = result.savedName;
         }
       });
       if (path == null &&
@@ -4408,20 +4409,72 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
+  /// I nomi con cui ogni scheda e' gia' stata scritta nella cartella di
+  /// salvataggio (Android): il Salva successivo aggiorna quel file senza
+  /// chiedere conferma.
+  final Expando<String> _savedFolderName = Expando<String>('savedFolderName');
+
+  /// Android: "Sostituire il file?" quando il nome scelto esiste gia'.
+  Future<bool> _confirmReplaceFile(String fileName) async {
+    final folder = await SaveFolder.current();
+    if (!mounted) return false;
+    final where = folder == null ? 'nella cartella' : 'in "${folder.name}"';
+    final replace = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('replace-file-dialog'),
+        title: const Text('Sostituire il file?'),
+        content: Text('"$fileName" esiste già $where. '
+            'Se continui, il file vecchio viene sostituito.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(appL10n(context).cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('replace-file-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sostituisci'),
+          ),
+        ],
+      ),
+    );
+    return replace == true;
+  }
+
+  /// Salva con il selettore della piattaforma. [ownName] e' il nome con cui
+  /// questo documento e' gia' stato scritto nella cartella (Android): scrivere
+  /// di nuovo lo stesso file e' un aggiornamento, non una sostituzione.
   Future<SaveResult> _saveAsDocument(
       BuildContext context, Uint8List bytes, String suggestedName,
-      {bool askName = true}) {
+      {bool askName = true, String? ownName}) async {
     final saveAs = widget.saveDocumentAs;
     if (saveAs != null) return saveAs(context, bytes, suggestedName);
     // Android: si salva nella cartella scelta dall'utente (la prima volta la
     // chiede), non piu' con il foglio di condivisione. Con askName false
-    // (voce Salva) si usa il nome del documento e si sovrascrive il file.
+    // (voce Salva) si usa il nome del documento. Se il file esiste gia' e non
+    // e' quello che questo documento ha scritto, si chiede conferma.
     if (SaveFolder.supported) {
-      if (!askName) return SaveFolder.save(context, bytes, suggestedName);
-      return _askFileName(suggestedName).then((name) {
-        if (name == null || !mounted) return SaveResult.cancelled;
-        return SaveFolder.save(context, bytes, name);
-      });
+      var name = suggestedName;
+      while (true) {
+        if (askName) {
+          final typed = await _askFileName(name);
+          if (typed == null || !mounted) return SaveResult.cancelled;
+          name = typed;
+        }
+        final fileName = SaveFolder.fileNameFor(name);
+        if (fileName != ownName && await SaveFolder.exists(fileName)) {
+          if (!mounted) return SaveResult.cancelled;
+          if (!await _confirmReplaceFile(fileName)) {
+            // con "Salva con nome" si torna a scegliere un altro nome
+            if (askName && mounted) continue;
+            return SaveResult.cancelled;
+          }
+        }
+        if (!mounted) return SaveResult.cancelled;
+        // ignore: use_build_context_synchronously
+        return SaveFolder.save(this.context, bytes, name);
+      }
     }
     return saveBytesAs(context, bytes, suggestedName,
         pdfLabel: appL10n(context).fileTypePdf);

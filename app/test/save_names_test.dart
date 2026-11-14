@@ -2,13 +2,15 @@ import 'package:dart_pdf_editor_app/file_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('le barre di una data non riducono il nome a "2026"', () {
-    expect(safeFileName('contratto 14/11/2026'), 'contratto 14-11-2026');
-    expect(safeFileName('14/11/2026'), '14-11-2026');
+  test('le barre di una data restano, con un carattere gemello', () {
+    expect(safeFileName('contratto 14/11/2026'),
+        'contratto 14\u221511\u22152026');
+    expect(safeFileName(r'14\11\2026'), '14\uFF3C11\uFF3C2026');
+    expect(safeFileName('14/11/2026').contains('/'), isFalse);
   });
 
   test('caratteri non ammessi e spazi in eccesso', () {
-    expect(safeFileName(r'a\b:c*d?e'), 'a-b-c-d-e');
+    expect(safeFileName('a:b*c?d'), 'a-b-c-d');
     expect(safeFileName('  file   letto.pdf '), 'file letto.pdf');
     expect(safeFileName('   '), '');
   });

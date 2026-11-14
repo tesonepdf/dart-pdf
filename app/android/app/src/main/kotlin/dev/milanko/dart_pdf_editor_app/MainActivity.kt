@@ -150,6 +150,32 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
                             }
                         }
                     }
+                    "exists" -> {
+                        val treeUri = Uri.parse(call.argument<String>("treeUri")!!)
+                        val name = call.argument<String>("name")!!
+                        fileIoExecutor.execute {
+                            try {
+                                val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+                                val children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+                                var found = false
+                                contentResolver.query(
+                                    children,
+                                    arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                                    null, null, null
+                                )?.use { c ->
+                                    while (c.moveToNext()) {
+                                        if (c.getString(0) == name) {
+                                            found = true
+                                            break
+                                        }
+                                    }
+                                }
+                                runOnUiThread { result.success(found) }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.error("exists_failed", e.toString(), null) }
+                            }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
