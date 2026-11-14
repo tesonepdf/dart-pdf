@@ -32,9 +32,8 @@ Per l'assistente che riprende il lavoro. Leggere prima `conflittiFusione.md` (re
 - Rendering in background: funziona con un'altra app davanti. Con lo schermo spento non è stato provato: l'utente avvisa se vede il problema.
 
 **Da fare (nuove richieste dell'utente):**
-1. **Riassunto del documento**: voce nel menu "Riassumi documento". Serve un modello AI online (offline non verrebbe un buon riassunto). Da progettare con l'utente; serve il suo ok per partire.
-2. **Foto incollate dalla galleria dentro il foglio PDF**: poter incollare/inserire una foto dalla galleria direttamente sulla pagina del PDF, come elemento sulla pagina.
-3. **Foto incollate ridimensionabili**: selezionare la foto con lo strumento Seleziona e cambiarne la dimensione a piacere (maniglie o misura), senza che occupi tutta la pagina. Si collega a "Foto a grandezza reale" qui sotto.
+1. **Foto incollate dalla galleria dentro il foglio PDF**: poter incollare/inserire una foto dalla galleria direttamente sulla pagina del PDF, come elemento sulla pagina.
+2. **Foto incollate ridimensionabili**: selezionare la foto con lo strumento Seleziona e cambiarne la dimensione a piacere (maniglie o misura), senza che occupi tutta la pagina. Si collega a "Foto a grandezza reale" qui sotto.
 
 **Limiti noti dell'OCR (da decidere se sistemarli):**
 - la memoria OCR non è attiva nel browser (web): il codice c'è, nessuno la riempie;
