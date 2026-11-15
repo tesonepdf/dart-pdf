@@ -7172,11 +7172,10 @@ class _EditorScreenState extends State<EditorScreen>
     ];
   }
 
-  /// Il foglio con i gruppi e' il menu del telefono (Android, iOS); su
-  /// Windows, Mac e Linux, anche nel web app, il menu e' quello a tendina del
-  /// computer, con tutte le voci in vista (dal 14/11: il web non usa piu' il
-  /// foglio di Android). Le voci vengono dalle stesse liste, quindi i due
-  /// menu mostrano le stesse azioni.
+  /// True dove l'intestazione e' quella del telefono (finestra stretta su
+  /// Android e iOS): senza titolo, che sta in cima al menu. Il menu in
+  /// se' e' lo stesso dappertutto (vedi [_buildAppMenu]); il nome viene dal
+  /// vecchio foglio del telefono, che non c'e' piu'.
   bool _usesAppMenuSheet(BuildContext context) =>
       !_usesCompactAppMenu && _isCompactWidth(context);
 

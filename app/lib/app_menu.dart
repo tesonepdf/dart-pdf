@@ -1,5 +1,5 @@
 // Il menu dell'app: uno solo, uguale su telefono, PC, web e Mac (richiesta
-// dell'utente, 14/11: "quando vado da telefono a PC vado al manicomio").
+// dell'utente, 15/11: "quando vado da telefono a PC vado al manicomio").
 //
 // E' una finestra ancorata in alto a sinistra, con la ricerca in cima e le
 // voci raccolte in macroaree che si aprono e si chiudono (a fisarmonica). Le
