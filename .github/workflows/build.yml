@@ -253,8 +253,8 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # prova della build web: se fallisce non ferma APK e release
-    continue-on-error: true
+    # se la web app non compila la build diventa rossa; APK e release non
+    # dipendono da questo job
     steps:
       - uses: actions/checkout@v7
         with:
