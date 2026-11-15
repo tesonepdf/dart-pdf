@@ -23,6 +23,7 @@ Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo
 - **Clonare:** `git clone https://github.com/tesonepdf/dart-pdf` (per leggere non serve la chiave). Per fare il push: `git push https://x-access-token:<CHIAVE>@github.com/tesonepdf/dart-pdf main`, mettendo il token al posto di `<CHIAVE>`.
 - **Numeri dei commit:** li scrive l'hook `.githooks/commit-msg`. In un clone nuovo si attiva con `git config core.hooksPath .githooks` e `chmod +x .githooks/commit-msg`.
 - **Compilare:** nell'ambiente dell'assistente non si può scaricare Flutter, quindi non si compila né si fanno girare i test in locale. L'unico controllo è la CI su GitHub Actions dopo il push, e la guarda l'utente.
+- **Controllo prima del commit (`tools/controlla.py`).** Non potendo compilare, prima di ogni commit si lancia `python3 tools/controlla.py` (Python puro, 3 secondi, senza Flutter). Trova import e `part` che puntano a file inesistenti, parentesi e stringhe non chiuse, classi usate senza import, nomi rinominati o cancellati ma ancora usati altrove, nomi sbagliati in un `show`, asset del `pubspec.yaml` mancanti e file `.arb` non validi. Se segnala un errore si corregge prima del commit. Non sostituisce `flutter analyze`: i tipi e le firme delle funzioni li controlla solo la CI. I casi voluti si scrivono in `tools/controlla_noti.txt` (`percorso|tipo|dettaglio`).
 
 ## Fatto
 
