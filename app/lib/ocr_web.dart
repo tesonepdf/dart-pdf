@@ -286,14 +286,18 @@ class OnDeviceOcr {
       }
       if (job.state != OcrJobState.complete) return;
       if (onRecognized != null) {
-        onRecognized(await _jobs.recognized(job));
+        final recognized = await _jobs.recognized(job);
+        // Il testo letto resta in memoria (IndexedDB del browser): alla
+        // prossima apertura dello stesso file non si rifà la scansione.
+        await _remember(job, recognized);
+        onRecognized(recognized);
         await _jobs.delete(job.id);
       } else {
         final result = await _delivery.take(job);
         if (result == null) return;
-        final spans = (await _jobs.recognized(job))
-            .values
-            .fold<int>(0, (n, s) => n + s.length);
+        final recognized = await _jobs.recognized(job);
+        await _remember(job, recognized);
+        final spans = recognized.values.fold<int>(0, (n, s) => n + s.length);
         onToast(l10n.ocrResult(spans));
         onComplete?.call(result);
       }
@@ -304,6 +308,19 @@ class OnDeviceOcr {
       await lease?.release();
       _jobId = null;
       _status(null);
+    }
+  }
+
+  /// Salva nella memoria OCR il testo riconosciuto, con l'impronta del file e
+  /// (se c'è) la chiave stabile della sessione, come fa la versione nativa.
+  Future<void> _remember(
+    OcrSavedJob job,
+    Map<int, List<PdfOcrSpan>> recognized,
+  ) async {
+    await cache.saveQuietly(job.sourceHash, job.pageCount, recognized);
+    final stable = job.stableKey;
+    if (stable != null) {
+      await cache.saveQuietly(stable, job.pageCount, recognized);
     }
   }
 
