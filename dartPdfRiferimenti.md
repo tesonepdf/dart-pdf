@@ -6,8 +6,8 @@ Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo
 
 ## Regole di lavoro (da rispettare sempre)
 
-- **Non aspettare la pubblicazione.** Dopo il push l'assistente non aspetta e non controlla in continuazione il commit, la build, la CI e il Secret scan: aspettare consuma solo token. Si ferma e scrive il numero del commit; la CI la guarda l'utente. L'assistente la legge solo se l'utente glielo chiede ("controlla la CI").
-- **Un errore rosso può essere falso.** Se la CI o la build dà errore, spesso basta rilanciare la pubblicazione e passa. Prima si rilancia; solo se resta rosso si legge il messaggio e si corregge il codice. Non si modifica il codice sulla base di un solo rosso.
+- **Non aspettare la pubblicazione (paletto 2).** Commit, push, build, Secret scan e CI hanno lo stesso numero dopo il `#`. Dopo il push l'assistente non aspetta e non controlla commit, build e CI: dice solo che ha lanciato il commit, con il numero, e si ferma, così l'utente può scrivere altri messaggi. La CI dell'ultimo commit si guarda solo prima del push successivo, e solo per avvisare (paletto 3).
+- **Un errore rosso può essere falso.** Se la CI o la build dà errore, spesso basta rilanciare la pubblicazione e passa. Prima si rilancia; solo se resta rosso si legge il messaggio e si corregge il codice. Non si modifica il codice sulla base di un solo rosso. Quando rilanciare o correggere lo decide l'utente (paletti 3 e 25).
 - **Il token si chiede una sola volta, a inizio chat.** Non sta nel file (il repo è pubblico): l'utente lo incolla all'inizio della chat, o lo ha già nell'allegato che ricevi, e l'assistente lo tiene a mente per tutta la chat. Non lo richiede a ogni messaggio, non chiede di cambiarlo o di revocarlo e non lo segnala come poco sicuro. Non lo scrive mai in un file del repo.
 - **Il file `.md` si dà prima di cominciare.** Per ogni lavoro, prima di eseguire qualsiasi comando, l'assistente dà subito all'utente questo file aggiornato con quello che sta per fare, e solo dopo esegue. Se il lavoro è un solo comando non si fa; da due comandi in su sì.
 - **Ogni richiesta dell'utente è un paletto.** Una richiesta dell'utente va nei paletti e non si cambia, non si aggira e non si reinterpreta senza una richiesta esplicita dell'utente: nemmeno lui la cambia per sbaglio, serve che lo chieda in modo esplicito. L'assistente non la cambia mai di sua iniziativa. I paletti stanno in `conflittiFusione.md`.
@@ -61,7 +61,7 @@ Già presenti prima nell'app (non serviva rifarli): riordino pagine, taglia, cop
 
 ## In corso (12/11)
 
-- **Font consigliato quando si scrive in un PDF.** Richiesta dell'utente (paletto 16 in `conflittiFusione.md`): quando il font di un PDF è "limitato" (triangolo nel menu "Carattere"), il menu consiglia il font completo più simile, per esempio Tinos al posto di Times New Roman. Leggendo, la scelta resta automatica. Fatto dopo il pull al `#353`: funzione `pdfSuggestedBundledFont` e sezione "Consigliato" in `editing_fonts.dart`, due testi nuovi in tutte le lingue (italiano vero, le altre in inglese), test. Un commit. Da provare sul telefono.
+- **Font consigliato quando si scrive in un PDF.** Richiesta dell'utente (paletto 18 in `conflittiFusione.md`): quando il font di un PDF è "limitato" (triangolo nel menu "Carattere"), il menu consiglia il font completo più simile, per esempio Tinos al posto di Times New Roman. Leggendo, la scelta resta automatica. Fatto dopo il pull al `#353`: funzione `pdfSuggestedBundledFont` e sezione "Consigliato" in `editing_fonts.dart`, due testi nuovi in tutte le lingue (italiano vero, le altre in inglese), test. Un commit. Da provare sul telefono.
 
 ## Da fare
 
