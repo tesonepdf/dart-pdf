@@ -2,7 +2,7 @@
 # Vercel: installa Flutter (stessa versione della build Android in
 # .github/workflows/build.yml) e scarica le dipendenze.
 set -euo pipefail
-FLUTTER_VERSION="${FLUTTER_VERSION:-3.47.7}"
+FLUTTER_VERSION="${FLUTTER_VERSION:-3.50.0}"
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "$APP_DIR/.." && pwd)"
 if [ ! -x "$HOME/flutter/bin/flutter" ]; then

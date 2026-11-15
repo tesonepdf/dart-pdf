@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FLUTTER_VERSION: '3.47.7'
+  FLUTTER_VERSION: '3.50.0'
   # Il ramo prova-sviluppatore produce un'app separata ("DartPDF Prova", id
   # it.tesonepdf.pdf.prova) con le proprie release e il proprio canale di
   # aggiornamenti: si installa accanto a quella normale senza sostituirla.
