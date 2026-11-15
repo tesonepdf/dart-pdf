@@ -880,4 +880,72 @@ void main() {
       expect(find.text('Circle'), findsNothing);
     });
   });
+
+  group('filtro per tipo e autore', () {
+    final filterButton = find.byKey(const ValueKey('pdf-annotation-filter'));
+
+    Future<void> openFilter(WidgetTester tester) async {
+      await tester.tap(filterButton);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('i tipi spuntati restringono la lista; Togli filtri la ridona',
+        (tester) async {
+      final editing = PdfEditingController(buildMultiPagePdf(2))
+        ..preferences.author = 'Ben'
+        ..addNote(0, 100, 700, 'review this paragraph')
+        ..addRectangle(0, const PdfRect(100, 100, 200, 150))
+        ..addStamp(1, const PdfRect(100, 600, 240, 650), 'DRAFT');
+      addTearDown(editing.dispose);
+      await pumpSidebarOnly(tester, editing);
+      expect(find.text('Note'), findsOneWidget);
+      expect(find.text('Square'), findsOneWidget);
+      expect(find.text('Stamp'), findsOneWidget);
+
+      await openFilter(tester);
+      await tester.tap(
+          find.byKey(const ValueKey('pdf-annotation-filter-type-Square')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-annotation-filter-type-Note')));
+      await tester.pumpAndSettle();
+      // dentro il gruppo vale "uno qualsiasi": Square e Note, non Stamp
+      expect(find.text('Stamp'), findsNothing);
+
+      await tester
+          .tap(find.byKey(const ValueKey('pdf-annotation-filter-clear')));
+      await tester.pumpAndSettle();
+      expect(find.text('Stamp'), findsOneWidget);
+    });
+
+    testWidgets('il filtro autore si somma alla ricerca e resiste alle modifiche',
+        (tester) async {
+      final editing = PdfEditingController(buildMultiPagePdf(1))
+        ..preferences.author = 'Ben'
+        ..addNote(0, 100, 700, 'review this paragraph')
+        ..addRectangle(0, const PdfRect(100, 100, 200, 150));
+      addTearDown(editing.dispose);
+      await pumpSidebarOnly(tester, editing);
+
+      await openFilter(tester);
+      await tester.tap(
+          find.byKey(const ValueKey('pdf-annotation-filter-author-Ben')));
+      await tester.pumpAndSettle();
+      expect(find.text('Note'), findsOneWidget);
+
+      // una nuova revisione ricostruisce la lista: il filtro resta
+      editing.preferences.author = 'Ada';
+      editing.addEllipse(0, const PdfRect(300, 100, 400, 150));
+      await tester.pump();
+      expect(find.text('Circle'), findsNothing);
+      expect(find.text('Note'), findsOneWidget);
+
+      // filtro e ricerca insieme: niente corrisponde
+      await tester.enterText(
+          find.byKey(const ValueKey('pdf-annotation-search')), 'zzz');
+      await tester.pump();
+      expect(find.text('Note'), findsNothing);
+      expect(find.text('No matching annotations'), findsOneWidget);
+    });
+  });
 }

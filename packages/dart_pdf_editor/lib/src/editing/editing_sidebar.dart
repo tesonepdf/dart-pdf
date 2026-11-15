@@ -138,6 +138,16 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
   /// invalidated by an edit.
   final TextEditingController _search = TextEditingController();
 
+  /// Tipi di annotazione spuntati nel menu del filtro (vedi [_typeKey]);
+  /// vuoto = tutti i tipi. Come il testo cercato, resiste alle modifiche.
+  final Set<String> _typeFilter = {};
+
+  /// Autori spuntati nel menu del filtro; vuoto = tutti gli autori (anche
+  /// le annotazioni senza autore).
+  final Set<String> _authorFilter = {};
+
+  bool get _filtering => _typeFilter.isNotEmpty || _authorFilter.isNotEmpty;
+
   /// The /NM of the root annotation whose inline reply field is open, if
   /// any. Cleared on every revision (a sent reply revises the document and
   /// closes the field).
@@ -278,7 +288,41 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
           ? pdfL10n(context).sbarCallout
           : pdfAnnotationLabel(context, annotation.subtype);
 
+  /// La voce del menu del filtro sotto cui sta un'annotazione: il suo
+  /// /Subtype, con tutti i campi dei moduli sotto un'unica voce 'Widget'.
+  static String _typeKey(PdfAnnotation annotation) =>
+      annotation is PdfWidgetAnnotation ? 'Widget' : annotation.subtype;
+
+  static String _typeLabel(BuildContext context, String type) =>
+      type == 'Widget'
+          ? 'Campi dei moduli'
+          : pdfAnnotationLabel(context, type);
+
+  /// L'autore su cui filtra il menu: /T delle annotazioni di markup (nei
+  /// campi dei moduli /T e' il nome del campo, i link non hanno autore).
+  static String? _authorOf(PdfAnnotation annotation) {
+    if (annotation is PdfWidgetAnnotation || annotation.subtype == 'Link') {
+      return null;
+    }
+    final author = annotation.author?.trim();
+    return author == null || author.isEmpty ? null : author;
+  }
+
+  /// Dentro un gruppo vale "uno qualsiasi dei valori spuntati"; i due
+  /// gruppi (tipo e autore) e la ricerca valgono tutti insieme.
+  bool _passesFilter(PdfAnnotation annotation) {
+    if (_typeFilter.isNotEmpty && !_typeFilter.contains(_typeKey(annotation))) {
+      return false;
+    }
+    if (_authorFilter.isNotEmpty &&
+        !_authorFilter.contains(_authorOf(annotation))) {
+      return false;
+    }
+    return true;
+  }
+
   bool _matches(String query, int pageIndex, PdfAnnotation annotation) {
+    if (!_passesFilter(annotation)) return false;
     if (query.isEmpty) return true;
     return _title(annotation).toLowerCase().contains(query) ||
         _detail(pageIndex, annotation).toLowerCase().contains(query);
@@ -290,6 +334,8 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
     required bool hasPages,
     required bool allCollapsed,
     required VoidCallback onToggleAll,
+    required Set<String> types,
+    required Set<String> authors,
   }) {
     // the docked panel's close button rides the right of the filter row;
     // a bottom sheet supplies its own in its sheet chrome
@@ -300,6 +346,7 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
       key: const ValueKey('pdf-annotation-panel-move'),
     );
     final trailing = <Widget>[
+      _filterButton(context, types: types, authors: authors),
       IconButton(
         key: const ValueKey('pdf-annotation-pages-toggle-all'),
         tooltip: allCollapsed
@@ -344,6 +391,88 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
               ...trailing,
             ])
           : field,
+    );
+  }
+
+  /// Il tasto del filtro (imbuto) e il suo menu: una casella per ogni tipo
+  /// e per ogni autore presenti nel documento. Un valore spuntato che non
+  /// compare piu' (cancellata la sua ultima annotazione) resta in elenco,
+  /// cosi' si puo' togliere. Il menu resta aperto mentre si spunta.
+  Widget _filterButton(
+    BuildContext context, {
+    required Set<String> types,
+    required Set<String> authors,
+  }) {
+    final typeEntries = [
+      for (final type in {...types, ..._typeFilter})
+        (type, _typeLabel(context, type)),
+    ]..sort((a, b) => a.$2.toLowerCase().compareTo(b.$2.toLowerCase()));
+    final authorEntries = {...authors, ..._authorFilter}.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final headingStyle = Theme.of(context)
+        .textTheme
+        .labelMedium
+        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
+    Widget heading(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text(text, style: headingStyle),
+        );
+    return MenuAnchor(
+      menuChildren: [
+        if (typeEntries.isNotEmpty) ...[
+          heading('Tipo'),
+          for (final (type, label) in typeEntries)
+            CheckboxMenuButton(
+              key: ValueKey('pdf-annotation-filter-type-$type'),
+              value: _typeFilter.contains(type),
+              closeOnActivate: false,
+              onChanged: (_) => setState(() {
+                if (!_typeFilter.add(type)) _typeFilter.remove(type);
+              }),
+              child: Text(label),
+            ),
+        ],
+        if (authorEntries.isNotEmpty) ...[
+          if (typeEntries.isNotEmpty) const Divider(height: 8),
+          heading('Autore'),
+          for (final author in authorEntries)
+            CheckboxMenuButton(
+              key: ValueKey('pdf-annotation-filter-author-$author'),
+              value: _authorFilter.contains(author),
+              closeOnActivate: false,
+              onChanged: (_) => setState(() {
+                if (!_authorFilter.add(author)) _authorFilter.remove(author);
+              }),
+              child: Text(author, overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        const Divider(height: 8),
+        MenuItemButton(
+          key: const ValueKey('pdf-annotation-filter-clear'),
+          onPressed: _filtering
+              ? () => setState(() {
+                    _typeFilter.clear();
+                    _authorFilter.clear();
+                  })
+              : null,
+          child: const Text('Togli filtri'),
+        ),
+      ],
+      builder: (context, menu, _) => IconButton(
+        key: const ValueKey('pdf-annotation-filter'),
+        tooltip: 'Filtra per tipo o autore',
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+        padding: EdgeInsets.zero,
+        icon: Icon(
+          Icons.filter_list,
+          size: 20,
+          color: _filtering ? Theme.of(context).colorScheme.primary : null,
+        ),
+        onPressed: types.isEmpty && authors.isEmpty && !_filtering
+            ? null
+            : () => menu.isOpen ? menu.close() : menu.open(),
+      ),
     );
   }
 
@@ -1108,6 +1237,10 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
             // captured by each row's tap handler (complete by tap time).
             final ordered = <(int, int)>[];
             var listed = 0;
+            // cio' che offre il menu del filtro: ogni tipo e autore presenti
+            // nel documento, prima di filtrare
+            final presentTypes = <String>{};
+            final presentAuthors = <String>{};
             for (var page = 0; page < document.pageCount; page++) {
               final annotations = widget.controller.pageAt(page).annotations;
               // map each thread to its root's dictionary so a tile can
@@ -1129,6 +1262,10 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
                 }
                 pageCount++;
                 listed++;
+                presentTypes.add(_typeKey(annotation));
+                if (_authorOf(annotation) case final author?) {
+                  presentAuthors.add(author);
+                }
                 if (!_matches(query, page, annotation)) continue;
                 rows.add(_AnnotationSidebarRow(
                   slot: i,
@@ -1217,7 +1354,7 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
             // the bar never covers a tile's trailing button
             final list = sections.isEmpty
                 ? Center(
-                    child: Text(listed > 0 && query.isNotEmpty
+                    child: Text(listed > 0 && (query.isNotEmpty || _filtering)
                         ? pdfL10n(context).sidebarNoMatchingAnnotations
                         : pdfL10n(context).sidebarNoAnnotations))
                 : geometry.withScrollbar(
@@ -1243,6 +1380,8 @@ class _PdfAnnotationSidebarState extends State<PdfAnnotationSidebar> {
                 geometry,
                 hasPages: visiblePages.isNotEmpty,
                 allCollapsed: allCollapsed,
+                types: presentTypes,
+                authors: presentAuthors,
                 onToggleAll: () => setState(() {
                   if (allCollapsed) {
                     _collapsedPages.removeAll(visiblePages);
