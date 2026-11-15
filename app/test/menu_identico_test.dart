@@ -29,7 +29,9 @@ List<String> _menuEntries(WidgetTester tester) {
         .descendant(of: find.byWidget(element.widget), matching: find.byType(Text))
         .evaluate()
         .map((e) => (e.widget as Text).data ?? '')
-        .where((t) => t.isNotEmpty)
+        // Le scorciatoie (Ctrl+K su Windows, Cmd+K su Mac) cambiano per
+        // sistema: e' il "come ci si arriva", non il menu.
+        .where((t) => t.isNotEmpty && !RegExp(r'Ctrl|⌘|⇧|⌥|Cmd').hasMatch(t))
         .join(' / ');
     out.add('$id|$texts');
   }
@@ -97,7 +99,16 @@ void main() {
     ]) {
       await tester.pumpWidget(const SizedBox());
       final other = await build(tester, platform);
-      expect(other, android, reason: 'menu diverso su ${platform.name}');
+      if (other.join('\n') != android.join('\n')) {
+        final diff = <String>[];
+        final n = other.length > android.length ? other.length : android.length;
+        for (var i = 0; i < n && diff.length < 12; i++) {
+          final a = i < android.length ? android[i] : '(niente)';
+          final b = i < other.length ? other[i] : '(niente)';
+          if (a != b) diff.add('#$i android: $a  |  ${platform.name}: $b');
+        }
+        fail('menu diverso su ${platform.name}:\n${diff.join('\n')}');
+      }
     }
   });
 }

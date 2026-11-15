@@ -57,14 +57,19 @@ void main() {
     expect(await open(), contains('guasto'));
   });
 
-  test('fuori da Android avvisa e non chiama il canale', () async {
+  test('fuori da Android non usa il canale Android e dice cosa non va',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     var called = false;
     answer((call) async {
       called = true;
       return 'ok';
     });
-    expect(await open(), contains('solo su Android'));
+    // Nei test non c'e' la cartella temporanea: l'errore e' in italiano e
+    // nomina l'app, il canale di Android non si tocca.
+    final message = await open();
+    expect(message, isNotNull);
+    expect(message, contains('Word'));
     expect(called, isFalse);
   });
 }
