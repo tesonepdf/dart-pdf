@@ -1889,6 +1889,9 @@ class DartPdfEditorLocalizationsCkb extends DartPdfEditorLocalizations {
       'ڕێکخستنەوەی دەق نەکرا - ئەمە بڕگەیەکی یەک ستوونی نییە. لەبری ئەوە گۆڕینی دەق تاقی بکەرەوە.';
 
   @override
+  String get tbConvertToFreeText => 'گۆڕین بۆ سندوقی دەق';
+
+  @override
   String get tbReflowParagraph => 'ڕێکخستنەوەی بڕگە';
 
   @override

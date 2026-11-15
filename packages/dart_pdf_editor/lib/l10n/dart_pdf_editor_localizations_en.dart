@@ -1882,6 +1882,9 @@ class DartPdfEditorLocalizationsEn extends DartPdfEditorLocalizations {
       'Couldn\'t reflow - this isn\'t a single-column paragraph this tool can re-wrap. Try Replace text instead.';
 
   @override
+  String get tbConvertToFreeText => 'Convert to text box';
+
+  @override
   String get tbReflowParagraph => 'Reflow paragraph';
 
   @override
@@ -4500,6 +4503,9 @@ class DartPdfEditorLocalizationsEnAu extends DartPdfEditorLocalizationsEn {
       'Couldn\'t reflow - this isn\'t a single-column paragraph this tool can re-wrap. Try Replace text instead.';
 
   @override
+  String get tbConvertToFreeText => 'Convert to text box';
+
+  @override
   String get tbReflowParagraph => 'Reflow paragraph';
 
   @override
@@ -7116,6 +7122,9 @@ class DartPdfEditorLocalizationsEnGb extends DartPdfEditorLocalizationsEn {
   @override
   String get tbReflowFailed =>
       'Couldn\'t reflow - this isn\'t a single-column paragraph this tool can re-wrap. Try Replace text instead.';
+
+  @override
+  String get tbConvertToFreeText => 'Convert to text box';
 
   @override
   String get tbReflowParagraph => 'Reflow paragraph';
