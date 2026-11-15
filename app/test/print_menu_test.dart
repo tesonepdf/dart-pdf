@@ -195,8 +195,10 @@ void main() {
     await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     expect(find.text('Office'), findsOneWidget);
+    // Opening the preview only queries: the queue list, its settings and the
+    // previewed sheet's printable area. Nothing is spooled before Print.
     expect(printCalls.map((call) => call.method),
-        ['listPrinters', 'printerSettings']);
+        ['listPrinters', 'printerSettings', 'printableArea']);
     await tester.tap(find.byKey(const ValueKey('print-preview-print')));
     // Desktop vector lowering yields between pages on the real event loop.
     await tester.runAsync(() async {
@@ -212,6 +214,7 @@ void main() {
     expect(printCalls.map((call) => call.method), [
       'listPrinters',
       'printerSettings',
+      'printableArea',
       'beginJob',
       'printPageVector',
       'endJob',
