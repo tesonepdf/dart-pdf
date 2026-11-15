@@ -2295,18 +2295,17 @@ class _PdfStretchToFill extends StatelessWidget {
   Widget build(BuildContext context) {
     final aspect = pageAspect;
     if (!enabled) return builder(0, 0);
-    if (aspect == null) return builder(topInset, 0);
-    return ValueListenableBuilder<double>(
-      valueListenable: pdfToolPanelInset,
-      builder: (context, panel, _) => LayoutBuilder(
-          builder: (context, constraints) {
+    // Richiesta dell'utente (15/11): niente spazio libero sopra la prima
+    // pagina. La barra in alto resta sempre visibile e sta sopra la pagina.
+    if (aspect == null) return builder(0, 0);
+    return LayoutBuilder(
+      builder: (context, constraints) {
         final w = constraints.maxWidth;
         final h = constraints.maxHeight;
-        final inset = panel > topInset ? panel : topInset;
-        if (!w.isFinite || !h.isFinite) return builder(inset, 0);
+        if (!w.isFinite || !h.isFinite) return builder(0, 0);
         final gap = ((h - w * aspect) / 2).clamp(0.0, h).toDouble();
-        return builder(gap < inset ? inset : gap, gap);
-      }),
+        return builder(0, gap);
+      },
     );
   }
 }
