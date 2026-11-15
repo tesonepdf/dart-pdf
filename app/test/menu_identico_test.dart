@@ -75,15 +75,19 @@ void main() {
     for (final id in [
       'open-in-word',
       'open-in-excel',
-      'menu-open-with-rank',
-      'menu-whatsapp-contact',
-      'menu-whatsapp',
-      'menu-share',
-      'menu-tools',
+      'open-with-rank',
+      'whatsapp-contact',
+      'whatsapp',
+      'share',
+      'tools',
       'ocr',
       'updates',
     ]) {
-      expect(android.any((e) => e.startsWith('$id|')), isTrue, reason: id);
+      // L'id della riga puo' avere o no il prefisso "menu-".
+      expect(
+          android.any((e) => e.startsWith('$id|') || e.startsWith('menu-$id|')),
+          isTrue,
+          reason: '$id manca. Voci trovate: ${android.map((e) => e.split('|').first).join(', ')}');
     }
     for (final platform in [
       TargetPlatform.iOS,
