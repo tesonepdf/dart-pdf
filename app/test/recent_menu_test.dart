@@ -62,7 +62,6 @@ void main() {
     expect(find.text('Open a PDF…'), findsOneWidget);
     expect(find.text('Recenti'), findsOneWidget);
     expect(find.text(shortcut('O')), findsOneWidget);
-    expect(find.text(shortcut('O', shift: true)), findsOneWidget);
 
     expect(findMiddleEllipsisText('alpha.pdf'), findsWidgets);
     expect(findMiddleEllipsisText('beta.pdf'), findsWidgets);

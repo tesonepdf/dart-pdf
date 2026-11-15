@@ -148,7 +148,7 @@ void main() {
 
       await tester.tap(appBar);
       await tester.pumpAndSettle();
-      await expandMenuGroup(tester, 'app'); // phone sheet: folded group
+      await expandMenuGroup(tester, 'view'); // Sola lettura sta in Visualizza
       final readOnly = find.byKey(const ValueKey('menu-read-only'));
       await tester.ensureVisible(readOnly);
       await tester.pumpAndSettle();
