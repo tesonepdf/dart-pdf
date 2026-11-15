@@ -234,14 +234,16 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('no scan entries where scanning is unsupported', (tester) async {
-    // A desktop platform with no injected scanner: the entries hide.
+  testWidgets('scan entries stay where scanning is unsupported (paletto 1)',
+      (tester) async {
+    // A desktop platform with no injected scanner: the entries stay in the
+    // menu (identical on every system); tapping them says it is unavailable.
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
     await pump(tester, withDoc: true, withScanner: false);
     await openMenu(tester);
 
-    expect(find.byKey(const ValueKey('menu-scan-document')), findsNothing);
-    expect(find.byKey(const ValueKey('menu-insert-scan')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-scan-document')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-insert-scan')), findsOneWidget);
 
     // Reset before the test body ends so the foundation-vars invariant passes.
     debugDefaultTargetPlatformOverride = null;

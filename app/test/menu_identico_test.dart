@@ -47,10 +47,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     prefs = PdfEditingPreferences();
   });
-  tearDown(() {
-    debugDefaultTargetPlatformOverride = null;
-    prefs.dispose();
-  });
+  tearDown(() => prefs.dispose());
 
   Future<List<String>> build(WidgetTester tester, TargetPlatform platform) async {
     debugDefaultTargetPlatformOverride = platform;
@@ -73,6 +70,20 @@ void main() {
 
   testWidgets('il menu e\' identico su Android, iOS, Windows, macOS e Linux',
       (tester) async {
+    try {
+      await _check(tester, build);
+    } finally {
+      // Prima che il test finisca, altrimenti Flutter segnala la variabile.
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+}
+
+Future<void> _check(
+  WidgetTester tester,
+  Future<List<String>> Function(WidgetTester, TargetPlatform) build,
+) async {
+  {
     final android = await build(tester, TargetPlatform.android);
     expect(android, isNotEmpty);
     // Le voci che prima sparivano su alcuni sistemi ci sono sempre.
@@ -112,5 +123,5 @@ void main() {
         fail('menu diverso su ${platform.name}:\n${diff.join('\n')}');
       }
     }
-  });
+  }
 }
