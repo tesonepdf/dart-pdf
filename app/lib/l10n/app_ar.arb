@@ -74,6 +74,8 @@
   "editorCloseOthers": "إغلاق الأخرى",
   "editorCloseTab": "إغلاق علامة التبويب",
   "editorCloseTabsToRight": "إغلاق علامات التبويب على اليمين",
+  "editorSortTabsByName": "ترتيب علامات التبويب حسب الاسم",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "فشلت المقارنة",
   "editorCompareTitle": "مقارنة: {title}",
   "editorCopiedToClipboard": "تم النسخ إلى الحافظة",

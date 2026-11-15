@@ -289,6 +289,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get editorCloseTab => 'Закрыть вкладку';
 
   @override
+  String get editorSortTabsByName => 'Сортировать вкладки по имени';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Закрыть вкладки справа';
 
   @override

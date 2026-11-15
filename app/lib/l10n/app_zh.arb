@@ -74,6 +74,8 @@
   "editorCloseOthers": "关闭其他",
   "editorCloseTab": "关闭标签页",
   "editorCloseTabsToRight": "关闭右侧标签页",
+  "editorSortTabsByName": "按名称排序标签页",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "比较失败",
   "editorCompareTitle": "比较：{title}",
   "editorCopiedToClipboard": "已复制到剪贴板",

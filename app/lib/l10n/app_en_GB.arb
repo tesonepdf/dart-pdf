@@ -74,6 +74,8 @@
   "editorCloseOthers": "Close others",
   "editorCloseTab": "Close tab",
   "editorCloseTabsToRight": "Close tabs to the right",
+  "editorSortTabsByName": "Sort tabs by name",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "Compare failed",
   "editorCompareTitle": "Compare: {title}",
   "editorCopiedToClipboard": "Copied to clipboard",

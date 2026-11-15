@@ -287,6 +287,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get editorCloseTab => 'Fechar aba';
 
   @override
+  String get editorSortTabsByName => 'Ordenar abas por nome';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Fechar abas à direita';
 
   @override

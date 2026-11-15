@@ -287,6 +287,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get editorCloseTab => 'Cerrar pestaña';
 
   @override
+  String get editorSortTabsByName => 'Ordenar pestañas por nombre';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Cerrar pestañas a la derecha';
 
   @override

@@ -289,6 +289,12 @@ class AppLocalizationsId extends AppLocalizations {
   String get editorCloseTab => 'Tutup tab';
 
   @override
+  String get editorSortTabsByName => 'Urutkan tab menurut nama';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Tutup tab di sebelah kanan';
 
   @override

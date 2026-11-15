@@ -35,6 +35,7 @@ import 'devtools_panel.dart';
 import 'digital_signature.dart';
 import 'doc_scan.dart';
 import 'document_tab.dart';
+import 'document_tabs.dart' show compareTabTitles;
 import 'escl_scan.dart';
 import 'file_io.dart';
 import 'image_clipboard.dart';
@@ -1775,7 +1776,10 @@ class _EditorScreenState extends State<EditorScreen>
     // the active tab already, and when it isn't - a session restore finishing
     // behind the file the OS launched us with - stealing focus here would undo
     // the ordering _addTab just got right.
-    setState(() => _tabs[index] = replacement);
+    setState(() {
+      replacement.lastModified = _tabs[index].lastModified;
+      _tabs[index] = replacement;
+    });
     _logOpened(replacement);
     loading.dispose();
     unawaited(_persistSession());
@@ -1930,7 +1934,10 @@ class _EditorScreenState extends State<EditorScreen>
         originBookmark: tab.originBookmark,
         cachePath: tab.cachePath,
       );
-      setState(() => _tabs[index] = built);
+      setState(() {
+        built.lastModified = _tabs[index].lastModified;
+        _tabs[index] = built;
+      });
       AppDevTools.instance.addLog(
           'open-trace: materialized deferred "${tab.title}" — session ready');
       tab.dispose();
@@ -2335,7 +2342,10 @@ class _EditorScreenState extends State<EditorScreen>
       originBookmark: preview.originBookmark,
       cachePath: preview.cachePath,
     );
-    setState(() => _tabs[index] = built);
+    setState(() {
+      built.lastModified = _tabs[index].lastModified;
+      _tabs[index] = built;
+    });
     // A mobile progressive open (#364) has no reopenable origin - the reference
     // token dies with the pick - so snapshot the now-complete bytes into the
     // app's private store, behind the first paint, so Recent/restore reopen
@@ -4164,6 +4174,23 @@ class _EditorScreenState extends State<EditorScreen>
           ),
           const PdfMenuDivider(),
           PdfMenuItem(
+            key: const ValueKey('tab-menu-sort-name'),
+            value: _TabMenuAction.sortByName,
+            enabled: _tabs.length > 1,
+            label: appL10n(context).editorSortTabsByName,
+            icon: Icons.sort_by_alpha,
+            height: _appMenuItemHeight(),
+          ),
+          PdfMenuItem(
+            key: const ValueKey('tab-menu-sort-modified'),
+            value: _TabMenuAction.sortByModified,
+            enabled: _tabs.length > 1,
+            label: appL10n(context).editorSortTabsByModified,
+            icon: Icons.schedule,
+            height: _appMenuItemHeight(),
+          ),
+          const PdfMenuDivider(),
+          PdfMenuItem(
             key: const ValueKey('tab-menu-close-all'),
             value: _TabMenuAction.closeAll,
             label: appL10n(context).editorCloseAll,
@@ -4197,6 +4224,11 @@ class _EditorScreenState extends State<EditorScreen>
         await _closeTabs(_tabs.sublist(i + 1));
       case _TabMenuAction.closeAll:
         await _closeTabs(List.of(_tabs));
+      case _TabMenuAction.sortByName:
+        _sortTabs((a, b) => compareTabTitles(a.title, b.title));
+      case _TabMenuAction.sortByModified:
+        // Le piu' recenti per prime.
+        _sortTabs((a, b) => b.lastModified.compareTo(a.lastModified));
     }
     onChanged?.call();
   }
@@ -7628,6 +7660,22 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_persistSession());
   }
 
+  /// Ordina tutte le schede con [compare] (a parita' resta l'ordine di prima)
+  /// e tiene attivo il documento che era attivo, ovunque finisca.
+  void _sortTabs(int Function(DocumentTab a, DocumentTab b) compare) {
+    if (_tabs.length < 2) return;
+    setState(() {
+      final active = _tabs[_activeIndex.clamp(0, _tabs.length - 1)];
+      final order = {for (var i = 0; i < _tabs.length; i++) _tabs[i]: i};
+      _tabs.sort((a, b) {
+        final byKey = compare(a, b);
+        return byKey != 0 ? byKey : order[a]!.compareTo(order[b]!);
+      });
+      _activeIndex = _tabs.indexOf(active);
+    });
+    unawaited(_persistSession());
+  }
+
   Widget _buildTabStrip() {
     final coordinator = _registeredTabDragCoordinator;
     Widget buildStrip() => SizedBox(
@@ -7903,10 +7951,12 @@ class _EditorScreenState extends State<EditorScreen>
     final dragSource = _nativeTabDragging && tab.session != null
         ? _buildNativeTabDragSource(tab, chrome)
         : _TabDragStartListener(index: index, child: chrome);
+    // The active document is already on screen, so its hover card carries
+    // only the full file name the strip truncates.
     final hoverPreview = _TabHoverPreview(
       tab: tab,
       storedThumbnails: _recentThumbnails,
-      enabled: !selected,
+      titleOnly: selected,
       child: dragSource,
     );
     final coordinator = _registeredTabDragCoordinator;
@@ -8215,23 +8265,26 @@ enum _TabMenuAction {
   closeOthers,
   closeRight,
   closeAll,
+  sortByName,
+  sortByModified,
 }
 
-/// Shows a non-interactive thumbnail card for an inactive desktop tab after a
-/// short hover. This uses a plain [OverlayEntry], not an OverlayPortal: the tab
+/// Shows a non-interactive card after a short hover over a desktop tab: the
+/// page thumbnail and full file name for an inactive tab, just the full file
+/// name for the active one ([titleOnly]). This uses a plain [OverlayEntry], not an OverlayPortal: the tab
 /// is a reorderable-list item, and portals must not be reactivated from that
 /// subtree while the list is laying out or moving its drag proxy.
 class _TabHoverPreview extends StatefulWidget {
   const _TabHoverPreview({
     required this.tab,
-    required this.enabled,
+    required this.titleOnly,
     required this.child,
     this.storedThumbnails,
   });
 
   final DocumentTab tab;
   final RecentThumbnailCache? storedThumbnails;
-  final bool enabled;
+  final bool titleOnly;
   final Widget child;
 
   @override
@@ -8250,22 +8303,21 @@ class _TabHoverPreviewState extends State<_TabHoverPreview> {
     if (!identical(oldWidget.tab, widget.tab)) {
       _imageCache.clear();
     }
-    if (!widget.enabled || !identical(oldWidget.tab, widget.tab)) {
+    if (!identical(oldWidget.tab, widget.tab) ||
+        oldWidget.titleOnly != widget.titleOnly) {
+      // Activating a tab swaps its card's shape; clicks already dismissed it.
       _hide();
-    } else if (widget.enabled && !oldWidget.enabled && _hovering) {
-      _schedule();
     }
   }
 
   void _schedule() {
     _timer?.cancel();
-    if (!widget.enabled) return;
     _timer = Timer(_tabHoverPreviewDelay, _show);
   }
 
   void _show() {
     _timer = null;
-    if (!mounted || !widget.enabled || !_hovering || _entry != null) return;
+    if (!mounted || !_hovering || _entry != null) return;
     final target = context.findRenderObject();
     final overlay = Overlay.of(context, rootOverlay: true);
     final overlayBox = overlay.context.findRenderObject();
@@ -8279,20 +8331,25 @@ class _TabHoverPreviewState extends State<_TabHoverPreview> {
           math.max(0.0, overlaySize.width - 16),
         )
         .toDouble();
-    final height = math
-        .min(
-          _tabHoverPreviewHeight,
-          math.max(0.0, overlaySize.height - 16),
-        )
-        .toDouble();
-    if (width <= 0 || height <= 0) return;
+    final titleOnly = widget.titleOnly;
+    final height = titleOnly
+        ? null
+        : math
+            .min(
+              _tabHoverPreviewHeight,
+              math.max(0.0, overlaySize.height - 16),
+            )
+            .toDouble();
+    if (width <= 0 || (height != null && height <= 0)) return;
 
     final maxLeft = math.max(8.0, overlaySize.width - width - 8);
     final left = (origin.dx + (target.size.width - width) / 2)
         .clamp(8.0, maxLeft)
         .toDouble();
     final below = origin.dy + target.size.height + 4;
-    final top = below + height <= overlaySize.height - 8
+    // The title-only card sizes to its text; the tab strip sits at the top of
+    // the window, so it always has room below.
+    final top = height == null || below + height <= overlaySize.height - 8
         ? below
         : math.max(8.0, origin.dy - height - 4);
 
@@ -8305,6 +8362,7 @@ class _TabHoverPreviewState extends State<_TabHoverPreview> {
         child: IgnorePointer(
           child: _DesktopTabPreviewCard(
             tab: widget.tab,
+            titleOnly: titleOnly,
             imageCache: _imageCache,
             storedThumbnails: widget.storedThumbnails,
           ),
@@ -8353,10 +8411,12 @@ class _DesktopTabPreviewCard extends StatelessWidget {
   const _DesktopTabPreviewCard({
     required this.tab,
     required this.imageCache,
+    this.titleOnly = false,
     this.storedThumbnails,
   });
 
   final DocumentTab tab;
+  final bool titleOnly;
   final _TabPreviewImageCache imageCache;
   final RecentThumbnailCache? storedThumbnails;
 
@@ -8390,43 +8450,54 @@ class _DesktopTabPreviewCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
         child: Column(
+          mainAxisSize: titleOnly ? MainAxisSize.min : MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: _TabPreview(
-                tab: tab,
-                pageIndex: pageIndex,
-                imageCache: imageCache,
-                storedThumbnails: storedThumbnails,
-                previewKey: const ValueKey('tab-hover-preview-thumbnail'),
-                imageKey: const ValueKey('tab-hover-preview-image'),
+            if (!titleOnly) ...[
+              Expanded(
+                child: _TabPreview(
+                  tab: tab,
+                  pageIndex: pageIndex,
+                  imageCache: imageCache,
+                  storedThumbnails: storedThumbnails,
+                  previewKey: const ValueKey('tab-hover-preview-thumbnail'),
+                  imageKey: const ValueKey('tab-hover-preview-image'),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (tab.isDirty)
                   Padding(
-                    padding: const EdgeInsets.only(right: 6),
+                    // Centre the dot on the first line of the title.
+                    padding: const EdgeInsetsDirectional.only(end: 6, top: 6),
                     child: Icon(Icons.circle, size: 8, color: scheme.primary),
                   ),
                 Expanded(
-                  child: MiddleEllipsisText(
+                  // The strip truncates names, so the card spells the whole
+                  // file name out, wrapping instead of eliding.
+                  child: Text(
                     tab.title.isEmpty
                         ? appL10n(context).editorUntitled
                         : tab.title,
-                    hidePdfExtension: tab.title.isNotEmpty,
                     key: const ValueKey('tab-hover-preview-title'),
+                    maxLines: titleOnly ? null : 6,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
-                if (tab.session != null)
-                  Text(
-                    appL10n(context).editorPageNumber(pageIndex + 1),
-                    key: const ValueKey('tab-hover-preview-page'),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                if (tab.session != null && !titleOnly)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 8, top: 2),
+                    child: Text(
+                      appL10n(context).editorPageNumber(pageIndex + 1),
+                      key: const ValueKey('tab-hover-preview-page'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
                   ),
               ],
             ),

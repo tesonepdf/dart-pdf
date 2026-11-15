@@ -288,6 +288,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get editorCloseTab => 'Tab schließen';
 
   @override
+  String get editorSortTabsByName => 'Tabs nach Name sortieren';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Tabs rechts schließen';
 
   @override

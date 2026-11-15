@@ -125,7 +125,13 @@ class DocumentTab {
         error = null,
         compareBefore = null,
         compareAfter = null,
-        isLoading = false;
+        isLoading = false {
+    final session = this.session;
+    if (session != null) {
+      _seenLength = session.bytes.length;
+      session.addListener(_onSessionChanged);
+    }
+  }
 
   /// A document whose bytes are already in hand but not yet parsed: the
   /// expensive [PdfEditingController] construction (a synchronous PDF open,
@@ -224,6 +230,20 @@ class DocumentTab {
         compareBefore = before,
         compareAfter = after,
         isLoading = false;
+
+  /// Ultimo momento in cui il documento e' stato modificato nell'app (uguale
+  /// su ogni sistema); una scheda mai modificata porta il momento in cui e'
+  /// stata aperta. Serve a "Ordina le schede per ultima modifica".
+  DateTime lastModified = DateTime.now();
+
+  int _seenLength = -1;
+
+  void _onSessionChanged() {
+    final length = session?.bytes.length ?? -1;
+    if (length == _seenLength) return;
+    _seenLength = length;
+    lastModified = DateTime.now();
+  }
 
   /// The filename shown by the tab. Save As updates it to the chosen file's
   /// name; mobile title taps rename the app's copy and its share filename.
@@ -380,6 +400,7 @@ class DocumentTab {
     progress?.dispose();
     _commands?.dispose();
     if (session case final session?) {
+      session.removeListener(_onSessionChanged);
       SignatureTrust.platformDefault?.detach(session);
       session.dispose();
     }

@@ -287,6 +287,12 @@ class AppLocalizationsIt extends AppLocalizations {
   String get editorCloseTab => 'Chiudi scheda';
 
   @override
+  String get editorSortTabsByName => 'Ordina le schede per nome';
+
+  @override
+  String get editorSortTabsByModified => 'Ordina le schede per ultima modifica';
+
+  @override
   String get editorCloseTabsToRight => 'Chiudi le schede a destra';
 
   @override

@@ -288,6 +288,12 @@ class AppLocalizationsUk extends AppLocalizations {
   String get editorCloseTab => 'Закрити вкладку';
 
   @override
+  String get editorSortTabsByName => 'Сортувати вкладки за назвою';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Закрити вкладки праворуч';
 
   @override

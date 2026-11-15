@@ -74,6 +74,8 @@
   "editorCloseOthers": "Fechar as outras",
   "editorCloseTab": "Fechar aba",
   "editorCloseTabsToRight": "Fechar abas à direita",
+  "editorSortTabsByName": "Ordenar abas por nome",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "Falha na comparação",
   "editorCompareTitle": "Comparar: {title}",
   "editorCopiedToClipboard": "Copiado para a área de transferência",

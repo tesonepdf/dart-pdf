@@ -74,6 +74,8 @@
   "editorCloseOthers": "Zamknij pozostałe",
   "editorCloseTab": "Zamknij kartę",
   "editorCloseTabsToRight": "Zamknij karty po prawej",
+  "editorSortTabsByName": "Sortuj karty według nazwy",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "Porównanie nie powiodło się",
   "editorCompareTitle": "Porównaj: {title}",
   "editorCopiedToClipboard": "Skopiowano do schowka",

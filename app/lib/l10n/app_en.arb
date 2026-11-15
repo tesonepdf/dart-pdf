@@ -364,6 +364,14 @@
   "@editorCloseTab": {
     "description": "Tooltip on the per-tab close button."
   },
+  "editorSortTabsByName": "Sort tabs by name",
+  "@editorSortTabsByName": {
+    "description": "Tab context-menu action that reorders every open tab alphabetically by file name."
+  },
+  "editorSortTabsByModified": "Sort tabs by last modified",
+  "@editorSortTabsByModified": {
+    "description": "Tab context-menu action that reorders every open tab by when its document was last modified, most recent first."
+  },
   "editorCloseTabsToRight": "Close tabs to the right",
   "@editorCloseTabsToRight": {
     "description": "Tab context-menu action to close every tab to the right of this one."

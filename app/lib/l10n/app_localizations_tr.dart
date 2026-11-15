@@ -287,6 +287,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get editorCloseTab => 'Sekmeyi kapat';
 
   @override
+  String get editorSortTabsByName => 'Sekmeleri ada göre sırala';
+
+  @override
+  String get editorSortTabsByModified => 'Sort tabs by last modified';
+
+  @override
   String get editorCloseTabsToRight => 'Sağdaki sekmeleri kapat';
 
   @override

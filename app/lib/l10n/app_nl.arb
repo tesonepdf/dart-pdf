@@ -74,6 +74,8 @@
   "editorCloseOthers": "Overige sluiten",
   "editorCloseTab": "Tabblad sluiten",
   "editorCloseTabsToRight": "Tabbladen rechts sluiten",
+  "editorSortTabsByName": "Tabbladen sorteren op naam",
+  "editorSortTabsByModified": "Sort tabs by last modified",
   "editorCompareFailedTitle": "Vergelijken mislukt",
   "editorCompareTitle": "Vergelijken: {title}",
   "editorCopiedToClipboard": "Gekopieerd naar klembord",
