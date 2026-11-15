@@ -235,6 +235,9 @@ void main() {
     final b = openTab(title: 'b.pdf', path: '/docs/b.pdf');
     addTearDown(a.dispose);
     addTearDown(b.dispose);
+    // Le chiusure partono in ordine inverso: prima l'autosalvataggio si stacca
+    // dalle schede (come fa l'app con untrack), poi le schede si chiudono.
+    addTearDown(autosave.dispose);
     autosave..track(a)..track(b);
 
     a.session!.addBookmark('one');
@@ -352,6 +355,8 @@ void main() {
     final autosave = controllerOver(_FailingStore());
     final tab = openTab();
     addTearDown(tab.dispose);
+    // Prima l'autosalvataggio si stacca dalla scheda, poi la scheda si chiude.
+    addTearDown(autosave.dispose);
     autosave.track(tab);
 
     expect(tab.session!.addBookmark('one'), isTrue);

@@ -208,6 +208,27 @@ jobs:
             echo "No CargoKit Gradle plugin found; skipping patch."
           fi
 
+          # flutter_tts usa ancora il vecchio blocco kotlinOptions, che con
+          # Kotlin 2.4 non esiste piu': lo si sostituisce con la forma nuova.
+          while IFS= read -r f; do
+            python3 - "$f" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          new = re.sub(r'\n[ \t]*kotlinOptions\s*\{[^{}]*\}', '', text)
+          if new != text:
+              new = new.rstrip() + (
+                  "\n\nkotlin {\n    compilerOptions {\n"
+                  "        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11\n"
+                  "    }\n}\n"
+              )
+              path.write_text(new)
+          PY
+          done < <(find "$HOME/.pub-cache" -path '*/flutter_tts-*/android/build.gradle')
+
       - name: Prepara la firma Android permanente
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -227,12 +248,30 @@ jobs:
       - name: Compila l'APK
         working-directory: app
         run: |
-          flutter --suppress-analytics build apk --release \
+          set -o pipefail
+          log="$RUNNER_TEMP/apk-build.log"
+          if ! flutter --suppress-analytics build apk --release \
             --no-tree-shake-icons --target-platform android-arm64 \
             --build-name="$VERSIONE" \
             --build-number="$NUMERO" \
             --dart-define=PDF_BUILD_COMMIT="$GITHUB_SHA" \
-            --dart-define=PDF_ANDROID_TAG="$ANDROID_TAG"
+            --dart-define=PDF_ANDROID_TAG="$ANDROID_TAG" 2>&1 | tee "$log"; then
+            # Se fallisce, l'errore vero di Gradle diventa un'annotazione
+            # (leggibile dalle API di GitHub anche senza scaricare il log).
+            {
+              sed -n '/What went wrong/,/\* Try:/p' "$log" | head -30
+              grep -nE '^e: |error:|Unresolved reference|Could not (find|resolve|get)|Execution failed' "$log" | head -15
+            } > "$RUNNER_TEMP/apk-errori.txt" || true
+            if [[ ! -s "$RUNNER_TEMP/apk-errori.txt" ]]; then
+              tail -n 30 "$log" > "$RUNNER_TEMP/apk-errori.txt"
+            fi
+            msg="$(cat "$RUNNER_TEMP/apk-errori.txt")"
+            msg="${msg//'%'/'%25'}"
+            msg="${msg//$'\r'/'%0D'}"
+            msg="${msg//$'\n'/'%0A'}"
+            echo "::error title=Errore della compilazione APK::${msg:0:3500}"
+            exit 1
+          fi
 
       - name: Controllo che lo scanner funzioni dopo la riduzione del codice
         run: |
