@@ -9,7 +9,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 
-import 'test_finders.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,7 +76,8 @@ void main() {
     expectEntries();
   });
 
-  testWidgets('the phone sheet folds them into their own page', (tester) async {
+  testWidgets('the phone shows the same form-data submenu as desktop',
+      (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -86,12 +86,17 @@ void main() {
 
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('app-menu-sheet')), findsOneWidget);
-    final group = find.byKey(const ValueKey('app-menu-group-forms'));
+    expect(find.byKey(const ValueKey('app-menu-sheet')), findsNothing);
+    final group = find.byKey(const ValueKey('menu-group-form-data'));
     expect(group, findsOneWidget);
-    expect(find.byKey(const ValueKey('menu-export-fdf')), findsNothing);
+    for (final id in _menuIds) {
+      expect(find.byKey(ValueKey(id)), findsNothing, reason: id);
+    }
 
-    await expandMenuGroup(tester, 'forms');
+    await tester.ensureVisible(group);
+    await tester.pumpAndSettle();
+    await tester.tap(group);
+    await tester.pumpAndSettle();
     expectEntries();
   });
 

@@ -1,5 +1,6 @@
-// Phones use the same File, This document, and App menu sections as desktop,
-// laid out as full-width touch rows instead of a popup.
+// Il telefono ha lo stesso menu di Windows: la tendina con tutte le voci e i
+// sottomenu (File, Questo documento, App), con le righe alte quanto serve al
+// tocco. Qui si prova a dimensione di telefono.
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -7,8 +8,6 @@ import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/editor_screen.dart';
-
-import 'test_finders.dart';
 
 void main() {
   late PdfEditingPreferences prefs;
@@ -50,22 +49,25 @@ void main() {
 
   Finder key(String value) => find.byKey(ValueKey(value));
 
-  testWidgets('a phone gets the same menu sections and actions as desktop',
+  testWidgets('il telefono ha la tendina di Windows con tutte le sezioni',
       (tester) async {
     phoneSize(tester);
     await pump(tester, withDoc: true);
     await openMenu(tester);
 
-    expect(key('app-menu-sheet'), findsOneWidget);
-    // the groups start folded (File open): open them all
-    await expandMenuGroups(tester);
+    // niente foglio con i gruppi: la tendina, con le etichette di sezione
+    expect(key('app-menu-sheet'), findsNothing);
     expect(find.text('FILE'), findsOneWidget);
-    expect(find.text('APP'), findsOneWidget);
     expect(key('menu-command-palette'), findsOneWidget);
     for (final id in [
       'menu-new-document',
       'menu-open',
-      'menu-open-recent',
+      'open-recent-submenu',
+      'menu-group-import',
+      'menu-photos-to-pdf',
+      'menu-open-comic',
+      'menu-open-epub',
+      'menu-compose-sheet',
       'menu-save-as',
       'menu-reduce-file-size',
       'menu-print',
@@ -78,39 +80,10 @@ void main() {
     ]) {
       expect(key(id), findsOneWidget, reason: id);
     }
-    expect(key('menu-group-export'), findsNothing);
-    expect(key('menu-group-more-tools'), findsNothing);
-    expect(tester.getTopLeft(find.text('FILE')).dy,
-        lessThan(tester.getTopLeft(key('menu-new-document')).dy));
-    expect(tester.getTopLeft(key('menu-new-document')).dy,
-        lessThan(tester.getTopLeft(key('menu-open')).dy));
-    expect(tester.getTopLeft(key('menu-open')).dy,
-        lessThan(tester.getTopLeft(key('menu-open-recent')).dy));
-    expect(tester.getTopLeft(find.text('APP')).dy,
-        lessThan(tester.getTopLeft(key('menu-settings')).dy));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Open Recent opens its page, and back returns to the menu',
-      (tester) async {
-    phoneSize(tester);
-    await pump(tester, withDoc: true);
-    await openMenu(tester);
-
-    await tester.tap(key('menu-open-recent'));
-    await tester.pumpAndSettle();
-    expect(key('app-menu-sheet-recent'), findsOneWidget);
-    expect(key('menu-recent-see-all'), findsOneWidget);
-
-    await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
-    expect(key('app-menu-sheet'), findsOneWidget);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-    expect(key('app-menu-sheet'), findsNothing);
-  });
-
-  testWidgets('without a document only file and app actions remain',
+  testWidgets('senza documento restano solo le voci di File e App',
       (tester) async {
     phoneSize(tester);
     await pump(tester);
@@ -118,15 +91,14 @@ void main() {
 
     expect(key('menu-new-document'), findsOneWidget);
     expect(key('menu-open'), findsOneWidget);
-    expect(key('menu-open-recent'), findsOneWidget);
+    expect(key('open-recent-submenu'), findsOneWidget);
     expect(key('menu-print'), findsNothing);
     expect(key('menu-digital-signature'), findsNothing);
-    expect(key('menu-group-export'), findsNothing);
     expect(key('menu-read-only'), findsNothing);
     expect(key('menu-settings'), findsOneWidget);
   });
 
-  testWidgets('New asks blank or scan, then runs the pick', (tester) async {
+  testWidgets('Nuovo apre la scelta e lo scanner e\' in File', (tester) async {
     phoneSize(tester);
     await pump(tester, withScanner: true);
     await openMenu(tester);
@@ -134,39 +106,72 @@ void main() {
     expect(key('menu-scan-document'), findsOneWidget);
     await tester.tap(key('menu-new-document'));
     await tester.pumpAndSettle();
-    expect(key('app-menu-sheet-new'), findsNothing);
     expect(key('new-document-dialog'), findsOneWidget);
   });
 
-  testWidgets('scan is directly available in the File section',
+  testWidgets('lo scanner e\' in File e Inserisci scansione nel documento',
       (tester) async {
     phoneSize(tester);
     await pump(tester, withDoc: true, withScanner: true);
     await openMenu(tester);
 
     expect(key('menu-scan-document'), findsOneWidget);
-    await expandMenuGroup(tester, 'pages');
     expect(key('menu-insert-scan'), findsOneWidget);
   });
 
-  testWidgets('read-only is a switch in the sheet', (tester) async {
+  testWidgets('sul telefono restano Schede aperte e Condividi',
+      (tester) async {
     phoneSize(tester);
     await pump(tester, withDoc: true);
     await openMenu(tester);
 
-    await expandMenuGroup(tester, 'app');
+    // sono le voci che sul telefono non hanno un pulsante in barra
+    expect(key('menu-tabs'), findsOneWidget);
+    expect(key('menu-share'), findsOneWidget);
+  });
+
+  testWidgets('l\'importazione di una foto con misura e\' un sottomenu',
+      (tester) async {
+    phoneSize(tester);
+    await pump(tester);
+    await openMenu(tester);
+
+    final group = key('menu-group-import');
+    expect(group, findsOneWidget);
+    expect(key('menu-import-auto'), findsNothing);
+    await tester.ensureVisible(group);
+    await tester.pumpAndSettle();
+    await tester.tap(group);
+    await tester.pumpAndSettle();
+    for (final id in [
+      'menu-import-auto',
+      'menu-import-cards',
+      'menu-import-passport',
+      'menu-import-photoid',
+      'menu-import-a4',
+      'menu-import-other',
+    ]) {
+      expect(key(id), findsOneWidget, reason: id);
+    }
+  });
+
+  testWidgets('la sola lettura e\' un interruttore nella tendina',
+      (tester) async {
+    phoneSize(tester);
+    await pump(tester, withDoc: true);
+    await openMenu(tester);
+
     final row = key('menu-read-only');
-    expect(tester.getSemantics(row), isSemantics(isToggled: false));
+    expect(find.descendant(of: row, matching: find.byType(Switch)),
+        findsOneWidget);
+    await tester.ensureVisible(row);
+    await tester.pumpAndSettle();
     await tester.tap(row);
     await tester.pumpAndSettle();
     expect(find.byType(PdfReader), findsOneWidget);
-
-    await openMenu(tester);
-    await expandMenuGroup(tester, 'app');
-    expect(tester.getSemantics(row), isSemantics(isToggled: true));
   });
 
-  testWidgets('a tablet-width touch screen keeps the popup', (tester) async {
+  testWidgets('un tablet ha la stessa tendina', (tester) async {
     tester.view.physicalSize = const Size(1024, 768);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -176,5 +181,6 @@ void main() {
 
     expect(key('app-menu-sheet'), findsNothing);
     expect(find.text('FILE'), findsOneWidget);
+    expect(key('menu-group-import'), findsOneWidget);
   });
 }

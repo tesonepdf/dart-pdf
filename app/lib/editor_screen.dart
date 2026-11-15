@@ -19,7 +19,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log.dart';
-import 'app_menu_sheet.dart';
 import 'autosave.dart';
 import 'measure_scale_setting.dart';
 import 'combine_incoming.dart';
@@ -6460,9 +6459,70 @@ class _EditorScreenState extends State<EditorScreen>
           ),
         );
 
+    PopupMenuItem<VoidCallback> plain(
+            String id, IconData icon, String title, VoidCallback run) =>
+        PopupMenuItem<VoidCallback>(
+          key: ValueKey('menu-$id'),
+          height: _appMenuItemHeight(),
+          value: run,
+          child: _appMenuTile(icon: icon, title: title),
+        );
+
     final file = <PopupMenuEntry<VoidCallback>>[
       ..._fileActions().map(item),
+      // Importare una foto scegliendo subito la misura (la stessa scelta e'
+      // poi sempre disponibile con "Misura della foto").
+      _submenuItem(
+        menuContext,
+        id: 'import',
+        icon: Icons.add_photo_alternate_outlined,
+        title: 'Importa una foto con misura',
+        items: [
+          plain('import-auto', Icons.auto_awesome_outlined,
+              'Automatica (riconosce la misura)',
+              () => unawaited(_importPhoto())),
+          plain(
+              'import-cards',
+              Icons.badge_outlined,
+              'Carte: identità, credito, tessera sanitaria, patente',
+              () => unawaited(_importPhoto(sizeId: 'card_cie'))),
+          plain('import-passport', Icons.menu_book_outlined, 'Passaporto',
+              () => unawaited(_importPhoto(sizeId: 'passport_id3'))),
+          plain('import-photoid', Icons.face_outlined, 'Foto tessera',
+              () => unawaited(_importPhoto(sizeId: 'photo_id_it'))),
+          plain('import-a4', Icons.description_outlined, 'Foglio A4',
+              () => unawaited(_importPhoto(sizeId: 'a4'))),
+          plain('import-other', Icons.straighten_outlined, 'Altra misura…',
+              () => unawaited(_importPhotoOtherSize())),
+        ],
+      ),
       ..._recentMenuItems(menuContext),
+    ];
+    // Voci che servono dove la barra e le schede non si vedono (telefono,
+    // finestra stretta): gli strumenti e l'elenco delle schede aperte.
+    final compactItems = <PopupMenuEntry<VoidCallback>>[
+      if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
+        plain('tools', Icons.build_outlined, pdfL10n(context).tbTools,
+            () => tab?.commands?.openToolSheet()),
+      if (_tabs.isNotEmpty && _isCompactWidth(context))
+        plain('tabs', Icons.tab_outlined,
+            '${l.editorOpenTabs} (${_tabs.length})', _showTabsSheet),
+    ];
+    // Condividi e invia: dove il telefono sa farlo.
+    final sendItems = <PopupMenuEntry<VoidCallback>>[
+      if (hasDocument && _usesMobileShare)
+        plain('share', Icons.share_outlined,
+            WidgetsLocalizations.of(context).shareButtonLabel, () {
+          if (tab != null) unawaited(_shareDocument(tab));
+        }),
+      if (hasDocument && WhatsappSend.supported && tab != null)
+        plain('whatsapp-contact', Icons.person_outline,
+            'WhatsApp: contatto salvato',
+            () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
+      if (hasDocument && WhatsappSend.supported && tab != null)
+        plain('whatsapp', Icons.send_outlined,
+            'WhatsApp: scelgo il contatto',
+            () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
     ];
     final documentActions = [
       if (hasDocument)
@@ -6474,6 +6534,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (action.sheet == _SheetPlacement.formData) action,
     ];
     final document = <PopupMenuEntry<VoidCallback>>[
+      ...sendItems,
       for (final action in documentActions)
         if (action.sheet != _SheetPlacement.formData)
           item(action)
@@ -6490,6 +6551,10 @@ class _EditorScreenState extends State<EditorScreen>
     final app = <PopupMenuEntry<VoidCallback>>[
       if (hasDocument) _readOnlyMenuItem(),
       ..._appActions().map(item),
+      if (OpenWithRank.supported)
+        plain('open-with-rank', Icons.vertical_align_top,
+            'Porta DartPDF in cima ad "Apri con"',
+            () => unawaited(OpenWithRank.show())),
     ];
 
     final sections =
@@ -6500,7 +6565,38 @@ class _EditorScreenState extends State<EditorScreen>
       (label: l.editorMenuSectionApp, items: app),
     ];
 
+    // Sul telefono l'intestazione non mostra il titolo: sta in cima al menu e
+    // toccandolo si rinomina il documento.
+    final canRename = hasDocument && _usesMobileShare;
+    final showTitle = _usesAppMenuSheet(menuContext) &&
+        tab != null &&
+        tab.title.isNotEmpty;
+
     return [
+      if (showTitle && tab != null) ...[
+        PopupMenuItem<VoidCallback>(
+          key: const ValueKey('mobile-document-title'),
+          height: _appMenuItemHeight(),
+          value: canRename ? () => unawaited(_renameDocument(tab)) : () {},
+          child: Row(
+            children: [
+              Expanded(
+                child: MiddleEllipsisText(
+                  tab.title,
+                  hidePdfExtension: true,
+                  style: Theme.of(menuContext).textTheme.titleMedium,
+                ),
+              ),
+              if (canRename)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Icon(Icons.edit_outlined, size: 20),
+                ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+      ],
       PopupMenuItem<VoidCallback>(
         key: const ValueKey('menu-command-palette'),
         height: _appMenuItemHeight(),
@@ -6512,6 +6608,10 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       ),
       const PopupMenuDivider(),
+      if (compactItems.isNotEmpty) ...[
+        ...compactItems,
+        const PopupMenuDivider(),
+      ],
       for (final (index, section) in sections.indexed) ...[
         if (index > 0) const PopupMenuDivider(),
         // A label is earned by two rows or more: over a lone row it would
@@ -7283,21 +7383,11 @@ class _EditorScreenState extends State<EditorScreen>
   bool _usesAppMenuSheet(BuildContext context) =>
       !_usesCompactAppMenu && _isCompactWidth(context);
 
-  Widget _buildAppMenu(DocumentTab? tab) {
-    if (!_usesAppMenuSheet(context)) return _buildAppMenuPopup(tab);
-    return IconButton(
-      key: const ValueKey('dartpdf-app-menu'),
-      iconSize: _appMenuIconSize,
-      icon: Image.asset(
-        'web/icons/Icon-512.png',
-        width: _appMenuIconSize,
-        height: _appMenuIconSize,
-        semanticLabel: 'DartPDF',
-      ),
-      tooltip: appL10n(context).editorAppMenuTooltip,
-      onPressed: () => unawaited(_showAppMenuSheet(tab)),
-    );
-  }
+  /// Il menu dell'app e' lo stesso su ogni piattaforma, telefono compreso: la
+  /// tendina di Windows con tutte le voci e i sottomenu (richiesta
+  /// dell'utente, 14/11). Sul telefono le righe sono alte quanto serve al
+  /// tocco (vedi [_appMenuItemHeight]).
+  Widget _buildAppMenu(DocumentTab? tab) => _buildAppMenuPopup(tab);
 
   ({String read, String stop, String page}) _readAloudTexts() =>
       readAloudLabels(Localizations.localeOf(context).languageCode);
@@ -7359,230 +7449,6 @@ class _EditorScreenState extends State<EditorScreen>
       ],
       labelBuilder: (_) => 'Pagine',
     );
-  }
-
-  Future<void> _showAppMenuSheet(DocumentTab? tab) async {
-    final l = appL10n(context);
-    final hasDocument = tab?.session != null;
-    String? groupOf(_MenuAction action) {
-      if (action.sheet == _SheetPlacement.formData) return 'forms';
-      return switch (action.id) {
-        'save' ||
-        'save-as' ||
-        'reduce-file-size' ||
-        'print' ||
-        'export-image' ||
-        'export-text' ||
-        'export-word' ||
-        'open-in-word' ||
-        'export-excel' ||
-        'open-in-excel' ||
-        'export-excel-zone' =>
-          'save',
-        'digital-signature' ||
-        'ocr' ||
-        'open-without-ocr' ||
-        'read-aloud' =>
-          'sign',
-        'compare' ||
-        'insert-document' ||
-        'insert-scan' ||
-        'number-pages' ||
-        'remove-strip' ||
-        'photo-size' ||
-        'watermark' =>
-          'pages',
-        'import-form-data' => 'forms',
-        _ => null,
-      };
-    }
-
-    AppMenuSheetEntry entry(_MenuAction action) => AppMenuSheetEntry(
-      key: ValueKey('menu-${action.id}'),
-      icon: action.icon,
-      title: action.title,
-      enabled: action.enabled,
-      run: action.run,
-      group: groupOf(action),
-    );
-    AppMenuSheetEntry importEntry(
-            String id, IconData icon, String title, VoidCallback run) =>
-        AppMenuSheetEntry(
-            key: ValueKey('menu-$id'), icon: icon, title: title, run: run);
-    final allRecents = _recentMenuEntries();
-    final documentActions = [
-      if (hasDocument)
-        for (final action in _documentActions())
-          if (!(action.hiddenWhenReadOnly && _readOnly)) action,
-    ];
-    // New actions from the upstream project (form data FDF/XFDF/XDP) go in
-    // their own "To organize" section until the user places them.
-    final organizeActions = [
-      for (final action in documentActions)
-        if (action.sheet == _SheetPlacement.formData) action,
-    ];
-    // Tutte le voci stanno nel menu (anche Numera, Filigrana e Togli spazio
-    // vuoto, nel gruppo "Pagine"), uguale a Windows: nessuna voce manca.
-    final plainDocumentActions = [
-      for (final action in documentActions)
-        if (action.sheet != _SheetPlacement.formData) action,
-    ];
-    final appActions = _appActions();
-    final action = await showAppMenuSheet(
-      context,
-      title: tab == null || tab.title.isEmpty ? null : tab.title,
-      onRename: tab == null || tab.session == null || !_usesMobileShare
-          ? null
-          : () => unawaited(_renameDocument(tab)),
-      search: AppMenuSheetEntry(
-        key: const ValueKey('menu-command-palette'),
-        icon: Icons.search,
-        title: l.editorMenuSearchActions,
-        run: _openCommandPalette,
-      ),
-      file: [
-        for (final action in _fileActions())
-          if (action.id != 'photos-one-sheet' &&
-              action.id != 'photos-to-pdf' &&
-              action.id != 'open-comic' &&
-              action.id != 'open-epub' &&
-              action.id != 'compose-sheet' &&
-              action.id != 'scanner-import')
-            entry(action),
-      ],
-      importEntries: [
-        importEntry('import-auto', Icons.auto_awesome_outlined,
-            'Automatica (riconosce la misura)',
-            () => unawaited(_importPhoto())),
-        importEntry(
-            'import-cards',
-            Icons.badge_outlined,
-            'Carte: identità, credito, tessera sanitaria, patente',
-            () => unawaited(_importPhoto(sizeId: 'card_cie'))),
-        importEntry('import-passport', Icons.menu_book_outlined, 'Passaporto',
-            () => unawaited(_importPhoto(sizeId: 'passport_id3'))),
-        importEntry('import-photoid', Icons.face_outlined, 'Foto tessera',
-            () => unawaited(_importPhoto(sizeId: 'photo_id_it'))),
-        importEntry('import-a4', Icons.description_outlined, 'Foglio A4',
-            () => unawaited(_importPhoto(sizeId: 'a4'))),
-        importEntry('import-other', Icons.straighten_outlined,
-            'Altra misura…', () => unawaited(_importPhotoOtherSize())),
-        importEntry('photos-one-sheet', Icons.photo_library_outlined,
-            'Foto su un solo foglio…', () => unawaited(_photosOnOneSheet())),
-        importEntry('photos-to-pdf', Icons.collections_outlined,
-            'Foto in PDF (una per pagina)…', () => unawaited(_photosToPdf())),
-        importEntry('open-comic', Icons.auto_stories_outlined,
-            'Apri un fumetto (.cbz)…', () => unawaited(_openComic())),
-        importEntry('open-epub', Icons.menu_book_outlined,
-            'Apri un libro (.epub)…', () => unawaited(_openEpub())),
-        importEntry('compose-sheet', Icons.dashboard_customize_outlined,
-            'Componi foglio…', () => unawaited(_composeSheet())),
-        importEntry('scanner-import', Icons.scanner_outlined,
-            'Importa da scanner…', () => unawaited(_importFromScanner())),
-      ],
-      document: [
-        if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-tools'),
-            group: 'top',
-            icon: Icons.build_outlined,
-            title: pdfL10n(context).tbTools,
-            run: () => tab?.commands?.openToolSheet(),
-          ),
-        if (_tabs.isNotEmpty)
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-tabs'),
-            group: 'top',
-            icon: Icons.tab_outlined,
-            title: '${l.editorOpenTabs} (${_tabs.length})',
-            run: _showTabsSheet,
-          ),
-        if (hasDocument && _usesMobileShare)
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-share'),
-            group: 'send',
-            icon: Icons.share_outlined,
-            title: WidgetsLocalizations.of(context).shareButtonLabel,
-            run: () {
-              if (tab != null) unawaited(_shareDocument(tab));
-            },
-          ),
-        if (hasDocument && WhatsappSend.supported && tab != null)
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-whatsapp-contact'),
-            group: 'send',
-            icon: Icons.person_outline,
-            title: 'WhatsApp: contatto salvato',
-            run: () {
-              if (tab != null) {
-                unawaited(_sendWhatsapp(tab, chooseSaved: true));
-              }
-            },
-          ),
-        if (hasDocument && WhatsappSend.supported && tab != null)
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-whatsapp'),
-            group: 'send',
-            icon: Icons.send_outlined,
-            title: 'WhatsApp: scelgo il contatto',
-            run: () {
-              if (tab != null) {
-                unawaited(_sendWhatsapp(tab, chooseSaved: false));
-              }
-            },
-          ),
-        for (final action in plainDocumentActions) entry(action),
-      ],
-      recentFiles: [
-        for (final recent in allRecents)
-          AppMenuSheetEntry(
-            key: ValueKey('menu-recent-${recent.id}'),
-            icon: Icons.picture_as_pdf_outlined,
-            title: recent.title.isEmpty ? l.editorUntitled : recent.title,
-            subtitle: recent.path,
-            run: () => unawaited(_openRecent(recent)),
-          ),
-      ],
-      viewAllRecentFiles: AppMenuSheetEntry(
-        key: const ValueKey('menu-recent-see-all'),
-        icon: Icons.grid_view_outlined,
-        title: l.editorViewAllRecentFiles,
-        enabled: allRecents.isNotEmpty,
-        run: _showRecentFiles,
-      ),
-      clearRecentFiles: allRecents.isEmpty
-          ? null
-          : AppMenuSheetEntry(
-              key: const ValueKey('menu-clear-recent-files'),
-              icon: Icons.clear_all,
-              title: l.editorClearRecentFiles,
-              run: () => unawaited(_recents.clear()),
-            ),
-      toOrganize: [
-        for (final action in organizeActions) entry(action),
-        if (OpenWithRank.supported)
-          AppMenuSheetEntry(
-            key: const ValueKey('menu-open-with-rank'),
-            group: 'app',
-            icon: Icons.vertical_align_top,
-            title: 'Porta DartPDF in cima ad "Apri con"',
-            run: () => unawaited(OpenWithRank.show()),
-          ),
-      ],
-      readOnly: hasDocument ? _readOnly : null,
-      onToggleReadOnly: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
-      app: [
-        for (final action in appActions.skip(1))
-          if (action.id != 'updates') entry(action),
-      ],
-      settings: appActions.isEmpty ? null : entry(appActions.first),
-      updates: [
-        for (final action in appActions)
-          if (action.id == 'updates') entry(action),
-      ].firstOrNull,
-    );
-    if (!mounted) return;
-    action?.call();
   }
 
   Widget _buildAppMenuPopup(DocumentTab? tab) => PopupMenuButton<VoidCallback>(
@@ -9741,7 +9607,8 @@ class _MenuAction {
   /// Edits the document, so it goes away in read-only mode.
   final bool hiddenWhenReadOnly;
 
-  /// Where the phone menu sheet puts it (see app_menu_sheet.dart).
+  /// Where the action goes: only [_SheetPlacement.formData] still matters,
+  /// it folds into the form-data submenu.
   final _SheetPlacement sheet;
 
   /// The short label under a [_SheetPlacement.primary] button ("Print"
