@@ -3817,6 +3817,12 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Future<void> _runOcr() async {
+    if (!OnDeviceOcr.isSupported) {
+      AppLog.instance.error('OCR',
+          'Non disponibile su questo sistema (${defaultTargetPlatform.name})');
+      _toast('L\'OCR su questo sistema non è ancora disponibile.');
+      return;
+    }
     final tab = _active;
     final bytes = tab?.session?.bytes;
     if (tab == null || bytes == null) {
@@ -4558,7 +4564,18 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Manda il documento (con le modifiche attuali) su WhatsApp: a un contatto
   /// salvato ([chooseSaved]) oppure scegliendo il contatto dentro WhatsApp.
+  Future<void> _showOpenWithRank() async {
+    final problem = await OpenWithRank.show();
+    if (problem != null && mounted) _toast(problem);
+  }
+
   Future<void> _sendWhatsapp(DocumentTab tab, {required bool chooseSaved}) async {
+    if (!WhatsappSend.supported) {
+      AppLog.instance.error('Invio WhatsApp',
+          'Non disponibile su questo sistema (${defaultTargetPlatform.name})');
+      _toast(WhatsappSend.unsupportedMessage);
+      return;
+    }
     try {
       FocusManager.instance.primaryFocus?.unfocus();
       final all = await _shareableBytes(tab);
@@ -6009,8 +6026,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_exportWord(tab));
         },
       ),
-      if (OpenFileExternal.supported)
-        _MenuAction(
+      _MenuAction(
           id: 'open-in-word',
           requiresDocument: true,
           icon: Icons.open_in_new,
@@ -6030,8 +6046,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_exportExcel(tab));
         },
       ),
-      if (OpenFileExternal.supported)
-        _MenuAction(
+      _MenuAction(
           id: 'open-in-excel',
           requiresDocument: true,
           icon: Icons.open_in_new,
@@ -6133,8 +6148,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_digitallySign(tab));
         },
       ),
-      if (OnDeviceOcr.isSupported)
-        _MenuAction(
+      _MenuAction(
           id: 'ocr',
           requiresDocument: true,
           icon: Icons.document_scanner_outlined,
@@ -6202,16 +6216,24 @@ class _EditorScreenState extends State<EditorScreen>
         ),
         // Aggiornamenti: accanto a Impostazioni (il mio repo e quello
         // ufficiale, tutti e due aperti nella stessa schermata).
-        if (_updates.supported)
-          _MenuAction(
+        _MenuAction(
             id: 'updates',
             icon: Icons.system_update_outlined,
             title: appUpdatesPlusTitle(context),
-            run: () => showAppUpdates(
-              context,
-              updates: _updates,
-              updateInstaller: _updateInstaller,
-            ),
+            run: () {
+              if (!_updates.supported) {
+                AppLog.instance.error('Aggiornamenti',
+                    'Non disponibili su questo sistema (${defaultTargetPlatform.name})');
+                _toast('Gli aggiornamenti su questo sistema arrivano da '
+                    'fuori dall\'app (store o pacchetto), non da qui.');
+                return;
+              }
+              unawaited(showAppUpdates(
+                context,
+                updates: _updates,
+                updateInstaller: _updateInstaller,
+              ));
+            },
           ),
       ];
 
@@ -6335,14 +6357,12 @@ class _EditorScreenState extends State<EditorScreen>
       ),
       'app',
     );
-    if (OpenWithRank.supported) {
-      add(
-        plain('menu-open-with-rank', Icons.vertical_align_top,
-            'Porta DartPDF in cima ad "Apri con"',
-            () => unawaited(OpenWithRank.show())),
-        'app',
-      );
-    }
+    add(
+      plain('menu-open-with-rank', Icons.vertical_align_top,
+          'Porta DartPDF in cima ad "Apri con"',
+          () => unawaited(_showOpenWithRank())),
+      'app',
+    );
 
     if (hasDocument) {
       add(
@@ -6363,14 +6383,21 @@ class _EditorScreenState extends State<EditorScreen>
     // Le voci che altrove sono pulsanti o barre del telefono: gli strumenti,
     // le schede aperte, Condividi e WhatsApp.
     final editorCommands = tab?.commands;
-    if (hasDocument && (editorCommands?.canOpenToolSheet ?? false)) {
+    if (hasDocument) {
       add(
-        plain('menu-tools', Icons.build_outlined, pdfL10n(context).tbTools,
-            () => editorCommands?.openToolSheet()),
+        plain('menu-tools', Icons.build_outlined, pdfL10n(context).tbTools, () {
+          if (editorCommands?.canOpenToolSheet ?? false) {
+            editorCommands?.openToolSheet();
+          } else {
+            AppLog.instance.info('Strumenti',
+                'Il foglio strumenti non serve: la barra e\' gia\' visibile');
+            _toast('Gli strumenti sono già nella barra, su questo schermo.');
+          }
+        }),
         'tools',
       );
     }
-    if (_tabs.isNotEmpty && _isCompactWidth(context)) {
+    if (_tabs.isNotEmpty) {
       add(
         plain('menu-tabs', Icons.tab_outlined,
             '${l.editorOpenTabs} (${_tabs.length})', _showTabsSheet),
@@ -6378,28 +6405,24 @@ class _EditorScreenState extends State<EditorScreen>
       );
     }
     if (hasDocument && tab != null) {
-      if (_usesMobileShare) {
-        add(
-          plain('menu-share', Icons.share_outlined,
-              WidgetsLocalizations.of(context).shareButtonLabel,
-              () => unawaited(_shareDocument(tab))),
-          'share',
-        );
-      }
-      if (WhatsappSend.supported) {
-        add(
-          plain('menu-whatsapp-contact', Icons.person_outline,
-              'WhatsApp: contatto salvato',
-              () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
-          'share',
-        );
-        add(
-          plain('menu-whatsapp', Icons.send_outlined,
-              'WhatsApp: scelgo il contatto',
-              () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
-          'share',
-        );
-      }
+      add(
+        plain('menu-share', Icons.share_outlined,
+            WidgetsLocalizations.of(context).shareButtonLabel,
+            () => unawaited(_shareDocument(tab))),
+        'share',
+      );
+      add(
+        plain('menu-whatsapp-contact', Icons.person_outline,
+            'WhatsApp: contatto salvato',
+            () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
+        'share',
+      );
+      add(
+        plain('menu-whatsapp', Icons.send_outlined,
+            'WhatsApp: scelgo il contatto',
+            () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
+        'share',
+      );
     }
 
     // Importare una foto scegliendo subito la misura (la stessa scelta e'
@@ -7260,12 +7283,8 @@ class _EditorScreenState extends State<EditorScreen>
     }
     // Sul telefono l'intestazione non mostra il titolo: sta in cima al menu e
     // toccandolo si rinomina il documento.
-    final titled = tab != null &&
-            _usesAppMenuSheet(context) &&
-            tab.title.isNotEmpty
-        ? tab
-        : null;
-    final canRename = titled != null && titled.session != null && _usesMobileShare;
+    final titled = tab != null && tab.title.isNotEmpty ? tab : null;
+    final canRename = titled != null && titled.session != null;
     final action = await showAppMenu(
       context,
       groups: groups,

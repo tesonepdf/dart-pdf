@@ -35,6 +35,10 @@ Future<List<PdfPlatformFont>> loadPlatformFonts() async {
   ];
 }
 
+/// Sui sistemi nativi i font si leggono senza permessi: stessa cosa di
+/// [loadPlatformFonts], richiamabile dalla voce "Font di sistema".
+Future<List<PdfPlatformFont>> loadPlatformFontsOnRequest() => loadPlatformFonts();
+
 const _maxFonts = 300;
 
 /// Scans the platform's font directories into at most [_maxFonts]

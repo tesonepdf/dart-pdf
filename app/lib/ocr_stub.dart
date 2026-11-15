@@ -44,6 +44,6 @@ class OnDeviceOcr {
     void Function(Map<int, List<PdfOcrSpan>> spans)? onRecognized,
     bool automatic = false,
   }) async {
-    if (!automatic) onToast('On-device OCR is not available on the web');
+    if (!automatic) onToast('L\'OCR su questo sistema non è ancora disponibile.');
   }
 }

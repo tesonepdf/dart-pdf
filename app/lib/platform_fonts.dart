@@ -8,4 +8,5 @@
 // dart:io-less target) an empty list - there are no readable OS font files
 // to embed there.
 export 'platform_fonts_stub.dart'
+    if (dart.library.js_interop) 'platform_fonts_web.dart'
     if (dart.library.io) 'platform_fonts_io.dart';

@@ -465,7 +465,8 @@ class _UserFontsSectionState extends State<_UserFontsSection> {
         Text('Font personali', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          'Importa i file .ttf o .otf dal telefono: più file in una volta, un '
+          'Usa i font installati nel sistema ("Font di sistema", dove il '
+          'sistema li espone) oppure importa i file .ttf o .otf: più file in una volta, un '
           'file per famiglia, solo la versione normale (i corsivi vengono '
           'saltati). Compaiono nel menu dei font e si incorporano nel PDF.',
           style: Theme.of(context).textTheme.bodySmall,
@@ -475,6 +476,22 @@ class _UserFontsSectionState extends State<_UserFontsSection> {
           key: const ValueKey('settings-import-fonts'),
           onPressed: _busy ? null : _import,
           child: const Text('Importa font…'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          key: const ValueKey('settings-system-fonts'),
+          onPressed: _busy
+              ? null
+              : () async {
+                  setState(() => _busy = true);
+                  final message = await UserFonts.instance.useSystemFonts();
+                  if (!mounted) return;
+                  setState(() {
+                    _message = message;
+                    _busy = false;
+                  });
+                },
+          child: const Text('Font di sistema'),
         ),
         if (_message != null) ...[
           const SizedBox(height: 6),

@@ -27,6 +27,11 @@ class WhatsappSend {
   static bool get supported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  /// Avviso in italiano quando il sistema non puo' mandare su WhatsApp.
+  static const unsupportedMessage =
+      'L\'invio diretto su WhatsApp c\'e\' solo su Android: '
+      'su questo sistema usa Condividi o Salva.';
+
   static Future<List<WhatsappContact>> contacts() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);

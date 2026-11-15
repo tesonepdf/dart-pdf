@@ -1,8 +1,11 @@
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:flutter/foundation.dart';
 
+import 'platform_fonts.dart' as platform;
 import 'user_fonts_model.dart';
-import 'user_fonts_stub.dart' if (dart.library.io) 'user_fonts_io.dart' as impl;
+import 'user_fonts_stub.dart'
+    if (dart.library.js_interop) 'user_fonts_web.dart'
+    if (dart.library.io) 'user_fonts_io.dart' as impl;
 
 export 'user_fonts_model.dart';
 
@@ -20,7 +23,7 @@ class UserFonts extends ChangeNotifier {
   /// The imported fonts, by family name.
   List<UserFontFile> get imported => _imported;
 
-  /// Whether this platform can keep imported fonts (not the web).
+  /// Whether this platform can keep imported fonts (ora anche il web).
   bool get supported => impl.userFontsSupported;
 
   /// Reads the imported fonts from storage and offers them in the menu.
@@ -34,6 +37,22 @@ class UserFonts extends ChangeNotifier {
   void setSystemFonts(List<PdfPlatformFont> fonts) {
     _system = fonts;
     _publish();
+  }
+
+  /// Voce "Font di sistema": legge i font installati e li offre nel menu.
+  /// Sul web chiede il permesso al browser (dove esiste). Ritorna il messaggio
+  /// in italiano da mostrare.
+  Future<String> useSystemFonts() async {
+    try {
+      final fonts = await platform.loadPlatformFontsOnRequest();
+      setSystemFonts(fonts);
+      return fonts.isEmpty
+          ? 'Nessun font di sistema trovato.'
+          : 'Font di sistema disponibili nel menu: ${fonts.length}.';
+    } catch (_) {
+      return 'I font di sistema non sono disponibili qui '
+          '(permesso negato o browser che non li espone).';
+    }
   }
 
   /// Imports the picked files and refreshes the menu.
