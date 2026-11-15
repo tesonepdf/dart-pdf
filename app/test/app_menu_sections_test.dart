@@ -54,18 +54,18 @@ void main() {
     expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
   });
 
-  testWidgets('with nothing open the document rows stay listed but dimmed',
+  testWidgets('with nothing open the document rows are not in the menu',
       (tester) async {
     await pump(tester);
     await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
+    expect(find.byKey(const ValueKey('menu-print')), findsNothing);
+    expect(find.byKey(const ValueKey('menu-digital-signature')), findsNothing);
     expect(
-      tester.widget<ListTile>(find.byKey(const ValueKey('menu-print'))).enabled,
-      isFalse,
-    );
-    expect(
-      tester.widget<ListTile>(find.byKey(const ValueKey('menu-new-document'))).enabled,
+      tester
+          .widget<ListTile>(find.byKey(const ValueKey('menu-new-document')))
+          .enabled,
       isTrue,
     );
   });

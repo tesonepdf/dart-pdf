@@ -40,9 +40,13 @@ Future<void> openAppMenu(WidgetTester tester) async {
   await tester.tap(find.byTooltip('DartPDF menu'));
   await tester.pumpAndSettle();
   await expandMenuGroups(tester);
-  final search = find.byKey(const ValueKey('menu-command-palette'));
-  if (search.evaluate().isNotEmpty) {
-    await tester.ensureVisible(search);
+  // The first row: the document title on the phone, else the search row.
+  final title = find.byKey(const ValueKey('mobile-document-title'));
+  final first = title.evaluate().isNotEmpty
+      ? title
+      : find.byKey(const ValueKey('menu-command-palette'));
+  if (first.evaluate().isNotEmpty) {
+    await tester.ensureVisible(first);
     await tester.pumpAndSettle();
   }
 }

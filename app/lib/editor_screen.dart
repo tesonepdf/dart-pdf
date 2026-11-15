@@ -7218,7 +7218,13 @@ class _EditorScreenState extends State<EditorScreen>
 
   Future<void> _showAppMenu(DocumentTab? tab) async {
     final l = appL10n(context);
-    final entries = _commandEntries();
+    // Nel menu non compaiono le voci che non valgono ora (niente documento
+    // aperto, sola lettura): restano nella ricerca, spente e con il motivo. Una
+    // voce momentaneamente non usabile (senza motivo) resta, spenta.
+    final entries = [
+      for (final e in _commandEntries())
+        if (e.command.enabled || e.command.disabledReason == null) e,
+    ];
     final groups = <AppMenuGroup>[];
     for (final (id, title, icon) in _menuAreas) {
       final inArea = [

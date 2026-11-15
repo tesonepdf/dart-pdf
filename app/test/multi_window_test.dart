@@ -58,10 +58,6 @@ void main() {
 
   tearDown(() => prefs.dispose());
 
-  Future<void> openAppMenu(WidgetTester tester) async {
-    await openAppMenu(tester);
-  }
-
   Finder tabTitle(String name) => find.descendant(
         of: find.byKey(const ValueKey('tab-strip')),
         matching: findMiddleEllipsisText(name),

@@ -101,7 +101,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('senza documento le voci del documento restano ma spente',
+  testWidgets('senza documento le voci del documento non ci sono',
       (tester) async {
     setSize(tester, const Size(390, 844));
     await pump(tester);
@@ -109,9 +109,8 @@ void main() {
 
     expect(tester.widget<ListTile>(key('menu-new-document')).enabled, isTrue);
     expect(tester.widget<ListTile>(key('menu-open')).enabled, isTrue);
-    expect(tester.widget<ListTile>(key('menu-print')).enabled, isFalse);
-    expect(tester.widget<ListTile>(key('menu-digital-signature')).enabled,
-        isFalse);
+    expect(key('menu-print'), findsNothing);
+    expect(key('menu-digital-signature'), findsNothing);
     expect(key('menu-read-only'), findsNothing);
     expect(key('menu-settings'), findsOneWidget);
   });
@@ -197,7 +196,7 @@ void main() {
     expect(
         find.descendant(of: key('panel-pages'), matching: find.byType(Switch)),
         findsOneWidget);
-    expect(key('view-two-page'), findsOneWidget);
+    expect(key('view-annotations'), findsOneWidget);
   });
 
   testWidgets('un tablet e un PC hanno lo stesso menu', (tester) async {
