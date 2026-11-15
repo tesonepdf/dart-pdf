@@ -380,8 +380,6 @@ class _EditorScreenState extends State<EditorScreen>
   late final DocumentScanner? _documentScanner = widget.documentScanner ??
       (documentScanSupported ? scanDocumentToPdf : null);
 
-  bool get _canScan => _documentScanner != null;
-
   final _recents = RecentsStore();
   late final _recentThumbnails =
       widget.recentThumbnails ?? RecentThumbnailCache();
@@ -3144,7 +3142,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// plumbing.
   Future<Uint8List?> _runScan() async {
     final scan = _documentScanner;
-    if (scan == null || _scanInFlight) return null;
+    if (scan == null) {
+      AppLog.instance.error('Scansione',
+          'Non disponibile su questo sistema (${kIsWeb ? 'web' : defaultTargetPlatform.name})');
+      if (mounted) {
+        _toast('La scansione con la fotocamera non è ancora disponibile su '
+            'questo sistema.');
+      }
+      return null;
+    }
+    if (_scanInFlight) return null;
     _scanInFlight = true;
     try {
       return await scan();
@@ -5864,8 +5871,7 @@ class _EditorScreenState extends State<EditorScreen>
           shortcut: _menuShortcut('N', shift: true),
           run: _newWindow,
         ),
-      if (_canScan)
-        _MenuAction(
+      _MenuAction(
           id: 'scan-document',
           icon: Icons.document_scanner_outlined,
           title: l.editorMenuScanDocument,
@@ -6185,8 +6191,7 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_insertDocument(tab));
         },
       ),
-      if (_canScan)
-        _MenuAction(
+      _MenuAction(
           id: 'insert-scan',
           requiresDocument: true,
           icon: Icons.add_a_photo_outlined,
@@ -7348,9 +7353,8 @@ class _EditorScreenState extends State<EditorScreen>
       [
         entry('insert-document', Icons.post_add_outlined,
             'Inserisci PDF', () => _insertDocument(tab)),
-        if (_canScan)
-          entry('insert-scan', Icons.add_a_photo_outlined,
-              'Inserisci scansione', () => _insertScan(tab)),
+        entry('insert-scan', Icons.add_a_photo_outlined,
+            'Inserisci scansione', () => _insertScan(tab)),
         entry('number', Icons.format_list_numbered, 'Numera le pagine',
             () => _numberPages(tab)),
         entry('watermark', Icons.water_drop_outlined, 'Filigrana',

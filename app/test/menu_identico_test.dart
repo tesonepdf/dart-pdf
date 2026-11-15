@@ -32,7 +32,9 @@ List<String> _menuEntries(WidgetTester tester) {
         // Le scorciatoie (Ctrl+K su Windows, Cmd+K su Mac) cambiano per
         // sistema: e' il "come ci si arriva", non il menu.
         .where((t) => t.isNotEmpty && !RegExp(r'Ctrl|⌘|⇧|⌥|Cmd').hasMatch(t))
-        .join(' / ');
+        .join('')
+        // Il testo puo' andare a capo in modo diverso: si confronta senza spazi.
+        .replaceAll(RegExp(r'\s+'), '');
     out.add('$id|$texts');
   }
   return out;
