@@ -7,6 +7,7 @@ import 'package:file_selector_platform_interface/file_selector_platform_interfac
     show FileSelectorPlatform;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -326,14 +327,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Digitally sign item can sit below the fold - scroll it in before tapping.
     await tester
         .ensureVisible(find.byKey(const ValueKey('menu-digital-signature')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-digital-signature')));
+    await tapMenuKey(tester, 'menu-digital-signature');
     await tester.pumpAndSettle();
 
     expect(saved, isNotNull);
@@ -370,14 +370,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Digitally sign item can sit below the fold - scroll it in before tapping.
     await tester
         .ensureVisible(find.byKey(const ValueKey('menu-digital-signature')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-digital-signature')));
+    await tapMenuKey(tester, 'menu-digital-signature');
     await tester.pumpAndSettle();
 
     expect(saved, isNotNull);
@@ -414,14 +413,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Digitally sign item can sit below the fold - scroll it in before tapping.
     await tester
         .ensureVisible(find.byKey(const ValueKey('menu-digital-signature')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-digital-signature')));
+    await tapMenuKey(tester, 'menu-digital-signature');
     await tester.pumpAndSettle();
 
     // signed once, and the "Undo" affordance is offered
@@ -722,14 +720,13 @@ void main() {
       ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       // The app menu is tall (scan entries land above this on mobile), so the
       // Digitally sign item can sit below the fold - scroll it in first.
       await tester
           .ensureVisible(find.byKey(const ValueKey('menu-digital-signature')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-digital-signature')));
+      await tapMenuKey(tester, 'menu-digital-signature');
       await tester.pumpAndSettle();
     }
 
@@ -770,14 +767,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Digitally sign item can sit below the fold - scroll it in before tapping.
     await tester
         .ensureVisible(find.byKey(const ValueKey('menu-digital-signature')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-digital-signature')));
+    await tapMenuKey(tester, 'menu-digital-signature');
     await tester.pumpAndSettle();
 
     expect(saved, isNotNull);

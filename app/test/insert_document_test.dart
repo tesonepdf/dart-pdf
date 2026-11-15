@@ -73,8 +73,7 @@ void main() {
   }
 
   Future<void> insert(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     final item = find.byKey(const ValueKey('menu-insert-document'));
     await tester.ensureVisible(item);
     await tester.tap(item);
@@ -257,15 +256,13 @@ void main() {
 
   testWidgets('read-only mode hides Insert document', (tester) async {
     await open(tester);
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // Read-only is a switch row now, not a "Switch to read-only" verb.
     final mode = find.byKey(const ValueKey('menu-read-only'));
     await tester.ensureVisible(mode);
     await tester.tap(mode);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     expect(find.byKey(const ValueKey('menu-insert-document')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });

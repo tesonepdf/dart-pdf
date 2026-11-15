@@ -5,6 +5,7 @@
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,8 +35,7 @@ void main() {
       (tester) async {
     await pumpWithDoc(tester);
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-ocr')), findsOneWidget);
     expect(find.text('OCR…'), findsOneWidget);
@@ -47,8 +47,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-ocr')), findsNothing);
   });

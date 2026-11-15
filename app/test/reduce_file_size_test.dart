@@ -8,6 +8,7 @@ import 'package:dart_pdf_editor_app/reduce_file_size.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -346,20 +347,9 @@ void main() {
     session.inkCommitDelay = null;
     session.addInkStroke(0, [(100, 500), (200, 550)]);
     expect(session.hasPendingInk, isTrue);
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     final action = find.byKey(const ValueKey('menu-reduce-file-size'));
-    expect(
-        tester.getTopLeft(action).dy,
-        greaterThan(tester
-            .getTopLeft(
-                find.byKey(const ValueKey('menu-section-This document')))
-            .dy));
-    expect(
-        tester.getTopLeft(action).dy,
-        lessThan(tester
-            .getTopLeft(find.byKey(const ValueKey('menu-section-App')))
-            .dy));
+    expect(action, findsOneWidget);
     await _tap(tester, 'menu-reduce-file-size');
     await tester.pumpAndSettle();
     expect(session.hasPendingInk, isFalse);
@@ -400,8 +390,7 @@ void main() {
       },
     )));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await _tap(tester, 'menu-command-palette');
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('command-palette-field')),
@@ -446,8 +435,7 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('pdf-freetext-editor')),
         'Currently being typed');
     expect(session.isEditingText, isTrue);
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await _tap(tester, 'menu-reduce-file-size');
     await tester.pumpAndSettle();
     await _tap(tester, 'reduce-size-run');
@@ -472,8 +460,7 @@ void main() {
       },
     )));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await _tap(tester, 'menu-reduce-file-size');
     await tester.pumpAndSettle();
     expect(find.text('Encrypted PDFs cannot be optimized.'), findsOneWidget);
@@ -488,8 +475,7 @@ void main() {
     addTearDown(prefs.dispose);
     await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     expect(find.byKey(const ValueKey('menu-reduce-file-size')), findsNothing);
     await _tap(tester, 'menu-command-palette');
     await tester.pumpAndSettle();

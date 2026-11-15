@@ -16,8 +16,7 @@ import 'test_finders.dart';
 /// Opens the phone's open-tabs sheet from the app menu (the header no longer
 /// has a tabs button).
 Future<void> tapMobileTabsButton(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-  await tester.pumpAndSettle();
+  await openAppMenu(tester);
   await tapMenuKey(tester, 'menu-tabs');
 }
 
@@ -616,11 +615,10 @@ void main() {
     await tester.pump();
     await openTab(tester, 'alpha.pdf', path: '/Users/ben/Documents/alpha.pdf');
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-save-as')));
+    await tapMenuKey(tester, 'menu-save-as');
     await tester.pumpAndSettle();
     expect(tabTitle('copy.pdf'), findsOneWidget);
 

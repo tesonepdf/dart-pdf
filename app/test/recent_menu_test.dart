@@ -26,19 +26,6 @@ void main() {
     await tester.pump();
   }
 
-  Future<void> openAppMenu(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> openRecentsSubmenu(WidgetTester tester) async {
-    await openAppMenu(tester);
-    // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
-    await tester.ensureVisible(find.text('Open Recent'));
-    await tester.tap(find.text('Open Recent'));
-    await tester.pumpAndSettle();
-  }
-
   String shortcut(String key, {bool shift = false}) {
     final apple = defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.iOS;
@@ -64,81 +51,7 @@ void main() {
     });
   }
 
-  testWidgets(
-    'app menu and recent submenu use compact rows on desktop',
-    (tester) async {
-      seedRecents();
-      await pumpApp(tester);
-
-      await openAppMenu(tester);
-      final newItemFinder = find.byKey(const ValueKey('menu-new-document'));
-      final newItem = tester.widget<PopupMenuItem<dynamic>>(newItemFinder);
-      final newTileFinder = find.descendant(
-        of: newItemFinder,
-        matching: find.byType(ListTile),
-      );
-      final newTile = tester.widget<ListTile>(newTileFinder);
-      expect(newItem.height, 36);
-      expect(newTile.minTileHeight, 36);
-      final openItemFinder = find.byKey(const ValueKey('menu-open'));
-      // other File rows (new window, photo import...) now sit between New and
-      // Open, so compare each row's own height instead of the distance
-      expect(
-        tester.widget<PopupMenuItem<dynamic>>(openItemFinder).height,
-        36,
-      );
-      expect(
-        tester
-            .getSize(find.descendant(
-                of: openItemFinder, matching: find.byType(ListTile)))
-            .height,
-        lessThan(kMinInteractiveDimension),
-      );
-
-      // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
-      await tester.ensureVisible(find.text('Open Recent'));
-      await tester.tap(find.text('Open Recent'));
-      await tester.pumpAndSettle();
-      final recentItemFinder = find.ancestor(
-        of: findMiddleEllipsisText('alpha.pdf'),
-        matching: find.byType(PopupMenuItem<VoidCallback>),
-      );
-      final recentItem = tester.widget<PopupMenuItem<VoidCallback>>(
-        recentItemFinder,
-      );
-      final recentTileFinder = find.descendant(
-        of: recentItemFinder,
-        matching: find.byType(ListTile),
-      );
-      final recentTile = tester.widget<ListTile>(recentTileFinder);
-      expect(recentItem.height, 48);
-      expect(recentTile.minTileHeight, 48);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
-  );
-
-  testWidgets(
-    'app menu keeps touch-sized rows on mobile',
-    (tester) async {
-      await pumpApp(tester);
-
-      await openAppMenu(tester);
-      final itemFinder = find.byKey(const ValueKey('menu-new-document'));
-      final item = tester.widget<PopupMenuItem<dynamic>>(itemFinder);
-      final tile = tester.widget<ListTile>(
-        find.descendant(of: itemFinder, matching: find.byType(ListTile)),
-      );
-      expect(item.height, kMinInteractiveDimension);
-      expect(tile.minTileHeight, isNull);
-      expect(
-        tester.getSize(itemFinder).height,
-        greaterThanOrEqualTo(kMinInteractiveDimension),
-      );
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
-  );
-
-  testWidgets('DartPDF menu shows Open and Open Recent entries',
+  testWidgets('the menu shows Open and the recent files under "Recenti"',
       (tester) async {
     seedRecents();
     await pumpApp(tester);
@@ -147,15 +60,9 @@ void main() {
 
     expect(find.byKey(const ValueKey('menu-open')), findsOneWidget);
     expect(find.text('Open a PDF…'), findsOneWidget);
-    expect(find.byKey(const ValueKey('open-recent-submenu')), findsOneWidget);
-    expect(find.text('Open Recent'), findsOneWidget);
+    expect(find.text('Recenti'), findsOneWidget);
     expect(find.text(shortcut('O')), findsOneWidget);
     expect(find.text(shortcut('O', shift: true)), findsOneWidget);
-
-    // il menu è lungo: con la finestra di prova la voce può stare sotto la piega
-    await tester.ensureVisible(find.text('Open Recent'));
-    await tester.tap(find.text('Open Recent'));
-    await tester.pumpAndSettle();
 
     expect(findMiddleEllipsisText('alpha.pdf'), findsWidgets);
     expect(findMiddleEllipsisText('beta.pdf'), findsWidgets);
@@ -166,13 +73,13 @@ void main() {
     expect(find.text('Clear recent files'), findsWidgets);
   });
 
-  testWidgets('Open Recent opens the full searchable recent-files browser',
+  testWidgets('"View all" opens the full searchable recent-files browser',
       (tester) async {
     seedRecents();
     await pumpApp(tester);
 
-    await openRecentsSubmenu(tester);
-    await tester.tap(find.byKey(const ValueKey('view-all-recent-files')));
+    await openAppMenu(tester);
+    await tapMenuKey(tester, 'view-all-recent-files');
     await tester.pumpAndSettle();
 
     expect(find.text('Recent files'), findsOneWidget);
@@ -188,15 +95,15 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('Open Recent stays visible when there are no recent files',
+  testWidgets('with no recent files "View all" stays but cannot be used',
       (tester) async {
     await pumpApp(tester);
 
-    await openRecentsSubmenu(tester);
+    await openAppMenu(tester);
 
-    expect(find.text('Open Recent'), findsOneWidget);
-    expect(find.text('No recent files'), findsOneWidget);
-    expect(find.byKey(const ValueKey('view-all-recent-files')), findsOneWidget);
+    final viewAll = find.byKey(const ValueKey('view-all-recent-files'));
+    expect(viewAll, findsOneWidget);
+    expect(tester.widget<ListTile>(viewAll).enabled, isFalse);
     expect(find.text('Clear recent files'), findsNothing);
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,11 +68,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-print')));
+      await tapMenuKey(tester, 'menu-print');
       await tester.pumpAndSettle();
       return () => printed;
     }

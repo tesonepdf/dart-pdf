@@ -32,42 +32,78 @@ Future<void> expandSettingsSections(WidgetTester tester,
   }
 }
 
-/// Taps an item of the app menu. The menu grows with every feature and its
-/// popup scrolls, so in the 800x600 test window an item near the bottom
-/// ("Settings", "Updates") can sit below the fold, where a plain tap misses.
+/// Opens the app menu and unfolds every group, so a test can find any row.
+/// The menu is the same accordion on every platform (macro-areas that open
+/// and close); afterwards it is scrolled back to the top, so the search row
+/// and the first rows can be tapped directly.
+Future<void> openAppMenu(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('DartPDF menu'));
+  await tester.pumpAndSettle();
+  await expandMenuGroups(tester);
+  final search = find.byKey(const ValueKey('menu-command-palette'));
+  if (search.evaluate().isNotEmpty) {
+    await tester.ensureVisible(search);
+    await tester.pumpAndSettle();
+  }
+}
+
+/// Taps an item of the app menu. A group that is still folded is unfolded
+/// first, and the item is scrolled into view: the menu grows with every
+/// feature, so in the 800x600 test window an item near the bottom can sit
+/// below the fold, where a plain tap misses.
 Future<void> tapMenuText(WidgetTester tester, String text) async {
-  final item = find.text(text);
+  var item = find.text(text);
+  if (item.evaluate().isEmpty) {
+    await expandMenuGroups(tester);
+    item = find.text(text);
+  }
   await tester.ensureVisible(item);
   await tester.pumpAndSettle();
   await tester.tap(item);
 }
 
-/// Taps a keyed app-menu item after scrolling it into view.
+/// Taps a keyed app-menu item after unfolding its group and scrolling it
+/// into view.
 Future<void> tapMenuKey(WidgetTester tester, String key) async {
-  final item = find.byKey(ValueKey(key));
+  var item = find.byKey(ValueKey(key));
+  if (item.evaluate().isEmpty) {
+    await expandMenuGroups(tester);
+    item = find.byKey(ValueKey(key));
+  }
   await tester.ensureVisible(item);
   await tester.pumpAndSettle();
   await tester.tap(item);
 }
 
-/// Opens one folded group ("doc", "send", "save", "sign", "pages", "forms",
-/// "import", "app") of the phone app menu, so the tests can find its rows.
-/// The File group starts open; tapping it would close it.
+/// Opens one folded group of the app menu ("file", "share", "print", "pages",
+/// "tools", "sign", "view", "app", "other"), so a test can find its rows.
+/// A group that is already open is left as it is (File starts open).
 Future<void> expandMenuGroup(WidgetTester tester, String id) async {
   final group = find.byKey(ValueKey('app-menu-group-$id'));
   if (group.evaluate().isEmpty) return;
-  final header =
-      find.descendant(of: group, matching: find.byType(ListTile)).first;
+  final tiles = find.descendant(of: group, matching: find.byType(ListTile));
+  // a folded group only has its header; an open one has its rows as well
+  if (tiles.evaluate().length > 1) return;
+  final header = tiles.first;
   await tester.ensureVisible(header);
   await tester.pumpAndSettle();
   await tester.tap(header);
   await tester.pumpAndSettle();
 }
 
-/// Opens every folded group of the phone app menu except File (open).
+/// Opens every folded group of the app menu.
 Future<void> expandMenuGroups(WidgetTester tester) async {
-  for (final id in ['import', 'doc', 'send', 'save', 'sign', 'pages', 'forms']) {
+  for (final id in [
+    'file',
+    'share',
+    'print',
+    'pages',
+    'tools',
+    'sign',
+    'view',
+    'app',
+    'other',
+  ]) {
     await expandMenuGroup(tester, id);
   }
-  await expandMenuGroup(tester, 'app');
 }

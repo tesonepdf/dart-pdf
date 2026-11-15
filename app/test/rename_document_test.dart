@@ -55,16 +55,14 @@ void main() {
 
   // Phone: the title lives at the top of the app menu; tapping it renames.
   Future<void> openTitle(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await tester.tap(title);
     await tester.pumpAndSettle();
   }
 
   // Opens the menu, checks the title shown at its top, closes the menu.
   Future<void> expectMenuTitle(WidgetTester tester, String text) async {
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     expect(find.descendant(of: title, matching: findMiddleEllipsisText(text)),
         findsOneWidget);
     tester.state<NavigatorState>(find.byType(Navigator).first).pop();
@@ -113,9 +111,8 @@ void main() {
     await expectMenuTitle(tester, 'Project notes.pdf');
     expect((await recovery.list()).single.title, 'Project notes.pdf');
 
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
-    await expandMenuGroup(tester, 'send');
+    await openAppMenu(tester);
+    await expandMenuGroup(tester, 'share');
     final share = find.byKey(const ValueKey('menu-share'));
     await tester.ensureVisible(share);
     await tester.tap(share);

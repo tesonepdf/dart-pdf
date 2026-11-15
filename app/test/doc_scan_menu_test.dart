@@ -54,8 +54,7 @@ void main() {
   }
 
   Future<void> openMenu(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
   }
 
   testWidgets('the app menu offers Scan to new document', (tester) async {
@@ -71,7 +70,7 @@ void main() {
     await pump(tester);
     await openMenu(tester);
 
-    await tester.tap(find.byKey(const ValueKey('menu-scan-document')));
+    await tapMenuKey(tester, 'menu-scan-document');
     await tester.pumpAndSettle();
 
     // A brand-new tab named for today's date now holds the scan.
@@ -136,7 +135,7 @@ void main() {
     // row has to be scrolled into view before it can be tapped.
     await tester.ensureVisible(find.byKey(const ValueKey('menu-insert-scan')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-insert-scan')));
+    await tapMenuKey(tester, 'menu-insert-scan');
     await tester.pump();
 
     expect(scanned, 1);
@@ -150,7 +149,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await openMenu(tester);
 
-    await tester.tap(find.byKey(const ValueKey('menu-scan-document')));
+    await tapMenuKey(tester, 'menu-scan-document');
     await tester.pumpAndSettle();
 
     // No document was created; the welcome screen is still up.
@@ -169,7 +168,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await openMenu(tester);
 
-    await tester.tap(find.byKey(const ValueKey('menu-scan-document')));
+    await tapMenuKey(tester, 'menu-scan-document');
     await tester.pump(); // reject the future
     await tester.pump(); // show the snack bar
 
@@ -196,7 +195,7 @@ void main() {
     // row has to be scrolled into view before it can be tapped.
     await tester.ensureVisible(find.byKey(const ValueKey('menu-insert-scan')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-insert-scan')));
+    await tapMenuKey(tester, 'menu-insert-scan');
     await tester.pump(); // reject the future
     await tester.pump(); // show the snack bar
 
@@ -224,10 +223,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     await openMenu(tester);
-    await tester.tap(find.byKey(const ValueKey('menu-scan-document')));
+    await tapMenuKey(tester, 'menu-scan-document');
     await tester.pump();
     await openMenu(tester);
-    await tester.tap(find.byKey(const ValueKey('menu-scan-document')));
+    await tapMenuKey(tester, 'menu-scan-document');
     await tester.pump();
 
     expect(scanned, 1);

@@ -4,6 +4,7 @@
 // collegamento (le parti di logica sono in pdf_conversions_test.dart).
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,8 +21,7 @@ void main() {
   tearDown(() => prefs.dispose());
 
   Future<void> openMenu(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
   }
 
   testWidgets('con un documento aperto il menu offre Esporta come testo',

@@ -6,6 +6,7 @@ import 'package:dart_pdf_editor_app/keyboard_availability.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -109,8 +110,7 @@ void main() {
     addTearDown(prefs.dispose);
     await tester.pumpWidget(root(EditorScreen(prefs: prefs)));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     expect(find.text('New document…'), findsOneWidget);
     expect(find.text('Ctrl+N'), findsNothing);
     expect(find.text('Ctrl+K'), findsNothing);
@@ -120,7 +120,7 @@ void main() {
     await notify(tester, false);
     expect(find.text('Ctrl+N'), findsNothing);
     expect(find.text('Ctrl+K'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('menu-command-palette')));
+    await tapMenuKey(tester, 'menu-command-palette');
     await tester.pumpAndSettle();
     await tester.enterText(
         find.byKey(const ValueKey('command-palette-field')), 'print');

@@ -81,6 +81,7 @@ import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
 import 'photo_source_store.dart';
+import 'app_menu.dart';
 import 'whatsapp_send.dart';
 import 'open_file_external.dart';
 import 'open_with_rank.dart';
@@ -5821,193 +5822,6 @@ class _EditorScreenState extends State<EditorScreen>
       ? '${shift ? '⇧' : ''}⌘$key'
       : 'Ctrl+${shift ? 'Shift+' : ''}$key';
 
-  Widget _appMenuTile({
-    required IconData icon,
-    required String title,
-    String? shortcut,
-    Widget? trailing,
-    Widget? subtitle,
-    TextOverflow? overflow,
-    bool middleEllipsis = false,
-    bool hidePdfExtension = false,
-  }) =>
-      Builder(
-          builder: (context) => ListTile(
-                leading: Icon(icon),
-                title: middleEllipsis
-                    ? MiddleEllipsisText(
-                        title,
-                        hidePdfExtension: hidePdfExtension,
-                      )
-                    : Text(title, overflow: overflow),
-                subtitle: subtitle,
-                trailing: trailing ??
-                    (shortcut == null || !PdfKeyboardAvailability.of(context)
-                        ? null
-                        : Text(
-                            shortcut,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                          )),
-                contentPadding: EdgeInsets.zero,
-                minTileHeight: _usesCompactAppMenu
-                    ? subtitle == null
-                        ? _compactAppMenuItemHeight
-                        : _compactRecentMenuItemHeight
-                    : null,
-                minVerticalPadding: _usesCompactAppMenu ? 0 : null,
-              ));
-
-  List<PopupMenuEntry<VoidCallback>> _recentMenuItems(
-      BuildContext menuContext) {
-    final recents = _recentMenuEntries();
-    final trailing = Builder(
-        builder: (context) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (PdfKeyboardAvailability.of(context)) ...[
-                  Text(
-                    _menuShortcut('O', shift: true),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                const Icon(Icons.arrow_right),
-              ],
-            ));
-    final buttonKey = GlobalKey<PopupMenuButtonState<VoidCallback>>();
-    return [
-      _SubmenuMenuItem(
-        key: const ValueKey('open-recent-submenu'),
-        height: _appMenuItemHeight(),
-        open: () => buttonKey.currentState?.showButtonMenu(),
-        child: PopupMenuButton<VoidCallback>(
-          key: buttonKey,
-          tooltip: appL10n(context).editorOpenRecent,
-          onSelected: (action) {
-            action();
-            if (Navigator.of(menuContext).canPop()) {
-              Navigator.of(menuContext).pop();
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem<VoidCallback>(
-              key: const ValueKey('view-all-recent-files'),
-              height: _appMenuItemHeight(),
-              enabled: _availableRecentEntries().isNotEmpty,
-              value: () {
-                // The submenu's onSelected callback closes the parent popup.
-                // Push the browser on the next frame so that pop cannot close
-                // the newly opened route as well.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _showRecentFiles();
-                });
-              },
-              child: _appMenuTile(
-                icon: Icons.grid_view_outlined,
-                title: appL10n(context).editorViewAllRecentFiles,
-              ),
-            ),
-            if (recents.isNotEmpty) const PopupMenuDivider(),
-            if (recents.isEmpty)
-              PopupMenuItem<VoidCallback>(
-                height: _appMenuItemHeight(),
-                enabled: false,
-                child: _appMenuTile(
-                  icon: Icons.history_toggle_off,
-                  title: appL10n(context).editorNoRecentFiles,
-                ),
-              )
-            else ...[
-              for (final entry in recents)
-                PopupMenuItem<VoidCallback>(
-                  height: _appMenuItemHeight(twoLine: entry.path != null),
-                  value: () => unawaited(_openRecent(entry)),
-                  child: _appMenuTile(
-                    icon: Icons.picture_as_pdf_outlined,
-                    title: entry.title.isEmpty
-                        ? appL10n(context).editorUntitled
-                        : entry.title,
-                    middleEllipsis: true,
-                    hidePdfExtension: true,
-                    subtitle: entry.path == null
-                        ? null
-                        : MiddleEllipsisText(entry.path!),
-                  ),
-                ),
-              const PopupMenuDivider(),
-              PopupMenuItem<VoidCallback>(
-                height: _appMenuItemHeight(),
-                value: () => unawaited(_recents.clear()),
-                child: _appMenuTile(
-                  icon: Icons.clear_all,
-                  title: appL10n(context).editorClearRecentFiles,
-                ),
-              ),
-            ],
-          ],
-          // The item carries no padding so the submenu button fills the whole
-          // row for hit-testing; inset the visible content by the stock menu
-          // padding so this row's icon/label line up with the plain items
-          // above it (New, Open…), which sit inside that default padding.
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _appMenuTile(
-              icon: Icons.history,
-              title: appL10n(context).editorOpenRecent,
-              trailing: trailing,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  /// A popup row that opens [items] in a cascading submenu (key
-  /// `menu-group-<id>`, like the phone sheet's folded groups). Picking an
-  /// item runs it and closes the parent popup too.
-  PopupMenuItem<VoidCallback> _submenuItem(
-    BuildContext menuContext, {
-    required String id,
-    required IconData icon,
-    required String title,
-    required List<PopupMenuEntry<VoidCallback>> items,
-  }) {
-    final buttonKey = GlobalKey<PopupMenuButtonState<VoidCallback>>();
-    return _SubmenuMenuItem(
-      key: ValueKey('menu-group-$id'),
-      height: _appMenuItemHeight(),
-      open: () => buttonKey.currentState?.showButtonMenu(),
-      child: PopupMenuButton<VoidCallback>(
-        key: buttonKey,
-        tooltip: title,
-        onSelected: (action) {
-          if (Navigator.of(menuContext).canPop()) {
-            Navigator.of(menuContext).pop();
-          }
-          action();
-        },
-        itemBuilder: (_) => items,
-        // as Open Recent: no item padding so the button fills the row,
-        // the content inset to line up with the plain rows
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: _appMenuTile(
-            icon: icon,
-            title: title,
-            trailing: const Icon(Icons.arrow_right),
-          ),
-        ),
-      ),
-    );
-  }
-
   /// The app menu's plain rows, grouped by the section they belong to.
   ///
   /// These descriptors are the single list behind two surfaces: the menu
@@ -6401,236 +6215,82 @@ class _EditorScreenState extends State<EditorScreen>
           ),
       ];
 
-  /// A section header inside the app menu - the same 11px uppercase label the
-  /// editor's tool sheet uses, so the two popups read as one family.
-  PopupMenuEntry<VoidCallback> _appMenuSectionLabel(String text) =>
-      PopupMenuItem<VoidCallback>(
-        key: ValueKey('menu-section-$text'),
-        enabled: false,
-        height: _usesCompactAppMenu ? 28 : 32,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(
-          text.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
 
-  /// Read-only as a switch rather than a verb: the row stops rewriting its
-  /// own label ("Switch to read-only" / "Switch to edit mode") and the state
-  /// is legible the moment the menu opens.
-  PopupMenuEntry<VoidCallback> _readOnlyMenuItem() =>
-      PopupMenuItem<VoidCallback>(
-        key: const ValueKey('menu-read-only'),
-        height: _appMenuItemHeight(),
-        value: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
-        child: _appMenuTile(
-          icon: Icons.visibility_outlined,
-          title: appL10n(context).editorMenuReadOnly,
-          // The row itself carries the tap; the switch is the state readout.
-          trailing: IgnorePointer(
-            child: Switch(
-              value: _readOnly,
-              onChanged: (_) {},
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-        ),
-      );
 
-  List<PopupMenuEntry<VoidCallback>> _appMenuItems(
-      BuildContext menuContext, DocumentTab? tab) {
-    final l = appL10n(context);
-    final hasDocument = tab?.session != null;
-    PopupMenuItem<VoidCallback> item(_MenuAction action) =>
-        PopupMenuItem<VoidCallback>(
-          key: ValueKey('menu-${action.id}'),
-          height: _appMenuItemHeight(),
-          enabled: action.enabled,
-          value: action.run,
-          child: _appMenuTile(
-            icon: action.icon,
-            title: action.title,
-            shortcut: action.shortcut,
-          ),
-        );
 
-    PopupMenuItem<VoidCallback> plain(
-            String id, IconData icon, String title, VoidCallback run) =>
-        PopupMenuItem<VoidCallback>(
-          key: ValueKey('menu-$id'),
-          height: _appMenuItemHeight(),
-          value: run,
-          child: _appMenuTile(icon: icon, title: title),
-        );
+  /// Tutto cio' che si puo' fare, nell'ordine in cui lo si sfoglia: le azioni
+  /// del menu, gli strumenti della barra, i pannelli, le opzioni di vista, i
+  /// file recenti. E' l'elenco del campo "Cerca" e anche quello del menu: ogni
+  /// voce porta con se' la macroarea in cui sta nel menu.
+  List<AppCommand> _paletteCommands() => [
+        for (final e in _commandEntries()) e.command,
+      ];
 
-    final file = <PopupMenuEntry<VoidCallback>>[
-      ..._fileActions().map(item),
-      // Importare una foto scegliendo subito la misura (la stessa scelta e'
-      // poi sempre disponibile con "Misura della foto").
-      _submenuItem(
-        menuContext,
-        id: 'import',
-        icon: Icons.add_photo_alternate_outlined,
-        title: 'Importa una foto con misura',
-        items: [
-          plain('import-auto', Icons.auto_awesome_outlined,
-              'Automatica (riconosce la misura)',
-              () => unawaited(_importPhoto())),
-          plain(
-              'import-cards',
-              Icons.badge_outlined,
-              'Carte: identità, credito, tessera sanitaria, patente',
-              () => unawaited(_importPhoto(sizeId: 'card_cie'))),
-          plain('import-passport', Icons.menu_book_outlined, 'Passaporto',
-              () => unawaited(_importPhoto(sizeId: 'passport_id3'))),
-          plain('import-photoid', Icons.face_outlined, 'Foto tessera',
-              () => unawaited(_importPhoto(sizeId: 'photo_id_it'))),
-          plain('import-a4', Icons.description_outlined, 'Foglio A4',
-              () => unawaited(_importPhoto(sizeId: 'a4'))),
-          plain('import-other', Icons.straighten_outlined, 'Altra misura…',
-              () => unawaited(_importPhotoOtherSize())),
-        ],
-      ),
-      ..._recentMenuItems(menuContext),
-    ];
-    // Voci che servono dove la barra e le schede non si vedono (telefono,
-    // finestra stretta): gli strumenti e l'elenco delle schede aperte.
-    final compactItems = <PopupMenuEntry<VoidCallback>>[
-      if (hasDocument && (tab?.commands?.canOpenToolSheet ?? false))
-        plain('tools', Icons.build_outlined, pdfL10n(context).tbTools,
-            () => tab?.commands?.openToolSheet()),
-      if (_tabs.isNotEmpty && _isCompactWidth(context))
-        plain('tabs', Icons.tab_outlined,
-            '${l.editorOpenTabs} (${_tabs.length})', _showTabsSheet),
-    ];
-    // Condividi e invia: dove il telefono sa farlo.
-    final sendItems = <PopupMenuEntry<VoidCallback>>[
-      if (hasDocument && _usesMobileShare)
-        plain('share', Icons.share_outlined,
-            WidgetsLocalizations.of(context).shareButtonLabel, () {
-          if (tab != null) unawaited(_shareDocument(tab));
-        }),
-      if (hasDocument && WhatsappSend.supported && tab != null)
-        plain('whatsapp-contact', Icons.person_outline,
-            'WhatsApp: contatto salvato',
-            () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
-      if (hasDocument && WhatsappSend.supported && tab != null)
-        plain('whatsapp', Icons.send_outlined,
-            'WhatsApp: scelgo il contatto',
-            () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
-    ];
-    final documentActions = [
-      if (hasDocument)
-        for (final action in _documentActions())
-          if (!(action.hiddenWhenReadOnly && _readOnly)) action,
-    ];
-    final formData = [
-      for (final action in documentActions)
-        if (action.sheet == _SheetPlacement.formData) action,
-    ];
-    final document = <PopupMenuEntry<VoidCallback>>[
-      ...sendItems,
-      for (final action in documentActions)
-        if (action.sheet != _SheetPlacement.formData)
-          item(action)
-        // the group takes the place of its first action
-        else if (identical(action, formData.first))
-          _submenuItem(
-            menuContext,
-            id: 'form-data',
-            icon: Icons.swap_vert_outlined,
-            title: l.editorMenuFormData,
-            items: formData.map(item).toList(),
-          ),
-    ];
-    final app = <PopupMenuEntry<VoidCallback>>[
-      if (hasDocument) _readOnlyMenuItem(),
-      ..._appActions().map(item),
-      if (OpenWithRank.supported)
-        plain('open-with-rank', Icons.vertical_align_top,
-            'Porta DartPDF in cima ad "Apri con"',
-            () => unawaited(OpenWithRank.show())),
-    ];
-
-    final sections =
-        <({String label, List<PopupMenuEntry<VoidCallback>> items})>[
-      (label: l.editorMenuSectionFile, items: file),
-      if (document.isNotEmpty)
-        (label: l.editorMenuSectionDocument, items: document),
-      (label: l.editorMenuSectionApp, items: app),
-    ];
-
-    // Sul telefono l'intestazione non mostra il titolo: sta in cima al menu e
-    // toccandolo si rinomina il documento.
-    final canRename = hasDocument && _usesMobileShare;
-    final showTitle = _usesAppMenuSheet(menuContext) &&
-        tab != null &&
-        tab.title.isNotEmpty;
-
-    return [
-      if (showTitle && tab != null) ...[
-        PopupMenuItem<VoidCallback>(
-          key: const ValueKey('mobile-document-title'),
-          height: _appMenuItemHeight(),
-          value: canRename ? () => unawaited(_renameDocument(tab)) : () {},
-          child: Row(
-            children: [
-              Expanded(
-                child: MiddleEllipsisText(
-                  tab.title,
-                  hidePdfExtension: true,
-                  style: Theme.of(menuContext).textTheme.titleMedium,
-                ),
-              ),
-              if (canRename)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Icon(Icons.edit_outlined, size: 20),
-                ),
-            ],
-          ),
-        ),
-        const PopupMenuDivider(),
-      ],
-      PopupMenuItem<VoidCallback>(
-        key: const ValueKey('menu-command-palette'),
-        height: _appMenuItemHeight(),
-        value: _openCommandPalette,
-        child: _appMenuTile(
-          icon: Icons.search,
-          title: l.editorMenuSearchActions,
-          shortcut: _menuShortcut('K'),
-        ),
-      ),
-      const PopupMenuDivider(),
-      if (compactItems.isNotEmpty) ...[
-        ...compactItems,
-        const PopupMenuDivider(),
-      ],
-      for (final (index, section) in sections.indexed) ...[
-        if (index > 0) const PopupMenuDivider(),
-        // A label is earned by two rows or more: over a lone row it would
-        // say less than the divider above it already does.
-        if (section.items.length >= 2) _appMenuSectionLabel(section.label),
-        ...section.items,
-      ],
-    ];
+  /// La macroarea del menu in cui sta una voce di menu.
+  String _menuAreaOf(_MenuAction action) {
+    if (action.sheet == _SheetPlacement.formData) return 'sign';
+    return switch (action.id) {
+      'new-document' ||
+      'new-window' ||
+      'scan-document' ||
+      'open' ||
+      'photos-one-sheet' ||
+      'open-comic' ||
+      'open-epub' ||
+      'scanner-import' ||
+      'save' ||
+      'save-as' ||
+      'reduce-file-size' =>
+        'file',
+      'open-in-word' || 'open-in-excel' => 'share',
+      'print' ||
+      'deferred-print' ||
+      'photos-to-pdf' ||
+      'export-image' ||
+      'export-text' ||
+      'export-word' ||
+      'export-excel' ||
+      'export-excel-zone' =>
+        'print',
+      'insert-document' ||
+      'insert-scan' ||
+      'number-pages' ||
+      'remove-strip' ||
+      'watermark' ||
+      'photo-size' ||
+      'compose-sheet' ||
+      'compare' =>
+        'pages',
+      'digital-signature' ||
+      'ocr' ||
+      'open-without-ocr' ||
+      'import-form-data' =>
+        'sign',
+      'read-aloud' => 'view',
+      'settings' || 'updates' => 'app',
+      _ => 'other',
+    };
   }
 
-  /// Everything the palette indexes, in browse order: the menu's own
-  /// actions, then the editing tools straight out of the dock's catalogue,
-  /// then the panels, the view options and the recent files.
-  List<AppCommand> _paletteCommands() {
+  List<_MenuEntry> _commandEntries() {
     final l = appL10n(context);
     final tab = _active;
     final session = tab?.session;
     final hasDocument = session != null;
-    final commands = <AppCommand>[];
+    final entries = <_MenuEntry>[];
+    void add(AppCommand command, String area,
+            {String? section, bool toggle = false}) =>
+        entries.add(
+            (command: command, area: area, section: section, toggle: toggle));
+    AppCommand plain(
+            String id, IconData icon, String label, VoidCallback run) =>
+        AppCommand(
+          id: id,
+          label: label,
+          icon: icon,
+          source: l.paletteSourceMenu,
+          run: run,
+        );
 
     for (final action in [
       ..._fileActions(),
@@ -6639,54 +6299,141 @@ class _EditorScreenState extends State<EditorScreen>
     ]) {
       final needsDocument = action.requiresDocument && !hasDocument;
       final blockedByReadOnly = action.hiddenWhenReadOnly && _readOnly;
-      commands.add(AppCommand(
-        id: 'menu-${action.id}',
-        label: action.title,
-        icon: action.icon,
-        source: l.paletteSourceMenu,
-        shortcut: action.shortcut,
-        enabled: action.enabled && !needsDocument && !blockedByReadOnly,
-        // Only the two structural reasons are worth spelling out; an action
-        // that is momentarily busy (a signature in flight) says nothing
-        // rather than blaming the wrong thing.
-        disabledReason: needsDocument
-            ? l.paletteNeedsDocument
-            : blockedByReadOnly
-                ? l.editorMenuReadOnly
-                : null,
-        searchTerms: action.searchTerms,
-        run: action.run,
-      ));
+      add(
+        AppCommand(
+          id: 'menu-${action.id}',
+          label: action.title,
+          icon: action.icon,
+          source: l.paletteSourceMenu,
+          shortcut: action.shortcut,
+          enabled: action.enabled && !needsDocument && !blockedByReadOnly,
+          // Only the two structural reasons are worth spelling out; an action
+          // that is momentarily busy (a signature in flight) says nothing
+          // rather than blaming the wrong thing.
+          disabledReason: needsDocument
+              ? l.paletteNeedsDocument
+              : blockedByReadOnly
+                  ? l.editorMenuReadOnly
+                  : null,
+          searchTerms: action.searchTerms,
+          run: action.run,
+        ),
+        _menuAreaOf(action),
+      );
     }
 
     // Reachable from Settings > About rather than the menu itself, so it
     // names Settings as its source instead of claiming a menu row it has not
     // got.
-    commands.add(AppCommand(
-      id: 'whats-new',
-      label: l.whatsNew,
-      icon: Icons.new_releases_outlined,
-      source: l.settingsTitle,
-      run: () => unawaited(showWhatsNew(context)),
-    ));
+    add(
+      AppCommand(
+        id: 'whats-new',
+        label: l.whatsNew,
+        icon: Icons.new_releases_outlined,
+        source: l.settingsTitle,
+        run: () => unawaited(showWhatsNew(context)),
+      ),
+      'app',
+    );
+    if (OpenWithRank.supported) {
+      add(
+        plain('menu-open-with-rank', Icons.vertical_align_top,
+            'Porta DartPDF in cima ad "Apri con"',
+            () => unawaited(OpenWithRank.show())),
+        'app',
+      );
+    }
 
     if (hasDocument) {
-      commands.add(AppCommand(
-        id: 'menu-read-only',
-        label: l.editorMenuReadOnly,
-        icon: Icons.visibility_outlined,
-        source: l.paletteSourceMenu,
-        selected: _readOnly,
-        run: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
-      ));
+      add(
+        AppCommand(
+          id: 'menu-read-only',
+          label: l.editorMenuReadOnly,
+          icon: Icons.visibility_outlined,
+          source: l.paletteSourceMenu,
+          selected: _readOnly,
+          run: () => setState(() => _readOnlyChoice = !_readOnlyChoice),
+        ),
+        'view',
+        section: 'Modalita\'',
+        toggle: true,
+      );
     }
+
+    // Le voci che altrove sono pulsanti o barre del telefono: gli strumenti,
+    // le schede aperte, Condividi e WhatsApp.
+    final editorCommands = tab?.commands;
+    if (hasDocument && (editorCommands?.canOpenToolSheet ?? false)) {
+      add(
+        plain('menu-tools', Icons.build_outlined, pdfL10n(context).tbTools,
+            () => editorCommands?.openToolSheet()),
+        'tools',
+      );
+    }
+    if (_tabs.isNotEmpty && _isCompactWidth(context)) {
+      add(
+        plain('menu-tabs', Icons.tab_outlined,
+            '${l.editorOpenTabs} (${_tabs.length})', _showTabsSheet),
+        'view',
+      );
+    }
+    if (hasDocument && tab != null) {
+      if (_usesMobileShare) {
+        add(
+          plain('menu-share', Icons.share_outlined,
+              WidgetsLocalizations.of(context).shareButtonLabel,
+              () => unawaited(_shareDocument(tab))),
+          'share',
+        );
+      }
+      if (WhatsappSend.supported) {
+        add(
+          plain('menu-whatsapp-contact', Icons.person_outline,
+              'WhatsApp: contatto salvato',
+              () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
+          'share',
+        );
+        add(
+          plain('menu-whatsapp', Icons.send_outlined,
+              'WhatsApp: scelgo il contatto',
+              () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
+          'share',
+        );
+      }
+    }
+
+    // Importare una foto scegliendo subito la misura (la stessa scelta e'
+    // poi sempre disponibile con "Misura della foto").
+    const importSection = 'Importa foto con misura';
+    for (final (id, icon, label, size) in <(String, IconData, String, String?)>[
+      ('import-auto', Icons.auto_awesome_outlined,
+          'Automatica (riconosce la misura)', null),
+      ('import-cards', Icons.badge_outlined,
+          'Carte: identita\', credito, tessera sanitaria, patente', 'card_cie'),
+      ('import-passport', Icons.menu_book_outlined, 'Passaporto',
+          'passport_id3'),
+      ('import-photoid', Icons.face_outlined, 'Foto tessera', 'photo_id_it'),
+      ('import-a4', Icons.description_outlined, 'Foglio A4', 'a4'),
+    ]) {
+      add(
+        plain('menu-$id', icon, label,
+            () => unawaited(_importPhoto(sizeId: size))),
+        'file',
+        section: importSection,
+      );
+    }
+    add(
+      plain('menu-import-other', Icons.straighten_outlined, 'Altra misura...',
+          () => unawaited(_importPhotoOtherSize())),
+      'file',
+      section: importSection,
+    );
 
     // The editor's own command catalog - its tools (in dock order), panels
     // and view options, with their real names, icons and shortcuts. A tool or
     // panel added to the editor joins the palette with nothing to keep in step
     // here, and a tool armed from here runs the same prerequisites as the
     // toolbar (a measure tool asks for its scale first).
-    final editorCommands = tab?.commands;
     if (editorCommands != null) {
       // the window's view mode, which the open editor binds too; set here so
       // a read-only tab (no editor mounted) still offers the view modes
@@ -6696,7 +6443,7 @@ class _EditorScreenState extends State<EditorScreen>
         if (command.category == PdfCommandCategory.document) continue;
         final tool = command.category == PdfCommandCategory.tool;
         final blocked = tool && _readOnly;
-        commands.add(AppCommand(
+        final appCommand = AppCommand(
           id: command.id,
           label: command.label(context),
           icon: command.icon,
@@ -6727,55 +6474,105 @@ class _EditorScreenState extends State<EditorScreen>
             _ => const [],
           },
           run: () => unawaited(command.invoke(context)),
-        ));
+        );
+        switch (command.category) {
+          case PdfCommandCategory.tool:
+            // Gli strumenti del gruppo Pagine sono le stesse voci della
+            // macroarea Pagine: nel menu si mostrano una volta sola.
+            add(
+              appCommand,
+              command.id.startsWith('pages-') ? 'hidden' : 'tools',
+              section: command.toolGroup?.label(context),
+            );
+          case PdfCommandCategory.panel:
+            add(appCommand, 'view', section: 'Pannelli', toggle: true);
+          case PdfCommandCategory.view:
+            add(appCommand, 'view', section: 'Opzioni di vista', toggle: true);
+          default:
+            add(appCommand, 'other');
+        }
       }
     } else {
       // Nothing open: the tools still list, dimmed, so the palette answers
       // "where is it?" before a document is.
       for (final (:group, :entry) in pdfToolCatalog()) {
         final tool = entry.tool;
-        commands.add(AppCommand(
-          id: tool != null
-              ? 'tool-${tool.name}'
-              : 'markup-${entry.markup!.name}',
-          label: entry.label(context),
-          icon: entry.icon,
-          source: l.paletteSourceTool(group.label(context)),
-          shortcut: tool == null ? null : pdfEditToolShortcutLabel(tool),
-          enabled: false,
-          disabledReason: l.paletteNeedsDocument,
-          searchTerms: switch (tool) {
-            PdfEditTool.freeText => const [
-                'add text',
-                'ajouter du texte',
-                'テキストを追加',
-                'إضافة نص',
-              ],
-            PdfEditTool.signature => const [
-                'sign',
-                'signer',
-                '手書き署名',
-                'توقيع',
-              ],
-            _ => const [],
-          },
-          run: () {},
-        ));
+        add(
+          AppCommand(
+            id: tool != null
+                ? 'tool-${tool.name}'
+                : 'markup-${entry.markup!.name}',
+            label: entry.label(context),
+            icon: entry.icon,
+            source: l.paletteSourceTool(group.label(context)),
+            shortcut: tool == null ? null : pdfEditToolShortcutLabel(tool),
+            enabled: false,
+            disabledReason: l.paletteNeedsDocument,
+            searchTerms: switch (tool) {
+              PdfEditTool.freeText => const [
+                  'add text',
+                  'ajouter du texte',
+                  'テキストを追加',
+                  'إضافة نص',
+                ],
+              PdfEditTool.signature => const [
+                  'sign',
+                  'signer',
+                  '手書き署名',
+                  'توقيع',
+                ],
+              _ => const [],
+            },
+            run: () {},
+          ),
+          'tools',
+          section: group.label(context),
+        );
       }
     }
 
-    for (final entry in _recentMenuEntries()) {
-      commands.add(AppCommand(
-        id: 'recent-${entry.id}',
-        label: entry.title.isEmpty ? l.editorUntitled : entry.title,
-        icon: Icons.picture_as_pdf_outlined,
+    // I file recenti, con "Mostra tutti" e "Svuota l'elenco".
+    const recentSection = 'Recenti';
+    final recents = _recentMenuEntries();
+    for (final entry in recents) {
+      add(
+        AppCommand(
+          id: 'recent-${entry.id}',
+          label: entry.title.isEmpty ? l.editorUntitled : entry.title,
+          icon: Icons.picture_as_pdf_outlined,
+          source: l.paletteSourceFile,
+          subtitle: entry.path,
+          run: () => unawaited(_openRecent(entry)),
+        ),
+        'file',
+        section: recentSection,
+      );
+    }
+    add(
+      AppCommand(
+        id: 'view-all-recent-files',
+        label: l.editorViewAllRecentFiles,
+        icon: Icons.grid_view_outlined,
         source: l.paletteSourceFile,
-        subtitle: entry.path,
-        run: () => unawaited(_openRecent(entry)),
-      ));
+        enabled: _availableRecentEntries().isNotEmpty,
+        // Il browser si apre al fotogramma dopo, a menu chiuso.
+        run: () => WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showRecentFiles();
+        }),
+      ),
+      'file',
+      section: recentSection,
+    );
+    if (recents.isNotEmpty) {
+      add(
+        plain('menu-clear-recent-files', Icons.clear_all,
+            l.editorClearRecentFiles, () => unawaited(_recents.clear())),
+        'file',
+        section: recentSection,
+      );
     }
 
-    return commands;
+    return entries;
   }
 
   Future<void> _openCommandPalette() async {
@@ -7383,11 +7180,101 @@ class _EditorScreenState extends State<EditorScreen>
   bool _usesAppMenuSheet(BuildContext context) =>
       !_usesCompactAppMenu && _isCompactWidth(context);
 
-  /// Il menu dell'app e' lo stesso su ogni piattaforma, telefono compreso: la
-  /// tendina di Windows con tutte le voci e i sottomenu (richiesta
-  /// dell'utente, 14/11). Sul telefono le righe sono alte quanto serve al
-  /// tocco (vedi [_appMenuItemHeight]).
-  Widget _buildAppMenu(DocumentTab? tab) => _buildAppMenuPopup(tab);
+  /// Il menu dell'app e' uno solo, uguale su telefono, PC, web e Mac: una
+  /// finestra con la ricerca in cima e le voci in macroaree a fisarmonica
+  /// (vedi app_menu.dart). Le voci sono quelle del campo "Cerca".
+  Widget _buildAppMenu(DocumentTab? tab) => IconButton(
+        key: const ValueKey('dartpdf-app-menu'),
+        iconSize: _appMenuIconSize,
+        icon: Image.asset(
+          'web/icons/Icon-512.png',
+          width: _appMenuIconSize,
+          height: _appMenuIconSize,
+          semanticLabel: 'DartPDF',
+        ),
+        tooltip: appL10n(context).editorAppMenuTooltip,
+        onPressed: () => unawaited(_showAppMenu(tab)),
+      );
+
+  /// Le macroaree del menu, nell'ordine in cui compaiono.
+  static const _menuAreas = <(String, String, IconData)>[
+    ('file', 'File', Icons.folder_open_outlined),
+    ('share', 'Condividi e invia', Icons.share_outlined),
+    ('print', 'Stampa ed esporta', Icons.print_outlined),
+    ('pages', 'Pagine', Icons.auto_stories_outlined),
+    ('tools', 'Strumenti e annotazioni', Icons.draw_outlined),
+    ('sign', 'Firma, moduli e OCR', Icons.verified_outlined),
+    ('view', 'Visualizza', Icons.visibility_outlined),
+    ('app', 'App', Icons.settings_outlined),
+    ('other', 'Altre voci', Icons.more_horiz),
+  ];
+
+  /// L'ordine dei blocchi dentro una macroarea (null e' il blocco senza
+  /// titolo, in cima); quelli non elencati seguono nell'ordine in cui
+  /// compaiono, per esempio i gruppi di strumenti nell'ordine della barra.
+  static const _menuSectionOrder = <String, List<String?>>{
+    'file': [null, 'Importa foto con misura', 'Recenti'],
+    'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
+  };
+
+  Future<void> _showAppMenu(DocumentTab? tab) async {
+    final l = appL10n(context);
+    final entries = _commandEntries();
+    final groups = <AppMenuGroup>[];
+    for (final (id, title, icon) in _menuAreas) {
+      final inArea = [
+        for (final e in entries)
+          if (e.area == id) e,
+      ];
+      if (inArea.isEmpty) continue;
+      final bySection = <String?, List<_MenuEntry>>{};
+      for (final e in inArea) {
+        (bySection[e.section] ??= []).add(e);
+      }
+      final order = _menuSectionOrder[id] ?? const <String?>[];
+      final keys = [
+        for (final k in order)
+          if (bySection.containsKey(k)) k,
+        for (final k in bySection.keys)
+          if (!order.contains(k)) k,
+      ];
+      groups.add(AppMenuGroup(
+        id: id,
+        title: title,
+        icon: icon,
+        open: id == 'file',
+        sections: [
+          for (final k in keys)
+            AppMenuSection(
+              [for (final e in bySection[k]!) e.command],
+              title: k,
+              toggles: bySection[k]!.every((e) => e.toggle),
+            ),
+        ],
+      ));
+    }
+    // Sul telefono l'intestazione non mostra il titolo: sta in cima al menu e
+    // toccandolo si rinomina il documento.
+    final titled = tab != null &&
+            _usesAppMenuSheet(context) &&
+            tab.title.isNotEmpty
+        ? tab
+        : null;
+    final canRename = titled != null && titled.session != null && _usesMobileShare;
+    final action = await showAppMenu(
+      context,
+      groups: groups,
+      searchLabel: l.editorMenuSearchActions,
+      searchShortcut: _menuShortcut('K'),
+      onSearch: () => unawaited(_openCommandPalette()),
+      title: titled?.title,
+      onRename: titled != null && canRename
+          ? () => unawaited(_renameDocument(titled))
+          : null,
+    );
+    if (!mounted) return;
+    action?.call();
+  }
 
   ({String read, String stop, String page}) _readAloudTexts() =>
       readAloudLabels(Localizations.localeOf(context).languageCode);
@@ -7451,19 +7338,6 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
-  Widget _buildAppMenuPopup(DocumentTab? tab) => PopupMenuButton<VoidCallback>(
-        key: const ValueKey('dartpdf-app-menu'),
-        iconSize: _appMenuIconSize,
-        icon: Image.asset(
-          'web/icons/Icon-512.png',
-          width: _appMenuIconSize,
-          height: _appMenuIconSize,
-          semanticLabel: 'DartPDF',
-        ),
-        tooltip: appL10n(context).editorAppMenuTooltip,
-        onSelected: (action) => action(),
-        itemBuilder: (context) => _appMenuItems(context, tab),
-      );
 
   Widget _buildTabsTitle() {
     if (!_isCompactWidth(context)) return _buildTabStrip();
@@ -9544,29 +9418,6 @@ class _TabDocumentPreviewState extends State<_TabDocumentPreview> {
   }
 }
 
-/// Both the outer menu item's semantic action and its nested button must
-/// open the submenu. PopupMenuItem's default action pops the parent route;
-/// MergeSemantics otherwise makes assistive activation close the whole menu.
-class _SubmenuMenuItem extends PopupMenuItem<VoidCallback> {
-  const _SubmenuMenuItem({
-    super.key,
-    required super.height,
-    required super.child,
-    required this.open,
-  }) : super(padding: EdgeInsets.zero);
-
-  final VoidCallback open;
-
-  @override
-  PopupMenuItemState<VoidCallback, _SubmenuMenuItem> createState() =>
-      _SubmenuMenuItemState();
-}
-
-class _SubmenuMenuItemState
-    extends PopupMenuItemState<VoidCallback, _SubmenuMenuItem> {
-  @override
-  void handleTap() => widget.open();
-}
 
 /// One plain row of the app menu: what it says, what it runs, and the state
 /// that decides whether it can run at all.
@@ -9647,4 +9498,15 @@ typedef _AppBarContent = ({
   Widget leading,
   Widget? title,
   List<Widget> actions,
+});
+
+/// Una voce dell'elenco dei comandi con il posto che ha nel menu: la
+/// macroarea ([area], "hidden" se nel menu e' gia' sotto un altro nome), il
+/// blocco dentro la macroarea ([section]) e se si accende e si spegne
+/// ([toggle]).
+typedef _MenuEntry = ({
+  AppCommand command,
+  String area,
+  String? section,
+  bool toggle,
 });

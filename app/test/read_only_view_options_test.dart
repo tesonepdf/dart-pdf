@@ -3,6 +3,7 @@
 // while reading and keeps it while editing.
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,8 +31,7 @@ void main() {
   }
 
   Future<void> switchToReadOnly(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // Read-only is a switch row now, not a "Switch to read-only" verb.
     final item = find.byKey(const ValueKey('menu-read-only'));
     await tester.ensureVisible(item);

@@ -59,8 +59,7 @@ void main() {
   tearDown(() => prefs.dispose());
 
   Future<void> openAppMenu(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('dartpdf-app-menu')));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
   }
 
   Finder tabTitle(String name) => find.descendant(
@@ -139,7 +138,7 @@ void main() {
     );
 
     await openAppMenu(tester);
-    await tester.tap(find.byKey(const ValueKey('menu-new-window')));
+    await tapMenuKey(tester, 'menu-new-window');
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(PdfViewer), kind: PointerDeviceKind.mouse);

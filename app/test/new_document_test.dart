@@ -25,22 +25,20 @@ void main() {
   }
 
   Future<void> openNewDocumentDialog(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-new-document')));
+    await openAppMenu(tester);
+    await tapMenuKey(tester, 'menu-new-document');
     await tester.pumpAndSettle();
   }
 
   testWidgets('the app menu opens the new-document dialog', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-new-document')), findsOneWidget);
     expect(find.text('New document…'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('menu-new-document')));
+    await tapMenuKey(tester, 'menu-new-document');
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('new-document-dialog')), findsOneWidget);

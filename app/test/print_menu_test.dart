@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'test_finders.dart';
 import 'package:pdf_graphics/pdf_graphics.dart';
 import 'package:pdf_document/pdf_document.dart';
 import 'package:pdf_test_fixtures/pdf_test_fixtures.dart';
@@ -71,8 +72,7 @@ void main() {
       (tester) async {
     await pumpWithDoc(tester);
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-print')), findsOneWidget);
     expect(find.text('Print…'), findsOneWidget);
@@ -82,8 +82,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
     await tester.pump();
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
 
     expect(find.byKey(const ValueKey('menu-print')), findsNothing);
   });
@@ -100,13 +99,12 @@ void main() {
       },
     );
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Print item can sit below the fold - scroll it into view before tapping.
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
 
     expect(printed, isNull);
@@ -135,13 +133,12 @@ void main() {
       },
     );
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Print item can sit below the fold - scroll it into view before tapping.
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('print-preview-print')));
     await tester.pumpAndSettle(); // close preview and reject the future
@@ -169,13 +166,12 @@ void main() {
       },
     );
 
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // The app menu is tall (scan entries land above this on mobile), so the
     // Print item can sit below the fold - scroll it into view before tapping.
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('print-preview-print')));
     await tester.pumpAndSettle(); // close preview and reject the future
@@ -194,10 +190,9 @@ void main() {
   testWidgets('Windows Print submits our selected destination directly',
       (tester) async {
     await pumpWithDoc(tester);
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     expect(find.text('Office'), findsOneWidget);
     expect(printCalls.map((call) => call.method),
@@ -231,10 +226,9 @@ void main() {
     await preferences.saveDestination(const PrintDestination(
         printer: 'Office', duplex: PrintDuplex.longEdge));
     await pumpWithDoc(tester);
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('print-preview-print')));
     await tester.runAsync(() async {
@@ -272,10 +266,9 @@ void main() {
     session.togglePageSelection(3);
     final before = Uint8List.fromList(session.bytes);
     await tester.pump();
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('menu-print')));
-    await tester.tap(find.byKey(const ValueKey('menu-print')));
+    await tapMenuKey(tester, 'menu-print');
     await tester.pumpAndSettle();
     final selected = find.byKey(const ValueKey('print-preview-selected'));
     await tester.ensureVisible(selected);

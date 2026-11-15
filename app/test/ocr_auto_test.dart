@@ -261,8 +261,7 @@ void main() {
         home: EditorScreen(prefs: prefs, autoOcr: setting),
       ));
       await tester.pump();
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tapMenuText(tester, 'Settings');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);

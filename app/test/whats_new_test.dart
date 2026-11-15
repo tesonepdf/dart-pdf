@@ -408,8 +408,7 @@ void main() {
     testWidgets('Updates+ opens it from the Information block', (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tapMenuText(tester, 'Updates+');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
@@ -432,8 +431,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tapMenuText(tester, 'Settings');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
@@ -445,8 +443,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tapMenuText(tester, 'Updates+');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
@@ -482,8 +479,7 @@ void main() {
       Future<void> tapTile(WidgetTester tester, String key) async {
         await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
         await tester.pump();
-        await tester.tap(find.byTooltip('DartPDF menu'));
-        await tester.pumpAndSettle();
+        await openAppMenu(tester);
         await tapMenuText(tester, 'Updates+');
         await tester.pumpAndSettle();
         await expandSettingsSections(tester);

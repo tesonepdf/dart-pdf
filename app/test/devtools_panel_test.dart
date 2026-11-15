@@ -531,8 +531,7 @@ void main() {
   testWidgets('Settings offers Developer tools and it opens the panel',
       (tester) async {
     await pumpWithDoc(tester);
-    await tester.tap(find.byTooltip('DartPDF menu'));
-    await tester.pumpAndSettle();
+    await openAppMenu(tester);
     // With a document open the menu is taller than the test surface.
     await tester.ensureVisible(find.text('Settings'));
     await tester.pumpAndSettle();

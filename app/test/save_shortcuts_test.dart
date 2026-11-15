@@ -120,9 +120,8 @@ void main() {
       await tester.pump();
 
       // Create a new, unedited document from the app menu.
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-new-document')));
+      await openAppMenu(tester);
+      await tapMenuKey(tester, 'menu-new-document');
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('new-document-create')));
       await tester.pumpAndSettle();
@@ -170,11 +169,10 @@ void main() {
       final before =
           tester.widget<PdfEditorView>(find.byType(PdfEditorView)).controller!;
 
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-save-as')));
+      await tapMenuKey(tester, 'menu-save-as');
       await tester.pumpAndSettle();
 
       expect(saveAsCalls, 1);
@@ -228,11 +226,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byTooltip('DartPDF menu'));
-      await tester.pumpAndSettle();
+      await openAppMenu(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('menu-save-as')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-save-as')));
+      await tapMenuKey(tester, 'menu-save-as');
       await tester.pumpAndSettle();
       expect(saveAsCalls, 1);
 
