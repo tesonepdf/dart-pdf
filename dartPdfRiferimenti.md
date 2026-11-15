@@ -15,6 +15,19 @@ Questo file sta nel repo (`dartPdfRiferimenti.md`, senza token): l'assistente lo
 - **Prima di modificare: pull e controllo.** L'utente può lavorare anche da altre chat e scaricare build per conto suo. Prima di ogni modifica, e prima di continuare con release e patch, l'assistente fa `git pull` e guarda gli ultimi commit e la release (build corrente, patch presenti, APK) e riparte da lì, senza dare per scontato quello che ricorda.
 - **Se sta aspettando, lo dice prima.** Se per un motivo vero l'assistente deve aspettare qualcosa, lo scrive prima di cominciare, così l'utente sa che non è fermo.
 
+## Procedura per ogni modifica
+
+Scelte dell'utente: si lavora solo su `main`, senza rami temporanei, e la chat non si blocca mai aspettando la build. Flutter non si clona nell'ambiente dell'assistente: il controllo prima del commit è `tools/controlla.py`, la verifica dei tipi la fa la CI su GitHub Actions.
+
+1. **Allineare il repo.** `git pull` e ultimi commit: l'utente o un'altra chat possono aver cambiato qualcosa.
+2. **Scrivere cosa si sta per fare.** 5-6 righe prima di ogni operazione, così l'utente può fermare il lavoro.
+3. **Fare la modifica al codice.**
+4. **Lanciare `python3 tools/controlla.py`.** Se segnala errori si correggono subito e si rilancia, finché non ne ha più.
+5. **Guardare la CI dell'ultimo commit** con le API di GitHub, solo per avvisare l'utente, senza toccare niente.
+6. **Commit e push su `main`.** L'hook mette il numero dopo il `#`.
+7. **Riassunto finale di 7-10 righe** con il numero del commit e della build in elaborazione. Il messaggio comincia e finisce con lo stato della CI dell'ultimo commit già concluso: verde, rossa o in corso.
+8. **Fermarsi.** Non si aspetta l'esito della build. Se una CI esce rossa, l'utente scrive "controlla la CI": si legge l'errore, si dice cosa non va e, se l'utente chiede di correggere, si riparte dal passo 1.
+
 ## Il tuo repo
 
 - **Indirizzo:** https://github.com/tesonepdf/dart-pdf
