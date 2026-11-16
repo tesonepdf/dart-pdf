@@ -81,7 +81,7 @@ Future<void> tapMenuKey(WidgetTester tester, String key) async {
 
 /// Opens one folded group of the app menu ("create", "file", "view", "pages",
 /// "tools", "sign", "ocr", "export", "share", "app", "other"), so a test can find its rows.
-/// A group that is already open is left as it is (Crea and Apri e salva start open).
+/// A group that is already open is left as it is (every group starts folded).
 Future<void> expandMenuGroup(WidgetTester tester, String id) async {
   final group = find.byKey(ValueKey('app-menu-group-$id'));
   if (group.evaluate().isEmpty) return;

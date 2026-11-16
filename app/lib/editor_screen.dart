@@ -7394,7 +7394,7 @@ class _EditorScreenState extends State<EditorScreen>
         id: id,
         title: title,
         icon: icon,
-        open: id == 'create' || id == 'file',
+        open: false,
         sections: [
           for (final k in keys)
             AppMenuSection(

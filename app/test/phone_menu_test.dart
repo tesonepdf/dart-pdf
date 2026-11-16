@@ -46,7 +46,7 @@ void main() {
   Finder key(String value) => find.byKey(ValueKey(value));
   Finder group(String id) => key('app-menu-group-$id');
 
-  testWidgets('il telefono ha le macroaree, File aperto e le altre chiuse',
+  testWidgets('il telefono ha le macroaree, tutte chiuse',
       (tester) async {
     setSize(tester, const Size(390, 844));
     await pump(tester, withDoc: true);
@@ -57,11 +57,16 @@ void main() {
     for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
-    // File e' aperto, le altre macroaree no
-    expect(key('menu-new-document'), findsOneWidget);
-    expect(key('menu-save-as'), findsOneWidget);
+    // tutte le macroaree sono chiuse: le loro voci non ci sono ancora
+    expect(key('menu-new-document'), findsNothing);
+    expect(key('menu-save-as'), findsNothing);
     expect(key('menu-print'), findsNothing);
     expect(key('menu-digital-signature'), findsNothing);
+
+    await expandMenuGroup(tester, 'create');
+    expect(key('menu-new-document'), findsOneWidget);
+    await expandMenuGroup(tester, 'file');
+    expect(key('menu-save-as'), findsOneWidget);
 
     // si aprono e si chiudono toccando il titolo
     await expandMenuGroup(tester, 'share');
@@ -121,6 +126,7 @@ void main() {
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
 
+    await expandMenuGroup(tester, 'create');
     expect(key('menu-scan-document'), findsOneWidget);
     await tester.tap(key('menu-new-document'));
     await tester.pumpAndSettle();
@@ -154,6 +160,7 @@ void main() {
     await pump(tester);
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
+    await expandMenuGroup(tester, 'create');
 
     expect(find.text('Importa foto con misura'), findsOneWidget);
     for (final id in [
@@ -209,6 +216,7 @@ void main() {
     for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
+    await expandMenuGroup(tester, 'create');
     expect(find.text('Importa foto con misura'), findsOneWidget);
   });
 }

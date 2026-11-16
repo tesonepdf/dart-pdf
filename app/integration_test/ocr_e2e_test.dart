@@ -21,6 +21,8 @@ import 'package:pdf_graphics/pdf_graphics.dart';
 import 'package:pdf_ocr_ondevice/pdf_ocr_ondevice.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../test/test_finders.dart';
+
 /// Paints [text] as black-on-white at a generous size and returns PNG bytes -
 /// a stand-in for a scanned page (no embedded text, just pixels).
 Future<Uint8List> _scanPng(String text) async {
@@ -125,7 +127,7 @@ void main() {
     // Start OCR from the DartPDF menu.
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('menu-ocr')));
+    await tapMenuKey(tester, 'menu-ocr');
     await tester.pump(); // dispatch the action
 
     // Wait for the background job to spin up (engine load + first page).

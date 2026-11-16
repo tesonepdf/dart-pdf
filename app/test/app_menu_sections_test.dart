@@ -34,7 +34,7 @@ void main() {
 
   Finder group(String id) => find.byKey(ValueKey('app-menu-group-$id'));
 
-  testWidgets('a document open shows every macro-area, File already open',
+  testWidgets('a document open shows every macro-area, all folded',
       (tester) async {
     await pump(tester, withDoc: true);
     await tester.tap(find.byTooltip('DartPDF menu'));
@@ -43,13 +43,15 @@ void main() {
     for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
-    // File starts open, the others are folded: their rows are not built yet
-    expect(find.byKey(const ValueKey('menu-new-document')), findsOneWidget);
+    // every group starts folded: their rows are not built yet
+    expect(find.byKey(const ValueKey('menu-new-document')), findsNothing);
     expect(find.byKey(const ValueKey('menu-print')), findsNothing);
     expect(find.byKey(const ValueKey('menu-settings')), findsNothing);
 
+    await expandMenuGroup(tester, 'create');
     await expandMenuGroup(tester, 'share');
     await expandMenuGroup(tester, 'app');
+    expect(find.byKey(const ValueKey('menu-new-document')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-print')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);
   });
