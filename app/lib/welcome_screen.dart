@@ -1288,9 +1288,16 @@ class _RecentThumbnailState extends State<_RecentThumbnail> {
     }
     return FutureBuilder<RecentThumbnail?>(
       future: future,
+      initialData: widget.thumbnails?.peek(widget.entry),
       builder: (context, snapshot) {
         final thumb = snapshot.data;
         final height = _heightFor(thumb);
+        // Finche' la miniatura si sta caricando il riquadro resta vuoto: il
+        // segnaposto con l'icona compare solo se la miniatura non esiste. Cosi'
+        // all'avvio i recenti non lampeggiano (icona e poi immagine).
+        if (thumb == null && snapshot.connectionState != ConnectionState.done) {
+          return box(height, const SizedBox.shrink());
+        }
         if (thumb == null) return box(height, placeholder);
         return box(height, Center(child: framed(thumb, height)));
       },

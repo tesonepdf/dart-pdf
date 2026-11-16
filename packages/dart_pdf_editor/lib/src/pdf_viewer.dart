@@ -2097,6 +2097,12 @@ class _PdfViewerState extends State<PdfViewer>
   TapDownDetails? _doubleTapDetails;
   bool _zoomed = false;
 
+  /// Spostamento libero del foglio quando lo zoom e' sotto l'adattamento
+  /// (`_layoutZoom` < 1): li' la pagina e' piu' piccola della vista e la
+  /// lista da sola non la puo' muovere. E' in pixel dello schermo, sempre
+  /// dentro i limiti di [_subFitShift]; con zoom 1 o piu' non conta.
+  final ValueNotifier<Offset> _subFitOffset = ValueNotifier(Offset.zero);
+
   /// Resolution multiplier pages render at; follows the zoom level once it
   /// settles (pinch end, wheel pause, double-tap animation end).
   double _renderScale = 1;
@@ -3047,6 +3053,7 @@ class _PdfViewerState extends State<PdfViewer>
       _transform.value = _transformOf(frame);
     }
     if (relayout) {
+      _subFitOffset.value = Offset.zero;
       setState(() => _layoutZoom = frame.layoutZoom);
       _controller._bumpViewport();
       if (_scroll.hasClients) {
@@ -3863,6 +3870,7 @@ class _PdfViewerState extends State<PdfViewer>
       final anchor = _controller.currentPage;
       _transform.value = Matrix4.identity();
       _layoutZoom = 1;
+      _subFitOffset.value = Offset.zero;
       _appliedInitialFit = false;
       _zoomed = false;
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -4313,6 +4321,7 @@ class _PdfViewerState extends State<PdfViewer>
     if (_ownsController) _controller.dispose();
     _scroll.dispose();
     _transform.dispose();
+    _subFitOffset.dispose();
     _transformScale.dispose();
     _renderScheduler.dispose();
     _previews.dispose();
@@ -8176,6 +8185,10 @@ class _PdfViewerState extends State<PdfViewer>
   /// transform); the scroll extents absorb what they can and the rest
   /// pans the zoom window, like the scrollbars.
   void _grabPanBy(Offset delta) {
+    if (_subFit) {
+      _subFitPanBy(delta);
+      return;
+    }
     _scrollbarScrollBy(-_mainOf(delta));
     _scrollbarPanBy(-_crossOf(delta));
   }
@@ -8186,6 +8199,10 @@ class _PdfViewerState extends State<PdfViewer>
     _touchPanning = true;
     _work.beginMotion();
     _hBounceController.stop();
+    if (_subFit) {
+      _subFitPanBy(delta);
+      return;
+    }
     _scrollbarScrollBy(-_mainOf(delta));
     _scrollbarPanBy(-_crossOf(delta));
   }
@@ -8273,13 +8290,15 @@ class _PdfViewerState extends State<PdfViewer>
     final scrollBefore = _scroll.hasClients ? _scroll.position.pixels : 0.0;
     final txBefore = _transform.value.storage[12];
     final tyBefore = _transform.value.storage[13];
+    final subFitBefore = _subFitShift;
     _touchGrabPanBy(delta);
     // every absorber pinned at its edge: the rest of the simulation
     // would tick for nothing
     if (delta != Offset.zero &&
         (!_scroll.hasClients || _scroll.position.pixels == scrollBefore) &&
         _transform.value.storage[12] == txBefore &&
-        _transform.value.storage[13] == tyBefore) {
+        _transform.value.storage[13] == tyBefore &&
+        _subFitShift == subFitBefore) {
       // Every absorber pinned - but if this fires on the FIRST tick of a fling
       // the momentum dies on lift-off, which is indistinguishable from "fling
       // does nothing". Log which it was.
@@ -8604,7 +8623,59 @@ class _PdfViewerState extends State<PdfViewer>
   /// it is false, every touch pan the viewer wants has to come from
   /// [_ZoomedTouchPanRecognizer] or an editing overlay, so the two must agree
   /// on the condition or a drag lands on nothing at all.
-  bool get _listOwnsTouchScroll => !_zoomed && widget.editing?.tool == null;
+  bool get _listOwnsTouchScroll =>
+      !_zoomed && !_subFit && widget.editing?.tool == null;
+
+  /// Zoom sotto l'adattamento e nessuna finestra di zoom: il foglio si
+  /// sposta liberamente a qualunque percentuale (vedi [_subFitPanBy]).
+  bool get _subFit => _layoutZoom < 1 && !_zoomed;
+
+  /// Quanto il foglio puo' uscire dal centro, per asse: meta' dello spazio
+  /// libero, cosi' il foglio resta sempre tutto dentro la vista.
+  double get _subFitMainLimit => _mainView * (1 - _layoutZoom) / 2;
+  double get _subFitCrossLimit => _crossView * (1 - _layoutZoom) / 2;
+
+  /// Lo spostamento da applicare ora, tenuto dentro i limiti. Zero quando lo
+  /// zoom non e' sotto l'adattamento.
+  Offset get _subFitShift {
+    if (!_subFit) return Offset.zero;
+    final o = _subFitOffset.value;
+    return _axisOffset(
+      _mainOf(o).clamp(-_subFitMainLimit, _subFitMainLimit).toDouble(),
+      _crossOf(o).clamp(-_subFitCrossLimit, _subFitCrossLimit).toDouble(),
+    );
+  }
+
+  /// Trascina il foglio di [delta] (pixel dello schermo). Sull'asse di
+  /// scorrimento prima si annulla lo spostamento gia' fatto in senso
+  /// contrario, poi scorre la lista, e quello che la lista non assorbe
+  /// sposta il foglio. Sull'altro asse il foglio si sposta direttamente.
+  void _subFitPanBy(Offset delta) {
+    final shift = _subFitShift;
+    var main = _mainOf(shift);
+    var cross = _crossOf(shift);
+    var dMain = _mainOf(delta);
+    final dCross = _crossOf(delta);
+    if (main != 0 && dMain != 0 && dMain.sign != main.sign) {
+      final undo = math.min(dMain.abs(), main.abs()) * dMain.sign;
+      main += undo;
+      dMain -= undo;
+    }
+    if (dMain != 0 && _scroll.hasClients) {
+      final position = _scroll.position;
+      final target = position.pixels - dMain;
+      final clamped = target
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      if (clamped != position.pixels) position.jumpTo(clamped);
+      main += clamped - target;
+    }
+    cross += dCross;
+    _subFitOffset.value = _axisOffset(
+      main.clamp(-_subFitMainLimit, _subFitMainLimit).toDouble(),
+      cross.clamp(-_subFitCrossLimit, _subFitCrossLimit).toDouble(),
+    );
+  }
 
   bool _touchPanEnabledAt(Offset localPosition) {
     // Leave native list scrolling (and its platform fling) alone.
@@ -9313,7 +9384,12 @@ class _PdfViewerState extends State<PdfViewer>
                   onDown: _temporaryPanDown,
                   onMove: _temporaryPanMove,
                   onEnd: _temporaryPanEnd,
-                  child: InteractiveViewer(
+                  child: ValueListenableBuilder<Offset>(
+                    valueListenable: _subFitOffset,
+                    // il foglio zoomato sotto l'adattamento si sposta liberamente
+                    builder: (_, __, child) =>
+                        Transform.translate(offset: _subFitShift, child: child),
+                    child: InteractiveViewer(
                     transformationController: _transform,
                     maxScale: _effectiveMaxZoom,
                     // wheel zoom is handled in _onPointerSignal; e^(-dy/∞) = 1
@@ -9583,6 +9659,7 @@ class _PdfViewerState extends State<PdfViewer>
                         ),
                       ),
                     ),
+                  ),
                   ),
                 ),
                 // outside the zoom transform, so they keep their place and

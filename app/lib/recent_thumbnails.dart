@@ -111,6 +111,11 @@ class RecentThumbnailCache {
   Future<void> _renderTail = Future<void>.value();
   bool _disposed = false;
 
+  /// La miniatura di [entry] se e' gia' in memoria, senza toccarla e senza
+  /// avviare nessun caricamento; altrimenti null. Serve a disegnare subito la
+  /// miniatura, senza il riquadro vuoto di un fotogramma.
+  RecentThumbnail? peek(RecentFile entry) => _cache[entry.id];
+
   /// The first-page thumbnail for [entry], rendered once and memoized. Null
   /// when the entry has no readable source or the render fails.
   ///
