@@ -8899,14 +8899,35 @@ class _PdfViewerState extends State<PdfViewer>
     // ctrl+wheel arrives as a PointerScaleEvent that InteractiveViewer zooms
     // around the pointer) is PdfViewportFrame.settled
     final top = _subFitMainInset;
-    _applyFrame(_currentFrame.settled(
+    final before = _currentFrame;
+    final carried = _subFitShift;
+    final settled = before.settled(
       axis: _layoutZoomAxis,
       mainView: _mainView,
       crossView: _crossView,
       minZoom: widget.minZoom,
       mainTop: top,
       contentMain: _contentMainAt(1.0, _mainView - top),
-    ));
+    );
+    _applyFrame(settled);
+    // Fine gesto vicino all'adattamento (zoom tra 1 e 1,01): il fold toglie
+    // la trasformata e con lei la posizione del foglio, che tornerebbe di
+    // scatto in cima sotto la barra. Se il documento sta nella finestra la
+    // posizione passa allo spostamento libero, cosi' il foglio resta dove
+    // le dita lo avevano portato.
+    if (before.scale > 1 &&
+        before.layoutZoom == 1 &&
+        settled.scale == 1 &&
+        settled.layoutZoom == 1 &&
+        _subFitFitsMain) {
+      final s = before.scale;
+      _subFitOffset.value = _axisOffset(
+        (_leadMain - before.scroll) * (s - 1) +
+            before.mainTranslate +
+            _mainOf(carried),
+        _crossView / 2 * (s - 1) + before.crossTranslate + _crossOf(carried),
+      );
+    }
     final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
     if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
   }
