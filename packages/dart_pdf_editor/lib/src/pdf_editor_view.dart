@@ -2073,6 +2073,10 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                           // clear of the controls instead of being trapped
                           // underneath them.
                           leadingPadding: lead,
+                          topChromeInset: compact && header != null
+                              ? MediaQuery.paddingOf(context).top +
+                                  kToolbarHeight
+                              : 0.0,
                           trailingPadding: showToolbar &&
                                   !dockToolbar &&
                                   prefs.toolbarDock == PdfPanelDock.bottom

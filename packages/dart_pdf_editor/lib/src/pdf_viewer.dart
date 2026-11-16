@@ -1458,6 +1458,7 @@ class PdfViewer extends StatefulWidget {
     this.pageSpacing = 12,
     this.trailingPadding = 0,
     this.leadingPadding = 0,
+    this.topChromeInset = 0,
     this.pageLayout = const PdfPageLayout.verticalContinuous(),
     this.initialFit = PdfViewerFit.page,
     this.initialViewport,
@@ -1909,6 +1910,12 @@ class PdfViewer extends StatefulWidget {
   /// Space kept free above the first page of a vertical layout - the height
   /// of a header drawn over the viewer, so the page starts below it.
   final double leadingPadding;
+
+  /// Altezza della barra disegnata sopra il visualizzatore (telefono). Non
+  /// cambia dove parte la prima pagina allo zoom di adattamento: serve solo
+  /// quando il foglio e' piu' piccolo della vista (zoom sotto l'adattamento),
+  /// perche' resti tutto sotto la barra e dentro lo schermo mentre si sposta.
+  final double topChromeInset;
 
   /// How the pages are arranged: vertical continuous (the default,
   /// top-to-bottom) or horizontal continuous (left-to-right). See
@@ -8630,50 +8637,96 @@ class _PdfViewerState extends State<PdfViewer>
   /// sposta liberamente a qualunque percentuale (vedi [_subFitPanBy]).
   bool get _subFit => _layoutZoom < 1 && !_zoomed;
 
-  /// Quanto il foglio puo' uscire dal centro, per asse: meta' dello spazio
-  /// libero, cosi' il foglio resta sempre tutto dentro la vista.
-  double get _subFitMainLimit => _mainView * (1 - _layoutZoom) / 2;
-  double get _subFitCrossLimit => _crossView * (1 - _layoutZoom) / 2;
+  /// Altezza della barra disegnata sopra il visualizzatore, sull'asse
+  /// verticale dello schermo (vedi [PdfViewer.topChromeInset]): il foglio
+  /// zoomato sotto l'adattamento non deve andarci sotto.
+  double get _subFitMainInset => _horizontal ? 0.0 : widget.topChromeInset;
+  double get _subFitCrossInset => _horizontal ? widget.topChromeInset : 0.0;
+
+  /// Lunghezza del documento sull'asse di scorrimento allo zoom di ora, senza
+  /// il padding finale. Smette di contare appena supera [limit]: su un
+  /// documento lungo il resto non serve.
+  double _subFitContentMain(double limit) {
+    var total = _leadMain;
+    for (var i = 0; i < _slotCount; i++) {
+      total += _scrollExtentOf(i);
+      if (total > limit) break;
+    }
+    return total;
+  }
+
+  /// Vero quando tutto il documento sta nella finestra libera (dalla barra al
+  /// bordo opposto dello schermo): allora il foglio si muove da solo, senza
+  /// scorrere la lista. Falso su un documento piu' alto della finestra: li'
+  /// scorre la lista e il foglio non si sposta.
+  bool get _subFitFitsMain {
+    final window = _mainView - _subFitMainInset;
+    return _subFitContentMain(window) <= window;
+  }
+
+  /// Dove puo' stare il foglio sull'asse di scorrimento: da subito sotto la
+  /// barra (paletto 12) fino al bordo opposto dello schermo, sempre tutto
+  /// dentro la vista. Se il documento non sta nella finestra, nessuno
+  /// spostamento (scorre la lista).
+  (double, double) get _subFitMainRange {
+    if (!_subFitFitsMain) return (0.0, 0.0);
+    final lo = _subFitMainInset;
+    final hi = _mainView - _subFitContentMain(_mainView);
+    return hi >= lo ? (lo, hi) : (lo, lo);
+  }
+
+  /// Dove puo' stare il foglio sull'altro asse: a riposo la pagina piu' larga
+  /// e' centrata, e puo' andare da un bordo della vista all'altro (sotto la
+  /// barra, se la barra sta su questo asse).
+  (double, double) get _subFitCrossRange {
+    final rest = (_crossView - _crossView * _layoutZoom) / 2;
+    var lo = _subFitCrossInset - rest;
+    var hi = rest;
+    if (lo > hi) lo = hi = (lo + hi) / 2;
+    return (lo, hi);
+  }
 
   /// Lo spostamento da applicare ora, tenuto dentro i limiti. Zero quando lo
   /// zoom non e' sotto l'adattamento.
   Offset get _subFitShift {
     if (!_subFit) return Offset.zero;
     final o = _subFitOffset.value;
+    final (mainLo, mainHi) = _subFitMainRange;
+    final (crossLo, crossHi) = _subFitCrossRange;
     return _axisOffset(
-      _mainOf(o).clamp(-_subFitMainLimit, _subFitMainLimit).toDouble(),
-      _crossOf(o).clamp(-_subFitCrossLimit, _subFitCrossLimit).toDouble(),
+      _mainOf(o).clamp(mainLo, mainHi).toDouble(),
+      _crossOf(o).clamp(crossLo, crossHi).toDouble(),
     );
   }
 
-  /// Trascina il foglio di [delta] (pixel dello schermo). Sull'asse di
-  /// scorrimento prima si annulla lo spostamento gia' fatto in senso
-  /// contrario, poi scorre la lista, e quello che la lista non assorbe
-  /// sposta il foglio. Sull'altro asse il foglio si sposta direttamente.
+  /// Trascina il foglio di [delta] (pixel dello schermo). Se il documento sta
+  /// nella finestra il foglio si sposta direttamente su tutti e due gli assi
+  /// e la lista resta ferma; se e' piu' alto scorre la lista e il foglio si
+  /// sposta solo sull'altro asse.
   void _subFitPanBy(Offset delta) {
     final shift = _subFitShift;
     var main = _mainOf(shift);
-    var cross = _crossOf(shift);
-    var dMain = _mainOf(delta);
-    final dCross = _crossOf(delta);
-    if (main != 0 && dMain != 0 && dMain.sign != main.sign) {
-      final undo = math.min(dMain.abs(), main.abs()) * dMain.sign;
-      main += undo;
-      dMain -= undo;
-    }
-    if (dMain != 0 && _scroll.hasClients) {
+    final cross = _crossOf(shift) + _crossOf(delta);
+    final dMain = _mainOf(delta);
+    if (_subFitFitsMain) {
+      if (_scroll.hasClients &&
+          _scroll.position.pixels != _scroll.position.minScrollExtent) {
+        _scroll.position.jumpTo(_scroll.position.minScrollExtent);
+      }
+      main += dMain;
+    } else if (dMain != 0 && _scroll.hasClients) {
       final position = _scroll.position;
       final target = position.pixels - dMain;
       final clamped = target
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble();
       if (clamped != position.pixels) position.jumpTo(clamped);
-      main += clamped - target;
     }
-    cross += dCross;
+    final (mainLo, mainHi) = _subFitMainRange;
+    final (crossLo, crossHi) = _subFitCrossRange;
     _subFitOffset.value = _axisOffset(
-      main.clamp(-_subFitMainLimit, _subFitMainLimit).toDouble(),
-      cross.clamp(-_subFitCrossLimit, _subFitCrossLimit).toDouble(),
+      main.clamp(mainLo, mainHi).toDouble(),
+      cross.clamp(crossLo, crossHi).toDouble(),
     );
   }
 
