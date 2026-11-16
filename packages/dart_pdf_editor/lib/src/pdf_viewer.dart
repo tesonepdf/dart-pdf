@@ -3036,8 +3036,11 @@ class _PdfViewerState extends State<PdfViewer>
       required double viewCross}) {
     final zoom = target.clamp(widget.minZoom, _effectiveMaxZoom).toDouble();
     final before = _currentFrame;
-    if (zoom <= 1) {
-      _zoomFree(zoom, before, listMain, listCross, viewMain, viewCross);
+    // fino a 1,01 lo zoom e' l'adattamento (zona morta del frame): resta sul
+    // percorso libero, cosi' il foglio non salta in cima
+    if (zoom <= 1.01) {
+      _zoomFree(math.min(zoom, 1.0), before, listMain, listCross, viewMain,
+          viewCross);
       return;
     }
     final top = _subFitMainInset;
@@ -8656,15 +8659,21 @@ class _PdfViewerState extends State<PdfViewer>
     _touchPanning = true;
     _work.beginMotion();
     _pinchScale = 1;
+    _pinchStartZoom = _currentZoom;
   }
+
+  /// Lo zoom all'inizio del pinch: a ogni passo lo zoom e' questo per la scala
+  /// del gesto (assoluto), non lo zoom di ora per il passo (cumulativo). Il
+  /// cumulativo restava fermo vicino all'adattamento: ogni passo piccolo
+  /// veniva riassorbito dalla zona morta attorno a 1.
+  double _pinchStartZoom = 1;
 
   void _onPinchUpdate(ScaleUpdateDetails details) {
     // a lone finger left over after a pinch shouldn't keep panning; the
     // gesture stays claimed but goes quiet until lift-off
     if (details.pointerCount < 2) return;
     if (details.scale > 0 && details.scale != _pinchScale) {
-      _zoomTo(
-          _currentZoom * details.scale / _pinchScale, details.localFocalPoint);
+      _zoomTo(_pinchStartZoom * details.scale, details.localFocalPoint);
       _pinchScale = details.scale;
     }
     // focalPointDelta is local to the receiver, which sits inside the
