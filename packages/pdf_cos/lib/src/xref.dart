@@ -237,6 +237,10 @@ class CosXrefReader {
     for (var r = 0; r + 1 < ranges.length; r += 2) {
       final start = ranges[r];
       final count = ranges[r + 1];
+      // Righe larghe 0 byte: l'intervallo non ha dati e `pos` non avanza mai,
+      // quindi un `count` enorme farebbe girare il ciclo quasi all'infinito.
+      // Si salta l'intervallo (come fa PDF.js).
+      if (rowLength == 0) continue;
       for (var i = 0; i < count && pos + rowLength <= data.length; i++) {
         final fields = <int>[];
         for (final width in widths) {
