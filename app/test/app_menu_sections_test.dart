@@ -40,7 +40,7 @@ void main() {
     await tester.tap(find.byTooltip('DartPDF menu'));
     await tester.pumpAndSettle();
 
-    for (final id in ['file', 'print', 'pages', 'tools', 'sign', 'view', 'app']) {
+    for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
     // File starts open, the others are folded: their rows are not built yet
@@ -48,7 +48,7 @@ void main() {
     expect(find.byKey(const ValueKey('menu-print')), findsNothing);
     expect(find.byKey(const ValueKey('menu-settings')), findsNothing);
 
-    await expandMenuGroup(tester, 'print');
+    await expandMenuGroup(tester, 'share');
     await expandMenuGroup(tester, 'app');
     expect(find.byKey(const ValueKey('menu-print')), findsOneWidget);
     expect(find.byKey(const ValueKey('menu-settings')), findsOneWidget);

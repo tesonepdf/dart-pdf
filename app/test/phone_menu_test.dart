@@ -54,7 +54,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(key('menu-command-palette'), findsOneWidget);
-    for (final id in ['file', 'print', 'pages', 'tools', 'sign', 'view', 'app']) {
+    for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
     // File e' aperto, le altre macroaree no
@@ -64,10 +64,10 @@ void main() {
     expect(key('menu-digital-signature'), findsNothing);
 
     // si aprono e si chiudono toccando il titolo
-    await expandMenuGroup(tester, 'print');
+    await expandMenuGroup(tester, 'share');
     expect(key('menu-print'), findsOneWidget);
     await tester.tap(
-        find.descendant(of: group('print'), matching: find.byType(ListTile)).first);
+        find.descendant(of: group('share'), matching: find.byType(ListTile)).first);
     await tester.pumpAndSettle();
     expect(key('menu-print'), findsNothing);
   });
@@ -206,7 +206,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(key('menu-command-palette'), findsOneWidget);
-    for (final id in ['file', 'print', 'pages', 'tools', 'sign', 'view', 'app']) {
+    for (final id in ['create', 'file', 'view', 'pages', 'tools', 'sign', 'export', 'share', 'app']) {
       expect(group(id), findsOneWidget, reason: id);
     }
     expect(find.text('Importa foto con misura'), findsOneWidget);

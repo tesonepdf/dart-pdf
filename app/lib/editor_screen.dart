@@ -6382,40 +6382,34 @@ class _EditorScreenState extends State<EditorScreen>
       'new-document' ||
       'new-window' ||
       'scan-document' ||
-      'open' ||
       'photos-one-sheet' ||
+      'photos-to-pdf' ||
       'open-comic' ||
       'open-epub' ||
       'scanner-import' ||
-      'save' ||
-      'save-as' ||
-      'reduce-file-size' =>
-        'file',
-      'open-in-word' || 'open-in-excel' => 'share',
-      'print' ||
-      'deferred-print' ||
-      'photos-to-pdf' ||
-      'export-image' ||
-      'export-text' ||
-      'export-word' ||
-      'export-excel' ||
-      'export-excel-zone' =>
-        'print',
+      'compose-sheet' =>
+        'create',
+      'open' || 'save' || 'save-as' || 'reduce-file-size' => 'file',
+      'read-aloud' => 'view',
       'insert-document' ||
       'insert-scan' ||
       'number-pages' ||
       'remove-strip' ||
       'watermark' ||
       'photo-size' ||
-      'compose-sheet' ||
       'compare' =>
         'pages',
-      'digital-signature' ||
-      'ocr' ||
-      'open-without-ocr' ||
-      'import-form-data' =>
-        'sign',
-      'read-aloud' => 'view',
+      'digital-signature' || 'import-form-data' => 'sign',
+      'ocr' || 'open-without-ocr' => 'ocr',
+      'export-image' ||
+      'export-text' ||
+      'export-word' ||
+      'export-excel' ||
+      'export-excel-zone' ||
+      'open-in-word' ||
+      'open-in-excel' =>
+        'export',
+      'print' || 'deferred-print' => 'share',
       'settings' || 'updates' => 'app',
       _ => 'other',
     };
@@ -6568,14 +6562,14 @@ class _EditorScreenState extends State<EditorScreen>
       add(
         plain('menu-$id', icon, label,
             () => unawaited(_importPhoto(sizeId: size))),
-        'file',
+        'create',
         section: importSection,
       );
     }
     add(
       plain('menu-import-other', Icons.straighten_outlined, 'Altra misura...',
           () => unawaited(_importPhotoOtherSize())),
-      'file',
+      'create',
       section: importSection,
     );
 
@@ -7347,13 +7341,15 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Le macroaree del menu, nell'ordine in cui compaiono.
   static const _menuAreas = <(String, String, IconData)>[
-    ('file', 'File', Icons.folder_open_outlined),
-    ('share', 'Condividi e invia', Icons.share_outlined),
-    ('print', 'Stampa ed esporta', Icons.print_outlined),
+    ('create', 'Crea', Icons.add_circle_outline),
+    ('file', 'Apri e salva', Icons.folder_open_outlined),
+    ('view', 'Leggi', Icons.visibility_outlined),
     ('pages', 'Pagine', Icons.auto_stories_outlined),
-    ('tools', 'Strumenti e annotazioni', Icons.draw_outlined),
-    ('sign', 'Firma, moduli e OCR', Icons.verified_outlined),
-    ('view', 'Visualizza', Icons.visibility_outlined),
+    ('tools', 'Annota e modifica', Icons.draw_outlined),
+    ('sign', 'Compila e firma', Icons.verified_outlined),
+    ('ocr', 'OCR', Icons.document_scanner_outlined),
+    ('export', 'Converti ed esporta', Icons.import_export),
+    ('share', 'Stampa e condividi', Icons.print_outlined),
     ('app', 'App', Icons.settings_outlined),
     ('other', 'Altre voci', Icons.more_horiz),
   ];
@@ -7362,7 +7358,8 @@ class _EditorScreenState extends State<EditorScreen>
   /// titolo, in cima); quelli non elencati seguono nell'ordine in cui
   /// compaiono, per esempio i gruppi di strumenti nell'ordine della barra.
   static const _menuSectionOrder = <String, List<String?>>{
-    'file': [null, 'Importa foto con misura', 'Recenti'],
+    'create': [null, 'Importa foto con misura'],
+    'file': [null, 'Recenti'],
     'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
   };
 
@@ -7397,7 +7394,7 @@ class _EditorScreenState extends State<EditorScreen>
         id: id,
         title: title,
         icon: icon,
-        open: id == 'file',
+        open: id == 'create' || id == 'file',
         sections: [
           for (final k in keys)
             AppMenuSection(
