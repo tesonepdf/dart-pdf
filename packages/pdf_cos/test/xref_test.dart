@@ -108,6 +108,17 @@ void main() {
       expect(section.entries[3]!.type, CosXrefEntryType.inUse);
       expect(section.entries[3]!.offset, 0x40);
     });
+
+    test('rows 0 bytes wide are skipped, even with a huge /Index count', () {
+      // /W [0 0 0]: le righe non hanno dati; senza il salto il ciclo
+      // girerebbe 2^31 volte senza avanzare.
+      final bytes = _xrefStreamSection(
+        '/Size 6 /W [0 0 0] /Index [0 2147483647 3 1]',
+        [],
+      );
+      final section = CosXrefReader(bytes).parseSection(0);
+      expect(section.entries, isEmpty);
+    });
   });
 
   group('parseSection - malformed sections throw', () {
