@@ -68,6 +68,30 @@ class PdfViewportFrame {
           ? (zoom.clamp(minZoom, 1.0).toDouble(), 1.0)
           : (1.0, zoom.clamp(1.0, maxZoom).toDouble());
 
+  /// Dove puo' stare la traslazione principale a [scale] (sopra l'adattamento),
+  /// la stessa regola della finestra libera sotto l'adattamento: la finestra
+  /// va dalla barra in alto ([top]) al bordo opposto della vista.
+  ///
+  /// - Documento corto ([content], la sua lunghezza allo zoom di adattamento,
+  ///   per [scale] sta nella finestra): il foglio si muove da subito sotto la
+  ///   barra fino a filo del bordo opposto, sempre tutto dentro la vista.
+  /// - Documento lungo: i bordi del contenuto non entrano nella vista; a
+  ///   [scroll] 0 il foglio si puo' tirare giu' fino a stare sotto la barra.
+  ///
+  /// Senza [top] e [content] e' il vecchio limite: da `mainView * (1 - scale)`
+  /// a 0.
+  static (double, double) mainTranslateRange({
+    required double scale,
+    required double mainView,
+    double top = 0,
+    double content = double.infinity,
+    double scroll = 0,
+  }) {
+    final window = mainView - top;
+    if (content * scale <= window) return (top, mainView - content * scale);
+    return (mainView * (1 - scale), scroll <= 0 ? top : 0.0);
+  }
+
   /// The list-space main coordinate under view-space [viewMain].
   double listMainAt(double viewMain) =>
       (viewMain - mainTranslate) / scale + scroll;
@@ -130,17 +154,25 @@ class PdfViewportFrame {
     required double crossView,
     bool clampCross = true,
     double layoutZoom = 1,
+    double mainTop = 0,
+    double contentMain = double.infinity,
   }) {
     if (scale <= 1.01) {
       return PdfViewportFrame(scroll: scroll, layoutZoom: layoutZoom);
     }
     final mainTranslate = atMain - scale * (listMain - scroll);
     final crossTranslate = atCross - scale * listCross;
+    final (mainLo, mainHi) = mainTranslateRange(
+        scale: scale,
+        mainView: mainView,
+        top: mainTop,
+        content: contentMain,
+        scroll: scroll);
     return PdfViewportFrame(
       scroll: scroll,
       scale: scale,
       layoutZoom: layoutZoom,
-      mainTranslate: mainTranslate.clamp(mainView * (1 - scale), 0.0),
+      mainTranslate: mainTranslate.clamp(mainLo, mainHi),
       crossTranslate: clampCross
           ? crossTranslate.clamp(crossView * (1 - scale), 0.0)
           : crossTranslate,
@@ -192,9 +224,15 @@ class PdfViewportFrame {
     required double mainView,
     required double crossView,
     bool clampCross = true,
+    double? viewMain,
+    double? viewCross,
+    double mainTop = 0,
+    double contentMain = double.infinity,
   }) {
-    final atMain = viewMainOf(listMain);
-    final atCross = viewCrossOf(listCross);
+    // il punto sotto le dita: dove sta sullo schermo, compreso lo
+    // spostamento libero del foglio quando lo passa chi chiama
+    final atMain = viewMain ?? viewMainOf(listMain);
+    final atCross = viewCross ?? viewCrossOf(listCross);
     if (zoom <= 1) {
       final unzoomed = scale > 1
           ? PdfViewportFrame(scroll: scroll, layoutZoom: layoutZoom)
@@ -222,6 +260,8 @@ class PdfViewportFrame {
       mainView: mainView,
       crossView: crossView,
       clampCross: clampCross,
+      mainTop: mainTop,
+      contentMain: contentMain,
     );
   }
 
@@ -244,6 +284,8 @@ class PdfViewportFrame {
     required double mainView,
     required double crossView,
     required double minZoom,
+    double mainTop = 0,
+    double contentMain = double.infinity,
   }) {
     final total = scale * layoutZoom;
     final anchor = mainView / 2;
@@ -262,19 +304,30 @@ class PdfViewportFrame {
       // once the extents clamp it
       final main =
           anchor - total * (axis.remapMain(content, fold, 1) - at.scroll);
+      final (foldLo, foldHi) = mainTranslateRange(
+          scale: total,
+          mainView: mainView,
+          top: mainTop,
+          content: contentMain,
+          scroll: at.scroll);
       return PdfViewportFrame(
         scroll: at.scroll,
         scale: total,
-        mainTranslate: main.clamp(mainView * (1 - total), 0.0).toDouble(),
+        mainTranslate: main.clamp(foldLo, foldHi).toDouble(),
         crossTranslate: crossTranslate + scale * crossView / 2 * (1 - fold),
       );
     }
     if (scale <= 1.01) return PdfViewportFrame(scroll: scroll);
+    final (mainLo, mainHi) = mainTranslateRange(
+        scale: scale,
+        mainView: mainView,
+        top: mainTop,
+        content: contentMain,
+        scroll: scroll);
     return PdfViewportFrame(
       scroll: scroll,
       scale: scale,
-      mainTranslate:
-          mainTranslate.clamp(mainView * (1 - scale), 0.0).toDouble(),
+      mainTranslate: mainTranslate.clamp(mainLo, mainHi).toDouble(),
       crossTranslate: crossTranslate,
     );
   }

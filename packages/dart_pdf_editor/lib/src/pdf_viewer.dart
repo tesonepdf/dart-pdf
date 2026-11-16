@@ -2100,6 +2100,9 @@ class _PdfViewerState extends State<PdfViewer>
   /// when the scale actually changes, not on every zoomed pan tick.
   final _transformScale = ValueNotifier<double>(1.0);
   late final AnimationController _zoomAnimator;
+
+  /// Anima lo zoom del doppio tocco passando da [_zoomAbout] a ogni passo.
+  late final AnimationController _smoothZoom;
   Animation<Matrix4>? _zoomAnimation;
   TapDownDetails? _doubleTapDetails;
   bool _zoomed = false;
@@ -2611,6 +2614,9 @@ class _PdfViewerState extends State<PdfViewer>
         final animation = _zoomAnimation;
         if (animation != null) _transform.value = animation.value;
       });
+    _smoothZoom = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 220))
+      ..addListener(_onSmoothZoomTick);
     _previews.configureFullRasterCache(widget.pageRasterCachePolicy);
     _previews.configurePreviewLods(widget.pagePreviewLodPolicy);
     // Background full-raster encodes yield to scrolling and to a foreground
@@ -2935,6 +2941,7 @@ class _PdfViewerState extends State<PdfViewer>
 
   void _applyWheelZoom(PointerScrollEvent event) {
     if (event.scrollDelta.dy == 0) return;
+    _smoothZoom.stop();
     // InteractiveViewer's wheel feel: e^(-delta/200)
     _zoomTo(_currentZoom * math.exp(-event.scrollDelta.dy / 200),
         event.localPosition);
@@ -3005,17 +3012,75 @@ class _PdfViewerState extends State<PdfViewer>
   /// relayout - and the new transform is then built to put the third back
   /// under the first.
   void _zoomTo(double target, Offset focal) {
-    final zoom = target.clamp(widget.minZoom, _effectiveMaxZoom);
     final before = _currentFrame;
-    _applyFrame(before.zoomedTo(
+    final listMain = before.scroll + _mainOf(focal);
+    final listCross = _crossOf(focal);
+    final shift = _subFitShift;
+    _zoomAbout(target,
+        listMain: listMain,
+        listCross: listCross,
+        viewMain: before.viewMainOf(listMain) + _mainOf(shift),
+        viewCross: before.viewCrossOf(listCross) + _crossOf(shift));
+  }
+
+  /// Lo zoom, in un solo passaggio per tutti i gesti (pinch, rotella,
+  /// trackpad, doppio tocco, comando): il punto del documento
+  /// ([listMain], [listCross], nello spazio della lista) che sta sotto le dita
+  /// in ([viewMain], [viewCross], sullo schermo) ci resta sotto, a qualsiasi
+  /// zoom e anche nel passaggio dall'adattamento. Nessuna piega a fine gesto,
+  /// nessun aggancio.
+  void _zoomAbout(double target,
+      {required double listMain,
+      required double listCross,
+      required double viewMain,
+      required double viewCross}) {
+    final zoom = target.clamp(widget.minZoom, _effectiveMaxZoom).toDouble();
+    final before = _currentFrame;
+    if (zoom <= 1) {
+      _zoomFree(zoom, before, listMain, listCross, viewMain, viewCross);
+      return;
+    }
+    final top = _subFitMainInset;
+    final frame = before.zoomedTo(
       zoom,
-      listMain: before.scroll + _mainOf(focal),
-      listCross: _crossOf(focal),
+      listMain: listMain,
+      listCross: listCross,
       axis: _layoutZoomAxis,
       mainView: _mainView,
       crossView: _crossView,
       clampCross: !_touchPanning,
-    ));
+      viewMain: viewMain,
+      viewCross: viewCross,
+      mainTop: top,
+      contentMain: _contentMainAt(1.0, _mainView - top),
+    );
+    _applyFrame(frame);
+    _subFitOffset.value = Offset.zero;
+  }
+
+  /// Zoom fino all'adattamento: le pagine si dispongono a [zoom] e il foglio
+  /// si sposta (o scorre la lista) perche' il punto sotto le dita resti dove
+  /// e'. Dentro i limiti della finestra libera il foglio non esce mai dallo
+  /// schermo.
+  void _zoomFree(double zoom, PdfViewportFrame before, double listMain,
+      double listCross, double viewMain, double viewCross) {
+    final from = before.layoutZoom;
+    final axis = _layoutZoomAxis;
+    final main = axis.remapMain(listMain, from, zoom);
+    final cross = axis.remapCross(listCross, from, zoom);
+    final top = _subFitMainInset;
+    final window = _mainView - top;
+    final double scroll;
+    final double shiftMain;
+    if (_contentMainAt(zoom, window) <= window) {
+      scroll = 0;
+      shiftMain = viewMain - main;
+    } else {
+      shiftMain = (viewMain - main).clamp(0.0, top).toDouble();
+      scroll = math.max(0.0, main + shiftMain - viewMain);
+    }
+    _applyFrame(PdfViewportFrame(scroll: scroll, layoutZoom: zoom));
+    _subFitOffset.value = _axisOffset(shiftMain, viewCross - cross);
   }
 
   /// The slots' main-axis extents at layout zoom 1, for remapping a point
@@ -3079,6 +3144,8 @@ class _PdfViewerState extends State<PdfViewer>
     if (transformChanged && transformLast) {
       _transform.value = _transformOf(frame);
     }
+    final zoomedNow = frame.scale > 1.01;
+    if (zoomedNow != _zoomed) setState(() => _zoomed = zoomedNow);
   }
 
   /// During a gesture the existing rasters scale under the transform
@@ -4333,6 +4400,7 @@ class _PdfViewerState extends State<PdfViewer>
     _renderScheduler.dispose();
     _previews.dispose();
     _zoomAnimator.dispose();
+    _smoothZoom.dispose();
     _panFlinger.dispose();
     _touchFlinger.dispose();
     _hBounceController.dispose();
@@ -8521,28 +8589,50 @@ class _PdfViewerState extends State<PdfViewer>
     // gesture - the strokes already committed through the raw path
     if (_kindDrawsInk(details.kind)) return;
     final current = _currentZoom;
-    final Matrix4 end;
-    final bool zoomedAfter;
-    if ((current - 1).abs() > 0.01) {
-      // from any zoom - in or out - back to 100%
-      if (_layoutZoom < 1) {
-        _setLayoutZoom(1, focalMain: _mainOf(details.localPosition));
-      }
-      end = Matrix4.identity();
-      zoomedAfter = false;
-    } else {
-      final position = details.localPosition;
-      final scale = widget.doubleTapZoom;
-      end = Matrix4.identity()
-        ..translateByDouble(
-            -position.dx * (scale - 1), -position.dy * (scale - 1), 0, 1)
-        ..scaleByDouble(scale, scale, scale, 1);
-      zoomedAfter = true;
-    }
-    _zoomAnimation = Matrix4Tween(begin: _transform.value, end: end).animate(
-        CurvedAnimation(parent: _zoomAnimator, curve: Curves.easeInOut));
-    _zoomAnimator.forward(from: 0);
-    setState(() => _zoomed = zoomedAfter);
+    // da qualsiasi zoom, in o out, si torna all'adattamento; dall'adattamento
+    // si va allo zoom del doppio tocco: sempre attorno al punto toccato, con
+    // lo stesso zoom continuo del pinch
+    final target = (current - 1).abs() > 0.01 ? 1.0 : widget.doubleTapZoom;
+    _animateZoomTo(target, details.localPosition);
+  }
+
+  /// Anima lo zoom fino a [target] tenendo fermo il punto toccato
+  /// ([focal], nello spazio della lista): a ogni passo e' lo stesso
+  /// [_zoomAbout] del pinch.
+  void _animateZoomTo(double target, Offset focal) {
+    final before = _currentFrame;
+    final listMain = before.scroll + _mainOf(focal);
+    final listCross = _crossOf(focal);
+    final shift = _subFitShift;
+    _smoothFrom = _currentZoom;
+    _smoothTo = target.clamp(widget.minZoom, _effectiveMaxZoom).toDouble();
+    _smoothFocalViewMain = before.viewMainOf(listMain) + _mainOf(shift);
+    _smoothFocalViewCross = before.viewCrossOf(listCross) + _crossOf(shift);
+    _panFlinger.stop();
+    _touchFlinger.stop();
+    _hBounceController.stop();
+    _smoothZoom.forward(from: 0);
+  }
+
+  double _smoothFrom = 1;
+  double _smoothTo = 1;
+  double _smoothFocalViewMain = 0;
+  double _smoothFocalViewCross = 0;
+
+  void _onSmoothZoomTick() {
+    final t = Curves.easeInOut.transform(_smoothZoom.value);
+    final zoom =
+        math.exp(math.log(_smoothFrom) * (1 - t) + math.log(_smoothTo) * t);
+    // il punto toccato, riletto a ogni passo nello spazio della lista di ora
+    final frame = _currentFrame;
+    final shift = _subFitShift;
+    final listMain = frame.listMainAt(_smoothFocalViewMain - _mainOf(shift));
+    final listCross = frame.listCrossAt(_smoothFocalViewCross - _crossOf(shift));
+    _zoomAbout(zoom,
+        listMain: listMain,
+        listCross: listCross,
+        viewMain: _smoothFocalViewMain,
+        viewCross: _smoothFocalViewCross);
   }
 
   // --- touch pinch zoom ---
@@ -8562,6 +8652,7 @@ class _PdfViewerState extends State<PdfViewer>
     _panFlinger.stop();
     _touchFlinger.stop();
     _hBounceController.stop();
+    _smoothZoom.stop();
     _touchPanning = true;
     _work.beginMotion();
     _pinchScale = 1;
@@ -8633,9 +8724,13 @@ class _PdfViewerState extends State<PdfViewer>
   bool get _listOwnsTouchScroll =>
       !_zoomed && !_subFit && widget.editing?.tool == null;
 
-  /// Zoom sotto l'adattamento e nessuna finestra di zoom: il foglio si
-  /// sposta liberamente a qualunque percentuale (vedi [_subFitPanBy]).
-  bool get _subFit => _layoutZoom < 1 && !_zoomed;
+  /// Nessuna finestra di zoom, e il foglio ha spazio per muoversi: zoom sotto
+  /// l'adattamento, oppure all'adattamento con tutto il documento nella
+  /// finestra. Il foglio si sposta liberamente (vedi [_subFitPanBy]).
+  bool get _subFit {
+    if (_zoomed || _transform.value.getMaxScaleOnAxis() > 1.01) return false;
+    return _layoutZoom < 1 || _subFitFitsMain;
+  }
 
   /// Altezza della barra disegnata sopra il visualizzatore, sull'asse
   /// verticale dello schermo (vedi [PdfViewer.topChromeInset]): il foglio
@@ -8646,10 +8741,14 @@ class _PdfViewerState extends State<PdfViewer>
   /// Lunghezza del documento sull'asse di scorrimento allo zoom di ora, senza
   /// il padding finale. Smette di contare appena supera [limit]: su un
   /// documento lungo il resto non serve.
-  double _subFitContentMain(double limit) {
+  double _subFitContentMain(double limit) =>
+      _contentMainAt(_layoutZoom, limit);
+
+  /// Come [_subFitContentMain], ma con le pagine disposte a [zoom].
+  double _contentMainAt(double zoom, double limit) {
     var total = _leadMain;
     for (var i = 0; i < _slotCount; i++) {
-      total += _scrollExtentOf(i);
+      total += _slotMain(i, zoom) + (i == 0 ? 0.0 : widget.pageSpacing);
       if (total > limit) break;
     }
     return total;
@@ -8669,7 +8768,12 @@ class _PdfViewerState extends State<PdfViewer>
   /// dentro la vista. Se il documento non sta nella finestra, nessuno
   /// spostamento (scorre la lista).
   (double, double) get _subFitMainRange {
-    if (!_subFitFitsMain) return (0.0, 0.0);
+    if (!_subFitFitsMain) {
+      // documento piu' alto della finestra: scorre la lista; a scroll 0 il
+      // foglio si puo' tirare giu' fino a stare sotto la barra
+      final atTop = !_scroll.hasClients || _scroll.position.pixels <= 0;
+      return (0.0, atTop ? _subFitMainInset : 0.0);
+    }
     final lo = _subFitMainInset;
     final hi = _mainView - _subFitContentMain(_mainView);
     return hi >= lo ? (lo, hi) : (lo, lo);
@@ -8707,20 +8811,30 @@ class _PdfViewerState extends State<PdfViewer>
     final shift = _subFitShift;
     var main = _mainOf(shift);
     final cross = _crossOf(shift) + _crossOf(delta);
-    final dMain = _mainOf(delta);
+    var dMain = _mainOf(delta);
     if (_subFitFitsMain) {
       if (_scroll.hasClients &&
           _scroll.position.pixels != _scroll.position.minScrollExtent) {
         _scroll.position.jumpTo(_scroll.position.minScrollExtent);
       }
       main += dMain;
-    } else if (dMain != 0 && _scroll.hasClients) {
-      final position = _scroll.position;
-      final target = position.pixels - dMain;
-      final clamped = target
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
-      if (clamped != position.pixels) position.jumpTo(clamped);
+    } else {
+      // prima si riporta su il foglio tirato giu', poi scorre la lista; cio'
+      // che la lista non assorbe (inizio del documento) tira giu' il foglio
+      if (dMain < 0 && main > 0) {
+        final take = math.min(-dMain, main);
+        main -= take;
+        dMain += take;
+      }
+      if (dMain != 0 && _scroll.hasClients) {
+        final position = _scroll.position;
+        final target = position.pixels - dMain;
+        final clamped = target
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble();
+        if (clamped != position.pixels) position.jumpTo(clamped);
+        main += clamped - target;
+      }
     }
     final (mainLo, mainHi) = _subFitMainRange;
     final (crossLo, crossHi) = _subFitCrossRange;
@@ -8784,11 +8898,14 @@ class _PdfViewerState extends State<PdfViewer>
     // the fold maths (and why the focal point must survive it - a web
     // ctrl+wheel arrives as a PointerScaleEvent that InteractiveViewer zooms
     // around the pointer) is PdfViewportFrame.settled
+    final top = _subFitMainInset;
     _applyFrame(_currentFrame.settled(
       axis: _layoutZoomAxis,
       mainView: _mainView,
       crossView: _crossView,
       minZoom: widget.minZoom,
+      mainTop: top,
+      contentMain: _contentMainAt(1.0, _mainView - top),
     ));
     final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
     if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
@@ -8937,9 +9054,25 @@ class _PdfViewerState extends State<PdfViewer>
     final scale = matrix.getMaxScaleOnAxis();
     if (scale <= 1.01) return Matrix4.identity();
     final s = matrix.storage;
-    s[12] = s[12].clamp(_viewWidth * (1 - scale), 0.0);
-    s[13] = s[13].clamp(_viewHeight * (1 - scale), 0.0);
+    s[_crossTranslate] =
+        s[_crossTranslate].clamp(_crossView * (1 - scale), 0.0).toDouble();
+    final (mainLo, mainHi) = _zoomedMainRange(scale);
+    s[_mainTranslate] = s[_mainTranslate].clamp(mainLo, mainHi).toDouble();
     return matrix;
+  }
+
+  /// I limiti della traslazione principale a [scale] (sopra l'adattamento):
+  /// la stessa finestra libera di sotto l'adattamento, dalla barra in alto al
+  /// bordo opposto (vedi [PdfViewportFrame.mainTranslateRange]).
+  (double, double) _zoomedMainRange(double scale) {
+    final top = _subFitMainInset;
+    return PdfViewportFrame.mainTranslateRange(
+      scale: scale,
+      mainView: _mainView,
+      top: top,
+      content: _contentMainAt(_layoutZoom, _mainView - top),
+      scroll: _scroll.hasClients ? _scroll.position.pixels : 0.0,
+    );
   }
 
   /// Like [_clampedTransform] but only clamps the main (scroll) axis,
@@ -8948,7 +9081,8 @@ class _PdfViewerState extends State<PdfViewer>
     final scale = matrix.getMaxScaleOnAxis();
     if (scale <= 1.01) return Matrix4.identity();
     final s = matrix.storage;
-    s[_mainTranslate] = s[_mainTranslate].clamp(_mainView * (1 - scale), 0.0);
+    final (mainLo, mainHi) = _zoomedMainRange(scale);
+    s[_mainTranslate] = s[_mainTranslate].clamp(mainLo, mainHi).toDouble();
     return matrix;
   }
 
@@ -12242,7 +12376,8 @@ class _PdfViewerBackgroundHost implements PdfBackgroundHost {
       _s._touchFlinger.isAnimating ||
       _s._panFlinger.isAnimating ||
       _s._hBounceController.isAnimating ||
-      _s._zoomAnimator.isAnimating;
+      _s._zoomAnimator.isAnimating ||
+      _s._smoothZoom.isAnimating;
   @override
   bool get scrollSettling => _s._scrollSettleTimer?.isActive ?? false;
   @override
