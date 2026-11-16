@@ -101,9 +101,10 @@ void main() {
           thumbnails: cache,
         ));
 
-    // Before the thumbnail lands the row shows the placeholder icon.
+    // Before the thumbnail lands the row stays empty: no placeholder icon
+    // that would flash and then be replaced by the image.
     await tester.pump();
-    expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.description_outlined), findsNothing);
     expect(find.byType(Image), findsNothing);
 
     // Drive the (real-async) render, then let the FutureBuilder rebuild.
