@@ -274,7 +274,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ),
                 const _SettingsSection(
                   title: 'Barra in basso',
-                  children: [_BottomBarTile()],
+                  children: [_BottomBarTile(), _BottomBarMenuButtonTile()],
                 ),
                 _SettingsSection(
                   title: 'Strumenti',
@@ -1416,6 +1416,43 @@ class _BottomBarTileState extends State<_BottomBarTile> {
             'Home, Crea, File, Strumenti e Impostazioni sempre a portata di pollice'),
         value: visible,
         onChanged: (value) => BottomBarSetting.instance.save(value),
+      ),
+    );
+  }
+}
+
+/// Impostazioni: il pulsante del menu (in alto a sinistra) fa comparire anche
+/// la barra in basso, quando e' nascosta (spento di base).
+class _BottomBarMenuButtonTile extends StatefulWidget {
+  const _BottomBarMenuButtonTile();
+
+  @override
+  State<_BottomBarMenuButtonTile> createState() =>
+      _BottomBarMenuButtonTileState();
+}
+
+class _BottomBarMenuButtonTileState extends State<_BottomBarMenuButtonTile> {
+  @override
+  void initState() {
+    super.initState();
+    BottomBarMenuButtonSetting.instance.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: BottomBarMenuButtonSetting.instance,
+      builder: (context, shows, _) => SwitchListTile(
+        key: const ValueKey('settings-bottom-bar-menu-button'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.menu_open_outlined),
+        title: const Text('Il pulsante del menu mostra anche la barra'),
+        subtitle: const Text(
+            'Con la barra nascosta, il pulsante in alto a sinistra apre il '
+            'menu e fa comparire anche la barra. Spento: esce solo il menu '
+            'a fisarmonica.'),
+        value: shows,
+        onChanged: (value) => BottomBarMenuButtonSetting.instance.save(value),
       ),
     );
   }

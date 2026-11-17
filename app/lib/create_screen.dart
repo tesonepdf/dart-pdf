@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'created_store.dart';
+
 /// Un'azione della schermata Crea: icona, nome e cosa fa.
 class CreateAction {
   const CreateAction({
@@ -30,9 +32,35 @@ class CreateSection {
 /// Si apre come schermata a parte (dalla voce Crea della barra in basso).
 /// Toccare un'azione la chiude e la fa partire.
 class CreateScreen extends StatelessWidget {
-  const CreateScreen({super.key, required this.sections});
+  const CreateScreen(
+      {super.key, required this.sections, this.store, this.onOpenCreated});
 
   final List<CreateSection> sections;
+
+  /// Le creazioni recenti da mostrare in fondo (se manca, la sezione non c'e').
+  final CreatedStore? store;
+
+  /// Chiamata quando si tocca una creazione recente (dopo aver chiuso la schermata).
+  final ValueChanged<CreatedFile>? onOpenCreated;
+
+  static const _months = [
+    'gen', 'feb', 'mar', 'apr', 'mag', 'giu',
+    'lug', 'ago', 'set', 'ott', 'nov', 'dic', //
+  ];
+
+  static IconData _iconOf(String kind) => switch (kind) {
+        'Scansione' || 'Da scanner' => Icons.document_scanner_outlined,
+        'Foto in PDF' => Icons.collections_outlined,
+        'Foto su un foglio' => Icons.photo_library_outlined,
+        'Fumetto' => Icons.auto_stories_outlined,
+        'Libro' => Icons.menu_book_outlined,
+        _ => Icons.note_add_outlined,
+      };
+
+  static String _subtitle(CreatedFile c) {
+    final d = DateTime.fromMillisecondsSinceEpoch(c.createdAt);
+    return '${c.kind} \u2022 ${d.day} ${_months[d.month - 1]} ${d.year}';
+  }
 
   static const _columns = 4;
 
@@ -96,8 +124,47 @@ class CreateScreen extends StatelessWidget {
               ],
             ),
           ],
+          if (store != null) ..._recentSection(context, theme),
         ],
       ),
     );
   }
+
+  List<Widget> _recentSection(BuildContext context, ThemeData theme) => [
+        Padding(
+          padding: const EdgeInsets.only(top: 24, bottom: 8),
+          child: Text('Creazioni recenti', style: theme.textTheme.titleMedium),
+        ),
+        ListenableBuilder(
+          listenable: store!,
+          builder: (context, _) {
+            final items = store!.items;
+            if (items.isEmpty) {
+              return Text(
+                'Ancora niente: i documenti che crei compaiono qui.',
+                key: const ValueKey('create-recent-empty'),
+                style: theme.textTheme.bodyMedium,
+              );
+            }
+            return Column(
+              children: [
+                for (final (i, c) in items.indexed)
+                  ListTile(
+                    key: ValueKey('create-recent-$i'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(_iconOf(c.kind),
+                        color: theme.colorScheme.primary),
+                    title: Text(c.title,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(_subtitle(c)),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onOpenCreated?.call(c);
+                    },
+                  ),
+              ],
+            );
+          },
+        ),
+      ];
 }

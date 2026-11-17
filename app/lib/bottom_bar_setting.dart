@@ -44,3 +44,58 @@ class BottomBarSetting extends ValueNotifier<bool> {
     }
   }
 }
+
+/// La scelta "Il pulsante del menu mostra anche la barra": con la barra in
+/// basso nascosta, il pulsante in alto a sinistra apre il menu e, se questa
+/// scelta e' accesa, fa comparire anche la barra. Spenta di base: esce solo il
+/// menu a fisarmonica. Salvata sul dispositivo, vale per tutte le finestre.
+class BottomBarMenuButtonSetting extends ValueNotifier<bool> {
+  BottomBarMenuButtonSetting() : super(false);
+
+  static final BottomBarMenuButtonSetting instance =
+      BottomBarMenuButtonSetting();
+
+  static const _key = 'dart_pdf_editor_app.bottom_bar_menu_button';
+
+  Future<void>? _loading;
+  bool _chosen = false;
+
+  Future<void> load() => _loading ??= _read();
+
+  Future<void> _read() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_chosen) value = prefs.getBool(_key) ?? false;
+    } catch (error) {
+      debugPrint('Menu button setting unreadable: $error');
+    }
+  }
+
+  Future<void> save(bool shows) async {
+    _chosen = true;
+    value = shows;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, shows);
+    } catch (error) {
+      debugPrint('Menu button setting not saved: $error');
+    }
+  }
+}
+
+/// La barra in basso fatta comparire dal pulsante del menu (solo se la barra
+/// e' nascosta da Impostazioni e [BottomBarMenuButtonSetting] e' accesa).
+/// Non si salva: a ogni avvio la barra nascosta resta nascosta.
+class BottomBarPeek {
+  BottomBarPeek._();
+
+  static final ValueNotifier<bool> visible = ValueNotifier<bool>(false);
+
+  /// Il pulsante del menu e' stato premuto: se serve, mostra o nasconde la barra.
+  static void onMenuButton() {
+    if (BottomBarMenuButtonSetting.instance.value &&
+        !BottomBarSetting.instance.value) {
+      visible.value = !visible.value;
+    }
+  }
+}

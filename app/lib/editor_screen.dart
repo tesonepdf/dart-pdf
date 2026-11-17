@@ -67,6 +67,7 @@ import 'session_store.dart';
 import 'window_sessions.dart';
 import 'bottom_bar.dart';
 import 'bottom_bar_setting.dart';
+import 'created_store.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
@@ -646,6 +647,7 @@ class _EditorScreenState extends State<EditorScreen>
     super.initState();
     PdfAnnotationSnapshotClipboard.instance.addListener(_onLocalAnnotationCopy);
     BottomBarSetting.instance.load();
+    BottomBarMenuButtonSetting.instance.load();
     WidgetsBinding.instance.addObserver(this);
     // Controllo ogni 2 secondi: tiene aggiornati salvataggio provvisorio,
     // scheda attiva e pagina in vista, qualunque strada abbia cambiato lo stato.
@@ -1803,8 +1805,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// the user asked for - the file the OS launched us with - keeps its place
   /// at the end and stays the one on screen, whichever order the two
   /// asynchronous sources happen to resolve in.
-  void _addTab(DocumentTab tab, {bool restored = false}) {
+  void _addTab(DocumentTab tab, {bool restored = false, String? createdKind}) {
     if (!tab.isLoading) _logOpened(tab, restored: restored);
+    if (createdKind != null) {
+      unawaited(CreatedStore.instance.add(kind: createdKind, title: tab.title));
+    }
     setState(() {
       // A new tab shrinks the others to fit; drop any close-streak width hold.
       _heldTabWidth = null;
@@ -2760,7 +2765,7 @@ class _EditorScreenState extends State<EditorScreen>
     // A newly-created file is always an editing session, even if the previous
     // document had switched the whole app into read-only mode.
     _readOnly = false;
-    _addTab(tab);
+    _addTab(tab, createdKind: 'Nuovo documento');
   }
 
   /// Sceglie le foto: su telefono prima chiede se prenderle dalla galleria
@@ -3030,7 +3035,7 @@ class _EditorScreenState extends State<EditorScreen>
         initiallyDirty: true,
       );
       _readOnly = false;
-      _addTab(tab);
+      _addTab(tab, createdKind: 'Foto su un foglio');
       final session = tab.session;
       if (session == null) return;
       for (var i = 0; i < photos.length; i++) {
@@ -3080,12 +3085,14 @@ class _EditorScreenState extends State<EditorScreen>
           [for (final p in choice.photos) p.bytes], choice.page);
       if (!mounted) return;
       _readOnly = false;
-      _addTab(DocumentTab.document(
-        title: _nextUntitledTitle(),
-        bytes: result.bytes,
-        preferences: _prefs,
-        initiallyDirty: true,
-      ));
+      _addTab(
+          DocumentTab.document(
+            title: _nextUntitledTitle(),
+            bytes: result.bytes,
+            preferences: _prefs,
+            initiallyDirty: true,
+          ),
+          createdKind: 'Foto in PDF');
       if (result.skipped > 0) {
         _toast('${result.skipped} file non letti e saltati.');
       }
@@ -3106,11 +3113,13 @@ class _EditorScreenState extends State<EditorScreen>
       final result = await comicToPdfAsync(await file.readAsBytes());
       if (!mounted) return;
       _readOnly = false;
-      _addTab(DocumentTab.document(
-        title: comicTitleFor(file.name, result.info),
-        bytes: result.bytes,
-        preferences: _prefs,
-      ));
+      _addTab(
+          DocumentTab.document(
+            title: comicTitleFor(file.name, result.info),
+            bytes: result.bytes,
+            preferences: _prefs,
+          ),
+          createdKind: 'Fumetto');
       if (result.skipped > 0) {
         _toast('${result.skipped} immagini non lette e saltate.');
       }
@@ -3133,11 +3142,13 @@ class _EditorScreenState extends State<EditorScreen>
       final result = await epubToPdfAsync(await file.readAsBytes());
       if (!mounted) return;
       _readOnly = false;
-      _addTab(DocumentTab.document(
-        title: epubTitle(file.name),
-        bytes: result.bytes,
-        preferences: _prefs,
-      ));
+      _addTab(
+          DocumentTab.document(
+            title: epubTitle(file.name),
+            bytes: result.bytes,
+            preferences: _prefs,
+          ),
+          createdKind: 'Libro');
     } on FormatException catch (e) {
       if (mounted) _toast('Libro non aperto: ${e.message}.');
     } catch (e) {
@@ -3178,7 +3189,7 @@ class _EditorScreenState extends State<EditorScreen>
         preferences: _prefs,
         initiallyDirty: true,
       );
-      _addTab(tab);
+      _addTab(tab, createdKind: 'Foglio composto');
       // "Crea e stampa": subito la stampa del foglio appena composto.
       if (result.print) unawaited(_print(tab));
     } catch (e) {
@@ -3213,12 +3224,14 @@ class _EditorScreenState extends State<EditorScreen>
         _revealInsertedPage(at);
       } else {
         _readOnly = false;
-        _addTab(DocumentTab.document(
-          title: _nextScanTitle(),
-          bytes: pdf,
-          preferences: _prefs,
-          initiallyDirty: true,
-        ));
+        _addTab(
+            DocumentTab.document(
+              title: _nextScanTitle(),
+              bytes: pdf,
+              preferences: _prefs,
+              initiallyDirty: true,
+            ),
+            createdKind: 'Da scanner');
       }
     } catch (e) {
       AppDevTools.instance
@@ -3285,7 +3298,7 @@ class _EditorScreenState extends State<EditorScreen>
       initiallyDirty: true,
     );
     _readOnly = false;
-    _addTab(tab);
+    _addTab(tab, createdKind: 'Scansione');
   }
 
   /// Scans a document (mobile/tablet only) and inserts its pages into [tab]'s
@@ -6639,7 +6652,7 @@ class _EditorScreenState extends State<EditorScreen>
           case PdfCommandCategory.view:
             add(appCommand, 'view', section: 'Opzioni di vista', toggle: true);
           default:
-            add(appCommand, 'other');
+            add(appCommand, 'tools', section: 'Altro');
         }
       }
     } else {
@@ -6960,11 +6973,13 @@ class _EditorScreenState extends State<EditorScreen>
       // La tastiera copre il documento senza spostarlo né ridimensionarlo.
       resizeToAvoidBottomInset: false,
       appBar: _shellDrawsAppBar(tab) ? null : _buildAppBar(tab),
-      bottomNavigationBar: ValueListenableBuilder<bool>(
-        valueListenable: BottomBarSetting.instance,
-        builder: (context, visible, _) => visible
-            ? AppBottomBar(onSelected: (item) => _onBottomBar(item, tab))
-            : const SizedBox.shrink(),
+      bottomNavigationBar: ListenableBuilder(
+        listenable: Listenable.merge(
+            [BottomBarSetting.instance, BottomBarPeek.visible]),
+        builder: (context, _) =>
+            BottomBarSetting.instance.value || BottomBarPeek.visible.value
+                ? AppBottomBar(onSelected: (item) => _onBottomBar(item, tab))
+                : const SizedBox.shrink(),
       ),
       body: CallbackShortcuts(
         // ⌘P (macOS) / Ctrl+P (Windows, Linux, web) print the active document.
@@ -7348,7 +7363,10 @@ class _EditorScreenState extends State<EditorScreen>
           semanticLabel: 'DartPDF',
         ),
         tooltip: appL10n(context).editorAppMenuTooltip,
-        onPressed: () => unawaited(_showAppMenu(tab)),
+        onPressed: () {
+          BottomBarPeek.onMenuButton();
+          unawaited(_showAppMenu(tab));
+        },
       );
 
   /// Le macroaree del menu, nell'ordine in cui compaiono.
@@ -7461,6 +7479,8 @@ class _EditorScreenState extends State<EditorScreen>
   /// La schermata Crea: le voci del gruppo Crea del menu (le stesse, con la
   /// stessa disponibilita') in una griglia. Si chiude da sola quando si sceglie.
   Future<void> _openCreate() {
+    // L'elenco delle creazioni si riempie da solo appena letto.
+    unawaited(CreatedStore.instance.load());
     final bySection = <String?, List<CreateAction>>{};
     for (final e in _commandEntries()) {
       if (e.area != 'create' || !e.command.enabled) continue;
@@ -7481,6 +7501,8 @@ class _EditorScreenState extends State<EditorScreen>
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => CreateScreen(
+          store: CreatedStore.instance,
+          onOpenCreated: _openCreated,
           sections: [
             for (final k in keys)
               CreateSection(title: k, actions: bySection[k]!),
@@ -7488,6 +7510,23 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       ),
     );
+  }
+
+  /// Riapre una creazione dell'elenco: la scheda se e' ancora aperta, altrimenti
+  /// il file recente con lo stesso nome (se salvato).
+  void _openCreated(CreatedFile created) {
+    final open = _tabs.indexWhere((t) => t.title == created.title);
+    if (open >= 0) {
+      setState(() => _activeIndex = open);
+      return;
+    }
+    for (final r in _recents.items) {
+      if (r.title == created.title && r.isReopenable) {
+        unawaited(_openRecent(r));
+        return;
+      }
+    }
+    _toast('"${created.title}" non e\' piu\' aperto e non risulta salvato.');
   }
 
   /// La Home: scorciatoie per cominciare e i file recenti, con stella e
@@ -7541,6 +7580,8 @@ class _EditorScreenState extends State<EditorScreen>
       );
 
   void _onBottomBar(BottomBarItem item, DocumentTab? tab) {
+    // La barra comparsa dal pulsante del menu sparisce appena si sceglie.
+    BottomBarPeek.visible.value = false;
     switch (item) {
       case BottomBarItem.home:
         unawaited(_openHome());
