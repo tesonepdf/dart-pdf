@@ -53,7 +53,7 @@ void main() {
     }
   });
 
-  testWidgets('Crea apre il menu con il gruppo Crea aperto', (tester) async {
+  testWidgets('Crea apre la schermata Crea con le sue azioni', (tester) async {
     await pumpWithDoc(tester);
     await BottomBarSetting.instance.save(true);
     await tester.pumpAndSettle();
@@ -61,8 +61,9 @@ void main() {
     await tester.tap(key('bottom-bar-create'));
     await tester.pumpAndSettle();
 
-    expect(key('menu-new-document'), findsOneWidget);
-    expect(key('menu-save-as'), findsNothing);
+    expect(key('create-screen'), findsOneWidget);
+    expect(key('create-action-new-document'), findsOneWidget);
+    expect(key('create-action-save-as'), findsNothing);
   });
 
   testWidgets('Home apre la schermata Home', (tester) async {

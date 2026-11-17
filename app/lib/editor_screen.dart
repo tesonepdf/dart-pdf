@@ -67,6 +67,7 @@ import 'session_store.dart';
 import 'window_sessions.dart';
 import 'bottom_bar.dart';
 import 'bottom_bar_setting.dart';
+import 'create_screen.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
 import 'page_drag.dart';
@@ -7373,9 +7374,41 @@ class _EditorScreenState extends State<EditorScreen>
     'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
   };
 
-  /// Cosa apre ogni voce della barra in basso: Crea, File e Strumenti il menu
-  /// con quel gruppo aperto, Home la schermata Home, Impostazioni le
-  /// impostazioni.
+  /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea, File e
+  /// Strumenti il menu con quel gruppo aperto, Home la schermata Home,
+  /// Impostazioni le impostazioni.
+  /// La schermata Crea: le voci del gruppo Crea del menu (le stesse, con la
+  /// stessa disponibilita') in una griglia. Si chiude da sola quando si sceglie.
+  Future<void> _openCreate() {
+    final bySection = <String?, List<CreateAction>>{};
+    for (final e in _commandEntries()) {
+      if (e.area != 'create' || !e.command.enabled) continue;
+      (bySection[e.section] ??= []).add(CreateAction(
+        id: e.command.id.replaceFirst('menu-', ''),
+        icon: e.command.icon,
+        label: e.command.label.replaceAll('…', '').trim(),
+        run: e.command.run,
+      ));
+    }
+    final order = _menuSectionOrder['create'] ?? const <String?>[];
+    final keys = [
+      for (final k in order)
+        if (bySection.containsKey(k)) k,
+      for (final k in bySection.keys)
+        if (!order.contains(k)) k,
+    ];
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CreateScreen(
+          sections: [
+            for (final k in keys)
+              CreateSection(title: k, actions: bySection[k]!),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// La Home: scorciatoie per cominciare e i file recenti, con stella e
   /// "sul dispositivo". Si chiude da sola quando si sceglie qualcosa.
   Future<void> _openHome() => Navigator.of(context).push<void>(
@@ -7431,7 +7464,7 @@ class _EditorScreenState extends State<EditorScreen>
       case BottomBarItem.home:
         unawaited(_openHome());
       case BottomBarItem.create:
-        unawaited(_showAppMenu(tab, openGroup: 'create'));
+        unawaited(_openCreate());
       case BottomBarItem.file:
         unawaited(_showAppMenu(tab, openGroup: 'file'));
       case BottomBarItem.tools:
