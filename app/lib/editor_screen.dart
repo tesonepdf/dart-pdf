@@ -65,6 +65,8 @@ import 'reduce_file_size.dart';
 import 'rename_document.dart';
 import 'session_store.dart';
 import 'window_sessions.dart';
+import 'bottom_bar.dart';
+import 'bottom_bar_setting.dart';
 import 'settings_screen.dart';
 import 'page_drag.dart';
 import 'paced_read.dart';
@@ -640,6 +642,7 @@ class _EditorScreenState extends State<EditorScreen>
   void initState() {
     super.initState();
     PdfAnnotationSnapshotClipboard.instance.addListener(_onLocalAnnotationCopy);
+    BottomBarSetting.instance.load();
     WidgetsBinding.instance.addObserver(this);
     // Controllo ogni 2 secondi: tiene aggiornati salvataggio provvisorio,
     // scheda attiva e pagina in vista, qualunque strada abbia cambiato lo stato.
@@ -6954,6 +6957,12 @@ class _EditorScreenState extends State<EditorScreen>
       // La tastiera copre il documento senza spostarlo né ridimensionarlo.
       resizeToAvoidBottomInset: false,
       appBar: _shellDrawsAppBar(tab) ? null : _buildAppBar(tab),
+      bottomNavigationBar: ValueListenableBuilder<bool>(
+        valueListenable: BottomBarSetting.instance,
+        builder: (context, visible, _) => visible
+            ? AppBottomBar(onSelected: (item) => _onBottomBar(item, tab))
+            : const SizedBox.shrink(),
+      ),
       body: CallbackShortcuts(
         // ⌘P (macOS) / Ctrl+P (Windows, Linux, web) print the active document.
         // Placed above the editor so the SDK's own shortcuts take precedence;
@@ -7363,7 +7372,31 @@ class _EditorScreenState extends State<EditorScreen>
     'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
   };
 
-  Future<void> _showAppMenu(DocumentTab? tab) async {
+  /// Cosa apre ogni voce della barra in basso: Crea, File e Strumenti il menu
+  /// con quel gruppo aperto, Home il menu tutto chiuso, Impostazioni le
+  /// impostazioni.
+  void _onBottomBar(BottomBarItem item, DocumentTab? tab) {
+    switch (item) {
+      case BottomBarItem.home:
+        unawaited(_showAppMenu(tab));
+      case BottomBarItem.create:
+        unawaited(_showAppMenu(tab, openGroup: 'create'));
+      case BottomBarItem.file:
+        unawaited(_showAppMenu(tab, openGroup: 'file'));
+      case BottomBarItem.tools:
+        unawaited(_showAppMenu(tab, openGroup: 'tools'));
+      case BottomBarItem.settings:
+        unawaited(showAppSettings(
+          context,
+          prefs: _prefs,
+          recents: _recents,
+          onOpenDevTools: kDevToolsEnabled ? _toggleDevTools : null,
+          autoOcr: _autoOcr,
+        ));
+    }
+  }
+
+  Future<void> _showAppMenu(DocumentTab? tab, {String? openGroup}) async {
     final l = appL10n(context);
     // Nel menu non compaiono le voci che non valgono ora (niente documento
     // aperto, sola lettura): restano nella ricerca, spente e con il motivo. Una
@@ -7394,7 +7427,7 @@ class _EditorScreenState extends State<EditorScreen>
         id: id,
         title: title,
         icon: icon,
-        open: false,
+        open: id == openGroup,
         sections: [
           for (final k in keys)
             AppMenuSection(

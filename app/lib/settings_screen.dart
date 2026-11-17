@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log_dialog.dart';
+import 'bottom_bar_setting.dart';
 import 'build_check.dart';
 import 'save_folder.dart';
 import 'cached_documents_settings.dart';
@@ -271,6 +272,10 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     title: 'Salvataggio',
                     children: [_SaveFolderTile()],
                   ),
+                const _SettingsSection(
+                  title: 'Barra in basso',
+                  children: [_BottomBarTile()],
+                ),
                 _SettingsSection(
                   title: 'Strumenti',
                   children: [
@@ -1381,6 +1386,40 @@ class _SignatureTrustSection extends StatelessWidget {
   }
 }
 
+
+/// Impostazioni: mostra o nasconde la barra in basso (spenta di base).
+class _BottomBarTile extends StatefulWidget {
+  const _BottomBarTile();
+
+  @override
+  State<_BottomBarTile> createState() => _BottomBarTileState();
+}
+
+class _BottomBarTileState extends State<_BottomBarTile> {
+  @override
+  void initState() {
+    super.initState();
+    // L'interruttore deve mostrare la scelta salvata, non quella di base.
+    BottomBarSetting.instance.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: BottomBarSetting.instance,
+      builder: (context, visible, _) => SwitchListTile(
+        key: const ValueKey('settings-bottom-bar'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.call_to_action_outlined),
+        title: const Text('Mostra la barra in basso'),
+        subtitle: const Text(
+            'Home, Crea, File, Strumenti e Impostazioni sempre a portata di pollice'),
+        value: visible,
+        onChanged: (value) => BottomBarSetting.instance.save(value),
+      ),
+    );
+  }
+}
 
 /// Impostazioni: la cartella dove si salvano i PDF (solo Android).
 class _SaveFolderTile extends StatelessWidget {
