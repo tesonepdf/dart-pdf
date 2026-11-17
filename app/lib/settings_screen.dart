@@ -211,6 +211,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   title: 'Home e barra in basso',
                   children: [
                     _StartHomeTile(),
+                    _TesoneBarTile(),
                     _BottomBarTile(),
                     _BottomBarMenuButtonTile(),
                   ],
@@ -1420,6 +1421,42 @@ class _BottomBarTileState extends State<_BottomBarTile> {
             'Home, Crea, File, Strumenti e Impostazioni sempre a portata di pollice'),
         value: visible,
         onChanged: (value) => BottomBarSetting.instance.save(value),
+      ),
+    );
+  }
+}
+
+/// Impostazioni: la barra del documento in stile tesone (spenta di base).
+class _TesoneBarTile extends StatefulWidget {
+  const _TesoneBarTile();
+
+  @override
+  State<_TesoneBarTile> createState() => _TesoneBarTileState();
+}
+
+class _TesoneBarTileState extends State<_TesoneBarTile> {
+  @override
+  void initState() {
+    super.initState();
+    TesoneBarSetting.instance.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: TesoneBarSetting.instance,
+      builder: (context, on, _) => SwitchListTile(
+        key: const ValueKey('settings-tesone-bar'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.view_agenda_outlined),
+        title: const Text('Barra del documento stile tesone'),
+        subtitle: const Text(
+            'Con un documento aperto: in alto freccia, riflusso, altoparlante, '
+            'ricerca e condividi; in basso Modifica PDF, Commento, Evidenzia, '
+            'Disegna, Compila e firma, Altri strumenti. La barra Home/Crea/File '
+            'resta nascosta finche\' il documento e\' aperto.'),
+        value: on,
+        onChanged: (value) => TesoneBarSetting.instance.save(value),
       ),
     );
   }

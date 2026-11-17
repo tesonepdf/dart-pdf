@@ -135,3 +135,40 @@ class StartHomeSetting extends ValueNotifier<bool> {
     }
   }
 }
+
+/// La scelta "Barra del documento stile tesone": con un documento aperto, in
+/// alto freccia, riflusso, altoparlante, ricerca, condividi e tre puntini; in
+/// basso Modifica PDF, Commento, Evidenzia, Disegna, Compila e firma e Altri
+/// strumenti. Spenta di base. Salvata sul dispositivo, vale per tutte le finestre.
+class TesoneBarSetting extends ValueNotifier<bool> {
+  TesoneBarSetting() : super(false);
+
+  static final TesoneBarSetting instance = TesoneBarSetting();
+
+  static const _key = 'dart_pdf_editor_app.tesone_bar';
+
+  Future<void>? _loading;
+  bool _chosen = false;
+
+  Future<void> load() => _loading ??= _read();
+
+  Future<void> _read() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_chosen) value = prefs.getBool(_key) ?? false;
+    } catch (error) {
+      debugPrint('Tesone bar setting unreadable: $error');
+    }
+  }
+
+  Future<void> save(bool on) async {
+    _chosen = true;
+    value = on;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, on);
+    } catch (error) {
+      debugPrint('Tesone bar setting not saved: $error');
+    }
+  }
+}

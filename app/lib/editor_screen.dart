@@ -65,6 +65,7 @@ import 'reduce_file_size.dart';
 import 'rename_document.dart';
 import 'session_store.dart';
 import 'window_sessions.dart';
+import 'tesone_bar.dart';
 import 'bottom_bar.dart';
 import 'bottom_bar_setting.dart';
 import 'created_store.dart';
@@ -649,6 +650,8 @@ class _EditorScreenState extends State<EditorScreen>
     BottomBarSetting.instance.load();
     BottomBarMenuButtonSetting.instance.load();
     StartHomeSetting.instance.load();
+    TesoneBarSetting.instance.load();
+    TesoneBarSetting.instance.addListener(_onTesoneBarChanged);
     WidgetsBinding.instance.addObserver(this);
     // Controllo ogni 2 secondi: tiene aggiornati salvataggio provvisorio,
     // scheda attiva e pagina in vista, qualunque strada abbia cambiato lo stato.
@@ -1095,6 +1098,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   @override
   void dispose() {
+    TesoneBarSetting.instance.removeListener(_onTesoneBarChanged);
     _devToolsOpen.dispose();
     PdfAnnotationSnapshotClipboard.instance
         .removeListener(_onLocalAnnotationCopy);
@@ -6828,6 +6832,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// skip the app menu, the tab strip and the app actions.
   PreferredSizeWidget _buildAppBar(DocumentTab? tab,
       {PdfHeaderParts? parts, _AppBarContent? content}) {
+    if (_tesoneOn(tab)) return _buildTesoneAppBar(tab!, parts: parts);
     final app = content ?? _appBarContent(tab);
     final phone = _usesAppMenuSheet(context);
     // phone: the selected tool and a folding search sit in the second row
@@ -6975,12 +6980,21 @@ class _EditorScreenState extends State<EditorScreen>
       resizeToAvoidBottomInset: false,
       appBar: _shellDrawsAppBar(tab) ? null : _buildAppBar(tab),
       bottomNavigationBar: ListenableBuilder(
-        listenable: Listenable.merge(
-            [BottomBarSetting.instance, BottomBarPeek.visible]),
-        builder: (context, _) =>
-            BottomBarSetting.instance.value || BottomBarPeek.visible.value
-                ? AppBottomBar(onSelected: (item) => _onBottomBar(item, tab))
-                : const SizedBox.shrink(),
+        listenable: Listenable.merge([
+          BottomBarSetting.instance,
+          BottomBarPeek.visible,
+          TesoneBarSetting.instance,
+          if (tab?.commands != null) tab!.commands!,
+        ]),
+        builder: (context, _) {
+          // Documento aperto con la barra stile tesone: al posto di
+          // Home/Crea/File/Strumenti/Impostazioni ci sono gli strumenti.
+          if (_tesoneOn(tab)) return _buildTesoneToolbar(tab!);
+          return BottomBarSetting.instance.value ||
+                  BottomBarPeek.visible.value
+              ? AppBottomBar(onSelected: (item) => _onBottomBar(item, tab))
+              : const SizedBox.shrink();
+        },
       ),
       body: CallbackShortcuts(
         // ⌘P (macOS) / Ctrl+P (Windows, Linux, web) print the active document.
@@ -7026,7 +7040,7 @@ class _EditorScreenState extends State<EditorScreen>
               Positioned.fill(
                 child: Row(
                   children: [
-                    Expanded(child: _buildBodyWithDevTools(tab)),
+                    Expanded(child: _withTesoneTitle(tab, _buildBodyWithDevTools(tab))),
                     if (appDevTools && !compactDevTools)
                       DevToolsPanel(
                         onClose: _toggleDevTools,
@@ -7535,6 +7549,246 @@ class _EditorScreenState extends State<EditorScreen>
       }
     }
     _toast('"${created.title}" non e\' piu\' aperto e non risulta salvato.');
+  }
+
+  // ---- barra del documento stile tesone --------------------------------
+
+  /// Dopo Commento la barra in basso cambia (Commento, Evidenzia, Sottolinea,
+  /// Barra, Disegna, Altri strumenti); la freccia in alto la riporta com'era.
+  bool _tesoneComment = false;
+
+  void _onTesoneBarChanged() {
+    if (!mounted) return;
+    setState(() => _tesoneComment = false);
+  }
+
+  /// True se la barra stile tesone e' accesa e c'e' un documento modificabile.
+  bool _tesoneOn(DocumentTab? tab) =>
+      TesoneBarSetting.instance.value && tab != null && tab.session != null;
+
+  Map<String, AppCommand> _commandsById() => {
+        for (final e in _commandEntries()) e.command.id: e.command,
+      };
+
+  /// La freccia in alto: prima esce dalla barra Commento, poi chiude il
+  /// documento (con la solita domanda se ci sono modifiche).
+  void _tesoneBack() {
+    if (_tesoneComment) {
+      setState(() => _tesoneComment = false);
+      _commandsById()['tool-select']?.run();
+      return;
+    }
+    if (_tabs.isEmpty) return;
+    unawaited(_closeTab(_activeIndex));
+  }
+
+  PreferredSizeWidget _buildTesoneAppBar(DocumentTab tab,
+      {PdfHeaderParts? parts}) {
+    final byId = _commandsById();
+    final reflow = byId['view-reflow'];
+    final searchPart = parts?.searchToggle ?? parts?.search;
+    Widget slot(Widget child) => Expanded(child: Center(child: child));
+    final row = ValueListenableBuilder<bool>(
+      valueListenable: pdfSearchOpen,
+      builder: (context, searching, _) {
+        if (searching && searchPart != null) {
+          return Row(children: [Expanded(child: searchPart)]);
+        }
+        return Row(
+          children: [
+            if (reflow != null)
+              slot(IconButton(
+                key: const ValueKey('tesone-reflow'),
+                tooltip: reflow.label,
+                isSelected: reflow.selected,
+                icon: const Icon(Icons.article_outlined),
+                onPressed: reflow.enabled ? reflow.run : null,
+              )),
+            slot(IconButton(
+              key: const ValueKey('tesone-read-aloud'),
+              tooltip: 'Leggi ad alta voce',
+              icon: const Icon(Icons.volume_up_outlined),
+              onPressed: () => unawaited(_readPageAloud(tab)),
+            )),
+            if (searchPart != null) slot(searchPart),
+            slot(IconButton(
+              key: const ValueKey('tesone-share'),
+              tooltip: 'Condividi',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () => unawaited(_shareDocument(tab)),
+            )),
+            slot(IconButton(
+              key: const ValueKey('tesone-more'),
+              tooltip: 'Altro',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => unawaited(_showAppMenu(tab)),
+            )),
+          ],
+        );
+      },
+    );
+    return AppBar(
+      key: const ValueKey('tesone-app-bar'),
+      automaticallyImplyLeading: false,
+      leadingWidth: 56,
+      leading: IconButton(
+        key: const ValueKey('tesone-back'),
+        tooltip: 'Indietro',
+        icon: const Icon(Icons.arrow_back),
+        onPressed: _tesoneBack,
+      ),
+      titleSpacing: 0,
+      title: row,
+    );
+  }
+
+  Widget _buildTesoneToolbar(DocumentTab tab) {
+    final byId = _commandsById();
+    TesoneChoice? choice(String id, String label, [IconData? icon]) {
+      final c = byId[id];
+      if (c == null || !c.enabled) return null;
+      return TesoneChoice(
+          id: id, icon: icon ?? c.icon, label: label, run: c.run);
+    }
+
+    TesoneBarItem item(
+      String id,
+      IconData icon,
+      String label, {
+      String? command,
+      VoidCallback? onTap,
+      List<TesoneChoice?> choices = const [],
+    }) {
+      final c = command == null ? null : byId[command];
+      return TesoneBarItem(
+        id: id,
+        icon: icon,
+        label: label,
+        enabled: onTap != null || (c?.enabled ?? false),
+        selected: c?.selected ?? false,
+        run: onTap ?? c?.run ?? () {},
+        choices: [
+          for (final x in choices)
+            if (x != null) x,
+        ],
+      );
+    }
+
+    final more = item('more', Icons.apps_outlined, 'Altri strumenti',
+        onTap: () => unawaited(_openMoreTools()));
+    final items = _tesoneComment
+        ? [
+            item('comment', Icons.chat_bubble_outline, 'Commento',
+                command: 'tool-note'),
+            item('highlight', Icons.border_color_outlined, 'Evidenzia',
+                command: 'markup-highlight'),
+            item('underline', Icons.format_underlined, 'Sottolinea',
+                command: 'markup-underline'),
+            item('strike', Icons.format_strikethrough, 'Barra',
+                command: 'markup-strikeOut'),
+            item('draw', Icons.draw_outlined, 'Disegna', command: 'tool-ink'),
+            more,
+          ]
+        : [
+            item('edit', Icons.edit_note_outlined, 'Modifica PDF',
+                command: byId.containsKey('tool-content')
+                    ? 'tool-content'
+                    : 'tool-freeText'),
+            item('comment', Icons.chat_bubble_outline, 'Commento',
+                onTap: () {
+                  setState(() => _tesoneComment = true);
+                  byId['tool-note']?.run();
+                },
+                choices: [
+                  choice('tool-note', 'Nota'),
+                  choice('tool-freeText', 'Testo libero'),
+                  choice('tool-stamp', 'Timbro'),
+                ]),
+            item('highlight', Icons.border_color_outlined, 'Evidenzia',
+                command: 'markup-highlight',
+                choices: [
+                  choice('markup-highlight', 'Evidenzia'),
+                  choice('markup-underline', 'Sottolinea',
+                      Icons.format_underlined),
+                  choice('markup-strikeOut', 'Barra',
+                      Icons.format_strikethrough),
+                  choice('markup-squiggly', 'Ondulato'),
+                  choice('tool-highlight', 'Evidenzia a mano'),
+                ]),
+            item('draw', Icons.draw_outlined, 'Disegna', command: 'tool-ink'),
+            item('sign', Icons.history_edu_outlined, 'Compila e firma',
+                command: 'tool-signature',
+                choices: [
+                  choice('tool-signature', 'Firma'),
+                  choice('tool-form', 'Compila modulo'),
+                  choice('menu-digital-signature', 'Firma digitale'),
+                ]),
+            more,
+          ];
+    return TesoneToolbar(items: items);
+  }
+
+  /// "Altri strumenti": tutto cio' che inserisce foto, fogli, scansioni o
+  /// porzioni di PDF nel documento o ne crea uno nuovo.
+  Future<void> _openMoreTools() {
+    final byId = _commandsById();
+    List<MoreToolTile> tiles(List<String> ids) => [
+          for (final id in ids)
+            if (byId[id] case final c? when c.enabled)
+              MoreToolTile(
+                id: id,
+                icon: c.icon,
+                label: c.label.replaceAll('…', '').trim(),
+                run: c.run,
+              ),
+        ];
+    final insert = tiles([
+      'menu-insert-document',
+      'menu-insert-scan',
+      'menu-photos-one-sheet',
+      'menu-photos-to-pdf',
+      'menu-compose-sheet',
+      'menu-scanner-import',
+      'menu-photo-size',
+      'tool-image',
+    ]);
+    final sized = tiles([
+      'menu-import-auto',
+      'menu-import-cards',
+      'menu-import-passport',
+      'menu-import-photoid',
+      'menu-import-a4',
+      'menu-import-other',
+    ]);
+    return showMoreToolsSheet(
+      context,
+      title: 'Altri strumenti',
+      sections: [
+        if (insert.isNotEmpty)
+          MoreToolsSection(title: 'Inserisci foto, fogli e PDF', tiles: insert),
+        if (sized.isNotEmpty)
+          MoreToolsSection(title: 'Importa foto con misura', tiles: sized),
+      ],
+    );
+  }
+
+  /// Sopra la pagina, per qualche secondo dopo l'apertura, il nome del file.
+  Widget _withTesoneTitle(DocumentTab? tab, Widget body) {
+    if (!_tesoneOn(tab)) return body;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        body,
+        Positioned(
+          top: 12,
+          left: 16,
+          right: 16,
+          child: Center(
+            child: _TesoneTitlePill(key: ObjectKey(tab), title: tab!.title),
+          ),
+        ),
+      ],
+    );
   }
 
   /// La Home: scorciatoie per cominciare e i file recenti, con stella e
@@ -9945,3 +10199,56 @@ typedef _MenuEntry = ({
   String? section,
   bool toggle,
 });
+
+/// L'etichetta scura col nome del file, che compare all'apertura e poi sfuma.
+class _TesoneTitlePill extends StatefulWidget {
+  const _TesoneTitlePill({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<_TesoneTitlePill> createState() => _TesoneTitlePillState();
+}
+
+class _TesoneTitlePillState extends State<_TesoneTitlePill> {
+  bool _shown = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _shown = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        key: const ValueKey('tesone-title-pill'),
+        opacity: _shown ? 1 : 0,
+        duration: const Duration(milliseconds: 400),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xE6303030),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            widget.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 15),
+          ),
+        ),
+      ),
+    );
+  }
+}
