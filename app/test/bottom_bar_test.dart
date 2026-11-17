@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dart_pdf_editor_app/bottom_bar_setting.dart';
 import 'package:dart_pdf_editor_app/editor_screen.dart';
+import 'test_finders.dart';
 
 void main() {
   late PdfEditingPreferences prefs;
@@ -99,6 +100,9 @@ void main() {
 
     await tester.tap(key('bottom-bar-settings'));
     await tester.pumpAndSettle();
+    // le sezioni delle Impostazioni sono chiuse: il loro contenuto c'e' solo
+    // dopo averle aperte
+    await expandSettingsSections(tester);
     final toggle = key('settings-bottom-bar');
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
