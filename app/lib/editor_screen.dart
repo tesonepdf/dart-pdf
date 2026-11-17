@@ -648,6 +648,7 @@ class _EditorScreenState extends State<EditorScreen>
     PdfAnnotationSnapshotClipboard.instance.addListener(_onLocalAnnotationCopy);
     BottomBarSetting.instance.load();
     BottomBarMenuButtonSetting.instance.load();
+    StartHomeSetting.instance.load();
     WidgetsBinding.instance.addObserver(this);
     // Controllo ogni 2 secondi: tiene aggiornati salvataggio provvisorio,
     // scheda attiva e pagina in vista, qualunque strada abbia cambiato lo stato.
@@ -7126,7 +7127,7 @@ class _EditorScreenState extends State<EditorScreen>
         AppDevTools.instance.pageRasterWarmPolicy.value;
     final tileRasterBackend = AppDevTools.instance.tileRasterBackend;
     if (tab == null) {
-      return WelcomeScreen(
+      final welcome = WelcomeScreen(
         recents: _recents,
         onOpen: _pickAndOpen,
         onNewDocument: () => unawaited(_newDocument()),
@@ -7138,6 +7139,13 @@ class _EditorScreenState extends State<EditorScreen>
         // welcome screen immediately. Enable them once restore has decided
         // that there really is no document to show.
         thumbnails: _sessionLoaded ? _recentThumbnails : null,
+      );
+      // Con "Home come schermata iniziale" acceso si vede la Home; il
+      // benvenuto resta finche' non si e' deciso che non c'e' nessun documento.
+      return ValueListenableBuilder<bool>(
+        valueListenable: StartHomeSetting.instance,
+        builder: (context, home, _) =>
+            home && _sessionLoaded ? _homeScreen(embedded: true) : welcome,
       );
     }
     if (tab.isDeferredPath) {
@@ -7532,51 +7540,53 @@ class _EditorScreenState extends State<EditorScreen>
   /// La Home: scorciatoie per cominciare e i file recenti, con stella e
   /// "sul dispositivo". Si chiude da sola quando si sceglie qualcosa.
   Future<void> _openHome() => Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(
-            recents: _recents,
-            thumbnails: _recentThumbnails,
-            onOpenRecent: _openRecent,
-            shortcuts: [
-              HomeShortcut(
-                id: 'open',
-                icon: Icons.folder_open_outlined,
-                label: 'Apri',
-                run: () => unawaited(_pickAndOpen()),
-              ),
-              HomeShortcut(
-                id: 'new-document',
-                icon: Icons.note_add_outlined,
-                label: 'Nuovo',
-                run: () => unawaited(_newDocument()),
-              ),
-              HomeShortcut(
-                id: 'scan-document',
-                icon: Icons.document_scanner_outlined,
-                label: 'Scansione',
-                run: () => unawaited(_newDocumentFromScan()),
-              ),
-              HomeShortcut(
-                id: 'photos-to-pdf',
-                icon: Icons.collections_outlined,
-                label: 'Foto in PDF',
-                run: () => unawaited(_photosToPdf()),
-              ),
-              HomeShortcut(
-                id: 'photos-one-sheet',
-                icon: Icons.photo_library_outlined,
-                label: 'Foto su un foglio',
-                run: () => unawaited(_photosOnOneSheet()),
-              ),
-              HomeShortcut(
-                id: 'open-comic',
-                icon: Icons.auto_stories_outlined,
-                label: 'Fumetto',
-                run: () => unawaited(_openComic()),
-              ),
-            ],
+        MaterialPageRoute(builder: (_) => _homeScreen()),
+      );
+
+  /// La Home; [embedded] quando e' la schermata iniziale al posto del benvenuto.
+  HomeScreen _homeScreen({bool embedded = false}) => HomeScreen(
+        embedded: embedded,
+        recents: _recents,
+        thumbnails: _recentThumbnails,
+        onOpenRecent: _openRecent,
+        shortcuts: [
+          HomeShortcut(
+            id: 'open',
+            icon: Icons.folder_open_outlined,
+            label: 'Apri',
+            run: () => unawaited(_pickAndOpen()),
           ),
-        ),
+          HomeShortcut(
+            id: 'new-document',
+            icon: Icons.note_add_outlined,
+            label: 'Nuovo',
+            run: () => unawaited(_newDocument()),
+          ),
+          HomeShortcut(
+            id: 'scan-document',
+            icon: Icons.document_scanner_outlined,
+            label: 'Scansione',
+            run: () => unawaited(_newDocumentFromScan()),
+          ),
+          HomeShortcut(
+            id: 'photos-to-pdf',
+            icon: Icons.collections_outlined,
+            label: 'Foto in PDF',
+            run: () => unawaited(_photosToPdf()),
+          ),
+          HomeShortcut(
+            id: 'photos-one-sheet',
+            icon: Icons.photo_library_outlined,
+            label: 'Foto su un foglio',
+            run: () => unawaited(_photosOnOneSheet()),
+          ),
+          HomeShortcut(
+            id: 'open-comic',
+            icon: Icons.auto_stories_outlined,
+            label: 'Fumetto',
+            run: () => unawaited(_openComic()),
+          ),
+        ],
       );
 
   void _onBottomBar(BottomBarItem item, DocumentTab? tab) {

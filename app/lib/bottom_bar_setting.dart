@@ -99,3 +99,39 @@ class BottomBarPeek {
     }
   }
 }
+
+/// La scelta "Home come schermata iniziale": senza documento aperto, al posto
+/// della schermata di benvenuto si vede la Home (scorciatoie e file recenti).
+/// Spenta di base. Salvata sul dispositivo, vale per tutte le finestre.
+class StartHomeSetting extends ValueNotifier<bool> {
+  StartHomeSetting() : super(false);
+
+  static final StartHomeSetting instance = StartHomeSetting();
+
+  static const _key = 'dart_pdf_editor_app.start_home';
+
+  Future<void>? _loading;
+  bool _chosen = false;
+
+  Future<void> load() => _loading ??= _read();
+
+  Future<void> _read() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_chosen) value = prefs.getBool(_key) ?? false;
+    } catch (error) {
+      debugPrint('Start home setting unreadable: $error');
+    }
+  }
+
+  Future<void> save(bool home) async {
+    _chosen = true;
+    value = home;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, home);
+    } catch (error) {
+      debugPrint('Start home setting not saved: $error');
+    }
+  }
+}

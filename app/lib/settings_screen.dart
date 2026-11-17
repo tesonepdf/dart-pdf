@@ -207,6 +207,14 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const _SettingsSection(
+                  title: 'Home e barra in basso',
+                  children: [
+                    _StartHomeTile(),
+                    _BottomBarTile(),
+                    _BottomBarMenuButtonTile(),
+                  ],
+                ),
                 _SettingsSection(
                   title: 'Aspetto e lingua',
                   children: [
@@ -272,10 +280,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     title: 'Salvataggio',
                     children: [_SaveFolderTile()],
                   ),
-                const _SettingsSection(
-                  title: 'Barra in basso',
-                  children: [_BottomBarTile(), _BottomBarMenuButtonTile()],
-                ),
                 _SettingsSection(
                   title: 'Strumenti',
                   children: [
@@ -1416,6 +1420,41 @@ class _BottomBarTileState extends State<_BottomBarTile> {
             'Home, Crea, File, Strumenti e Impostazioni sempre a portata di pollice'),
         value: visible,
         onChanged: (value) => BottomBarSetting.instance.save(value),
+      ),
+    );
+  }
+}
+
+/// Impostazioni: la Home al posto del benvenuto quando non c'e' un documento
+/// aperto (spento di base).
+class _StartHomeTile extends StatefulWidget {
+  const _StartHomeTile();
+
+  @override
+  State<_StartHomeTile> createState() => _StartHomeTileState();
+}
+
+class _StartHomeTileState extends State<_StartHomeTile> {
+  @override
+  void initState() {
+    super.initState();
+    StartHomeSetting.instance.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: StartHomeSetting.instance,
+      builder: (context, home, _) => SwitchListTile(
+        key: const ValueKey('settings-start-home'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.home_outlined),
+        title: const Text('Home come schermata iniziale'),
+        subtitle: const Text(
+            'Senza documento aperto, al posto del benvenuto si vede la Home '
+            'con le scorciatoie e i file recenti.'),
+        value: home,
+        onChanged: (value) => StartHomeSetting.instance.save(value),
       ),
     );
   }

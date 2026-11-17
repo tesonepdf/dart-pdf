@@ -34,8 +34,13 @@ class HomeScreen extends StatefulWidget {
     required this.shortcuts,
     required this.onOpenRecent,
     this.thumbnails,
+    this.embedded = false,
     StarredStore? starred,
   }) : starred = starred;
+
+  /// True quando la Home e' la schermata iniziale dell'app (senza documento):
+  /// niente barra del titolo con la freccia e niente chiusura quando si sceglie.
+  final bool embedded;
 
   final RecentsStore recents;
   final List<HomeShortcut> shortcuts;
@@ -91,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openAndClose(VoidCallback run) {
-    Navigator.of(context).pop();
+    if (!widget.embedded) Navigator.of(context).pop();
     run();
   }
 
@@ -100,13 +105,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       key: const ValueKey('home-screen'),
-      appBar: AppBar(title: const Text('Home')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Home')),
       body: ListenableBuilder(
         listenable: Listenable.merge([widget.recents, _starred]),
         builder: (context, _) {
           final items = _visible();
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(16, widget.embedded ? 24 : 8, 16, 24),
             children: [
               Text('Bentornato/a', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 20),
