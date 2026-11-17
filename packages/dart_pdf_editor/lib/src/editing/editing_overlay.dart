@@ -4020,11 +4020,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _startLineCursorMove(LogicalKeyboardKey direction) {
     _stopLineCursorMove();
     _moveTextEditBox(direction);
-    _lineCursorRepeatTimer = Timer(const Duration(milliseconds: 350), () {
+    final touch = _lastPointerKind == PointerDeviceKind.touch;
+    _lineCursorRepeatTimer =
+        Timer(Duration(milliseconds: touch ? 600 : 350), () {
       if (!mounted || (_textEditRect == null && !_padForSelection)) return;
       _moveTextEditBox(direction);
       _lineCursorRepeatTimer = Timer.periodic(
-        const Duration(milliseconds: 90),
+        Duration(milliseconds: touch ? 180 : 90),
         (_) => _moveTextEditBox(direction),
       );
     });
@@ -4042,7 +4044,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// for the horizontal or vertical arrows, carried through zoom and /Rotate.
   (double dx, double dy) _arrowPageDelta(LogicalKeyboardKey direction) {
     final prefs = _controller.preferences;
-    final scale = _geometry.scale;
+    // col dito il passo e' la meta': una pressione sposta meno
+    final scale = _geometry.scale *
+        (_lastPointerKind == PointerDeviceKind.touch ? 0.5 : 1.0);
     var viewDx = 0.0, viewDy = 0.0;
     if (direction == LogicalKeyboardKey.arrowLeft) {
       viewDx = -prefs.lineArrowStepX * scale;
@@ -4546,12 +4550,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    const d = 8.4, closeSize = 8.64, closeHit = 16.0, gap = 2.0;
+    // Col dito (Android, anche web, telefoni) i pulsanti sono grandi e
+    // distanziati; col mouse restano quelli piccoli di prima.
+    final touch = _lastPointerKind == PointerDeviceKind.touch;
+    final d = touch ? 30.0 : 8.4;
+    final closeSize = touch ? 34.0 : 8.64;
+    final closeHit = touch ? 44.0 : 16.0;
+    final arrowHit = touch ? 40.0 : 8.4;
+    final gap = touch ? 4.0 : 2.0;
+    final arrowIconSize = touch ? 22.0 : 5.6;
+    final bigIconSize = touch ? 22.0 : 8.4;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
       final isClose = direction == null;
-      final hit = isClose ? closeHit : d;
+      final hit = isClose ? closeHit : arrowHit;
       final face = isClose ? closeSize : d;
       final left =
           (center.dx - hit / 2).clamp(0.0, math.max(0.0, size.width - hit));
@@ -4604,7 +4617,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   child: OverflowBox(
                     maxWidth: face,
                     maxHeight: face,
-                    child: Icon(icon, size: isClose ? 8.4 : 5.6, color: color),
+                    child: Icon(icon,
+                        size: isClose ? bigIconSize : arrowIconSize,
+                        color: color),
                   ),
                 ),
               ),
@@ -4627,7 +4642,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         top: top.toDouble(),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPanUpdate: (details) => onDrag(details.delta),
+          onPanUpdate: (details) =>
+              onDrag(touch ? details.delta * 0.6 : details.delta),
           child: Listener(
             behavior: HitTestBehavior.opaque,
             onPointerDown: (_) => _holdChipFocus(),
@@ -4650,7 +4666,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   child: OverflowBox(
                     maxWidth: closeSize,
                     maxHeight: closeSize,
-                    child: Icon(icon, size: 8.4, color: scheme.onSurface),
+                    child: Icon(icon, size: bigIconSize, color: scheme.onSurface),
                   ),
                 ),
               ),
@@ -4665,11 +4681,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // distanziati: sposta, chiudi, ridimensiona (sopra il bordo alto della
     // casella, per non coprirne il testo). La freccia destra sta a destra.
     final c = rect.center;
-    final columnX = rect.left - gap - d / 2;
-    const arrowStep = 16.0, rowStep = 20.0;
+    final columnX = rect.left - gap - arrowHit / 2;
+    final arrowStep = touch ? 46.0 : 16.0;
+    final rowStep = touch ? 46.0 : 20.0;
     final upY = c.dy - arrowStep;
     final rowY = math.min(upY, rect.top - gap - closeHit / 2);
-    final firstX = columnX + d / 2 + 3 + closeHit / 2;
+    final firstX = columnX + arrowHit / 2 + 3 + closeHit / 2;
     return [
       button(Offset(columnX, upY), Icons.keyboard_arrow_up, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowUp),
@@ -4684,7 +4701,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       dragButton(Offset(firstX + 2 * rowStep, rowY), Icons.open_in_full,
           _resizeTextEditBox,
           key: 'pdf-text-edit-resize'),
-      button(Offset(rect.right + gap + d / 2, c.dy),
+      button(Offset(rect.right + gap + arrowHit / 2, c.dy),
           Icons.keyboard_arrow_right, scheme.onSurface,
           direction: LogicalKeyboardKey.arrowRight),
       // la X sulle righe rosse: toglie quell'allineamento per questa casella
