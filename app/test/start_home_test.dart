@@ -47,7 +47,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AppBar), findsNothing);
-    expect(find.text('Bentornato/a'), findsOneWidget);
+    expect(find.text('Cosa vorresti fare?'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-shortcut-new-document')));
     await tester.pumpAndSettle();

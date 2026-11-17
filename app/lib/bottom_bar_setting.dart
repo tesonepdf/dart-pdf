@@ -172,3 +172,38 @@ class TesoneBarSetting extends ValueNotifier<bool> {
     }
   }
 }
+
+/// La scelta "Vista griglia" della Home: i file in una griglia di miniature
+/// invece che in un elenco. Spenta di base, salvata sul dispositivo.
+class HomeGridSetting extends ValueNotifier<bool> {
+  HomeGridSetting() : super(false);
+
+  static final HomeGridSetting instance = HomeGridSetting();
+
+  static const _key = 'dart_pdf_editor_app.home_grid';
+
+  Future<void>? _loading;
+  bool _chosen = false;
+
+  Future<void> load() => _loading ??= _read();
+
+  Future<void> _read() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!_chosen) value = prefs.getBool(_key) ?? false;
+    } catch (error) {
+      debugPrint('Home grid setting unreadable: $error');
+    }
+  }
+
+  Future<void> save(bool grid) async {
+    _chosen = true;
+    value = grid;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, grid);
+    } catch (error) {
+      debugPrint('Home grid setting not saved: $error');
+    }
+  }
+}

@@ -56,13 +56,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('mostra saluto, scorciatoie e le tre schede', (tester) async {
+  testWidgets('mostra le scorciatoie e le tre schede', (tester) async {
     await pumpHome(tester, shortcuts: [
       HomeShortcut(
           id: 'open', icon: Icons.folder_open, label: 'Apri', run: () {}),
     ]);
 
-    expect(find.text('Bentornato/a'), findsOneWidget);
+    // niente saluto: si parte da "Cosa vorresti fare?"
+    expect(find.text('Bentornato/a'), findsNothing);
     expect(find.text('Cosa vorresti fare?'), findsOneWidget);
     expect(key('home-shortcut-open'), findsOneWidget);
     for (final t in ['recent', 'starred', 'device']) {
@@ -88,6 +89,8 @@ void main() {
     expect(key('home-file-/a.pdf'), findsNothing);
 
     await tester.tap(key('home-tab-recent'));
+    await tester.pumpAndSettle();
+    await tester.tap(key('home-more-/a.pdf'));
     await tester.pumpAndSettle();
     await tester.tap(key('home-star-/a.pdf'));
     await tester.pumpAndSettle();

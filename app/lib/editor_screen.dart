@@ -69,6 +69,7 @@ import 'tesone_bar.dart';
 import 'bottom_bar.dart';
 import 'bottom_bar_setting.dart';
 import 'created_store.dart';
+import 'file_info.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
@@ -7800,6 +7801,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// La Home; [embedded] quando e' la schermata iniziale al posto del benvenuto.
   HomeScreen _homeScreen({bool embedded = false}) => HomeScreen(
         embedded: embedded,
+        fileInfo: readFileInfo,
         recents: _recents,
         thumbnails: _recentThumbnails,
         onOpenRecent: _openRecent,
