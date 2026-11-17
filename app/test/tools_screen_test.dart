@@ -17,6 +17,11 @@ void main() {
       );
 
   Future<void> pumpTools(WidgetTester tester, List<ToolItem> items) async {
+    // Schermo alto: la griglia costruisce solo le righe visibili, e l'ultima
+    // sta fuori da quello di prova (800x600).
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       home: Builder(
         builder: (context) => Scaffold(

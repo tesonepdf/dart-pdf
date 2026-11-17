@@ -100,7 +100,8 @@ void main() {
 
   testWidgets('Sul dispositivo elenca i file che si possono riaprire',
       (tester) async {
-    await recents.add(title: 'web.pdf');
+    // L'add scrive su disco (log): nel tempo finto del test non finirebbe mai.
+    await tester.runAsync(() => recents.add(title: 'web.pdf'));
     await pumpHome(tester);
 
     await tester.tap(key('home-tab-device'));
