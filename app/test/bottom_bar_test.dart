@@ -1,5 +1,5 @@
 // La barra in basso (Home, Crea, File, Strumenti, Impostazioni): spenta di
-// base, si accende dalle Impostazioni, ogni voce apre il gruppo giusto.
+// base, si accende dalle Impostazioni, ogni voce apre la cosa giusta.
 import 'package:dart_pdf_editor/dart_pdf_editor.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,7 +65,7 @@ void main() {
     expect(key('menu-save-as'), findsNothing);
   });
 
-  testWidgets('Home apre il menu con tutti i gruppi chiusi', (tester) async {
+  testWidgets('Home apre la schermata Home', (tester) async {
     await pumpWithDoc(tester);
     await BottomBarSetting.instance.save(true);
     await tester.pumpAndSettle();
@@ -73,9 +73,8 @@ void main() {
     await tester.tap(key('bottom-bar-home'));
     await tester.pumpAndSettle();
 
-    expect(key('app-menu'), findsOneWidget);
-    expect(key('menu-new-document'), findsNothing);
-    expect(key('menu-save-as'), findsNothing);
+    expect(key('home-screen'), findsOneWidget);
+    expect(find.text('Cosa vorresti fare?'), findsOneWidget);
   });
 
   testWidgets('Impostazioni apre le impostazioni con l\'interruttore',

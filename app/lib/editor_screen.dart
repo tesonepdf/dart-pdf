@@ -67,6 +67,7 @@ import 'session_store.dart';
 import 'window_sessions.dart';
 import 'bottom_bar.dart';
 import 'bottom_bar_setting.dart';
+import 'home_screen.dart';
 import 'settings_screen.dart';
 import 'page_drag.dart';
 import 'paced_read.dart';
@@ -7373,12 +7374,62 @@ class _EditorScreenState extends State<EditorScreen>
   };
 
   /// Cosa apre ogni voce della barra in basso: Crea, File e Strumenti il menu
-  /// con quel gruppo aperto, Home il menu tutto chiuso, Impostazioni le
+  /// con quel gruppo aperto, Home la schermata Home, Impostazioni le
   /// impostazioni.
+  /// La Home: scorciatoie per cominciare e i file recenti, con stella e
+  /// "sul dispositivo". Si chiude da sola quando si sceglie qualcosa.
+  Future<void> _openHome() => Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(
+            recents: _recents,
+            thumbnails: _recentThumbnails,
+            onOpenRecent: _openRecent,
+            shortcuts: [
+              HomeShortcut(
+                id: 'open',
+                icon: Icons.folder_open_outlined,
+                label: 'Apri',
+                run: () => unawaited(_pickAndOpen()),
+              ),
+              HomeShortcut(
+                id: 'new-document',
+                icon: Icons.note_add_outlined,
+                label: 'Nuovo',
+                run: () => unawaited(_newDocument()),
+              ),
+              HomeShortcut(
+                id: 'scan-document',
+                icon: Icons.document_scanner_outlined,
+                label: 'Scansione',
+                run: () => unawaited(_newDocumentFromScan()),
+              ),
+              HomeShortcut(
+                id: 'photos-to-pdf',
+                icon: Icons.collections_outlined,
+                label: 'Foto in PDF',
+                run: () => unawaited(_photosToPdf()),
+              ),
+              HomeShortcut(
+                id: 'photos-one-sheet',
+                icon: Icons.photo_library_outlined,
+                label: 'Foto su un foglio',
+                run: () => unawaited(_photosOnOneSheet()),
+              ),
+              HomeShortcut(
+                id: 'open-comic',
+                icon: Icons.auto_stories_outlined,
+                label: 'Fumetto',
+                run: () => unawaited(_openComic()),
+              ),
+            ],
+          ),
+        ),
+      );
+
   void _onBottomBar(BottomBarItem item, DocumentTab? tab) {
     switch (item) {
       case BottomBarItem.home:
-        unawaited(_showAppMenu(tab));
+        unawaited(_openHome());
       case BottomBarItem.create:
         unawaited(_showAppMenu(tab, openGroup: 'create'));
       case BottomBarItem.file:

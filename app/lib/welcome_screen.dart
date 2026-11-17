@@ -1304,3 +1304,29 @@ class _RecentThumbnailState extends State<_RecentThumbnail> {
     );
   }
 }
+
+/// La miniatura della prima pagina di un file recente, per la Home: la stessa
+/// dell'elenco dei recenti (stessa cache, stessa icona se non c'e' nulla da
+/// mostrare).
+class RecentThumbnailView extends StatelessWidget {
+  const RecentThumbnailView({
+    super.key,
+    required this.entry,
+    required this.thumbnails,
+    required this.width,
+    required this.height,
+  });
+
+  final RecentFile entry;
+  final RecentThumbnailCache? thumbnails;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => _RecentThumbnail(
+        entry: entry,
+        thumbnails: thumbnails,
+        width: width,
+        height: height,
+      );
+}
