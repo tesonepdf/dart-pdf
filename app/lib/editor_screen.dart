@@ -70,6 +70,7 @@ import 'bottom_bar_setting.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
+import 'tools_screen.dart';
 import 'page_drag.dart';
 import 'paced_read.dart';
 import 'tab_drag.dart';
@@ -7374,9 +7375,89 @@ class _EditorScreenState extends State<EditorScreen>
     'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
   };
 
-  /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea, File e
-  /// Strumenti il menu con quel gruppo aperto, Home la schermata Home,
-  /// Impostazioni le impostazioni.
+  /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea,
+  /// Strumenti la schermata Strumenti, File il menu con quel gruppo aperto,
+  /// Home la schermata Home, Impostazioni le impostazioni.
+  /// Una riga breve per ogni strumento della schermata Strumenti. Quelli che
+  /// non sono qui (i tanti strumenti di annotazione, pannelli, opzioni)
+  /// mostrano il nome del loro blocco.
+  static const _toolDescriptions = <String, String>{
+    'new-document': 'Crea un documento vuoto',
+    'new-window': 'Apri una nuova finestra',
+    'scan-document': 'Scansiona un documento con la fotocamera',
+    'photos-to-pdf': 'Una foto per ogni pagina',
+    'photos-one-sheet': 'Piu\' foto su un solo foglio',
+    'open-comic': 'Leggi un fumetto in formato .cbz',
+    'open-epub': 'Leggi un libro in formato .epub',
+    'scanner-import': 'Importa da uno scanner',
+    'compose-sheet': 'Componi un foglio',
+    'open': 'Apri un PDF',
+    'save': 'Salva le modifiche',
+    'save-as': 'Salva una copia con un altro nome',
+    'reduce-file-size': 'Riduci il peso del file',
+    'read-aloud': 'Ascolta il testo del documento',
+    'insert-document': 'Aggiungi un altro PDF al documento',
+    'insert-scan': 'Aggiungi pagine da una scansione',
+    'number-pages': 'Numera le pagine',
+    'remove-strip': 'Togli lo spazio vuoto',
+    'watermark': 'Aggiungi una filigrana',
+    'photo-size': 'Scegli la misura delle foto',
+    'compare': 'Confronta con un altro documento',
+    'digital-signature': 'Firma il documento',
+    'import-form-data': 'Importa ed esporta i dati dei moduli',
+    'ocr': 'Riconosci il testo di una scansione',
+    'open-without-ocr': 'Apri l\'originale senza il testo riconosciuto',
+    'export-image': 'Salva le pagine come immagini',
+    'export-text': 'Salva il testo del documento',
+    'export-word': 'Converti in Word',
+    'export-excel': 'Converti in Excel',
+    'export-excel-zone': 'Converti in Excel una zona scelta',
+    'open-in-word': 'Apri una copia in Word',
+    'open-in-excel': 'Apri una copia in Excel',
+    'print': 'Stampa il documento',
+    'deferred-print': 'Metti in coda per stampare dopo',
+    'share': 'Condividi il file',
+    'whatsapp': 'Invia su WhatsApp',
+    'whatsapp-contact': 'Invia al contatto salvato',
+    'settings': 'Cambia le impostazioni',
+    'updates': 'Cerca aggiornamenti',
+  };
+
+  /// La scheda della schermata Strumenti per ogni gruppo del menu.
+  static ToolTab _toolTabOf(String area) => switch (area) {
+        'view' => ToolTab.read,
+        'create' => ToolTab.create,
+        'pages' || 'tools' || 'sign' || 'ocr' => ToolTab.edit,
+        'export' => ToolTab.convert,
+        _ => ToolTab.other,
+      };
+
+  /// La schermata Strumenti: le voci del menu (le stesse, con la stessa
+  /// disponibilita') in schede e in una griglia a 2 colonne. Si chiude da
+  /// sola quando si sceglie.
+  Future<void> _openTools() {
+    final titles = {for (final (id, title, _) in _menuAreas) id: title};
+    final items = <ToolItem>[
+      for (final e in _commandEntries())
+        if (titles.containsKey(e.area) &&
+            (e.command.enabled || e.command.disabledReason == null))
+          ToolItem(
+            id: e.command.id.replaceFirst('menu-', ''),
+            icon: e.command.icon,
+            title: e.command.label.replaceAll('…', '').trim(),
+            description: _toolDescriptions[
+                    e.command.id.replaceFirst('menu-', '')] ??
+                e.section ??
+                titles[e.area]!,
+            tab: _toolTabOf(e.area),
+            run: e.command.run,
+          ),
+    ];
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => ToolsScreen(items: items)),
+    );
+  }
+
   /// La schermata Crea: le voci del gruppo Crea del menu (le stesse, con la
   /// stessa disponibilita') in una griglia. Si chiude da sola quando si sceglie.
   Future<void> _openCreate() {
@@ -7468,7 +7549,7 @@ class _EditorScreenState extends State<EditorScreen>
       case BottomBarItem.file:
         unawaited(_showAppMenu(tab, openGroup: 'file'));
       case BottomBarItem.tools:
-        unawaited(_showAppMenu(tab, openGroup: 'tools'));
+        unawaited(_openTools());
       case BottomBarItem.settings:
         unawaited(showAppSettings(
           context,

@@ -66,6 +66,19 @@ void main() {
     expect(key('create-action-save-as'), findsNothing);
   });
 
+  testWidgets('Strumenti apre la schermata Strumenti', (tester) async {
+    await pumpWithDoc(tester);
+    await BottomBarSetting.instance.save(true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(key('bottom-bar-tools'));
+    await tester.pumpAndSettle();
+
+    expect(key('tools-screen'), findsOneWidget);
+    expect(key('tools-tab-all'), findsOneWidget);
+    expect(key('tool-new-document'), findsOneWidget);
+  });
+
   testWidgets('Home apre la schermata Home', (tester) async {
     await pumpWithDoc(tester);
     await BottomBarSetting.instance.save(true);
