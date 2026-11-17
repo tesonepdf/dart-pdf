@@ -990,9 +990,9 @@ class _OfficialUpdatePanel extends StatelessWidget {
                 _t(
                   context,
                   'Controlla ogni volta che apri l\'app o la riporti in primo '
-                      'piano. Consigliata.',
+                      'piano. Non sul web.',
                   'Checks every time you open the app or bring it to the '
-                      'foreground. Recommended.',
+                      'foreground. Not on the web.',
                 ),
               ),
               (
@@ -1009,8 +1009,9 @@ class _OfficialUpdatePanel extends StatelessWidget {
                 _t(context, 'Solo manuale', 'Manual only'),
                 _t(
                   context,
-                  'Nessun controllo automatico: usa il pulsante qui sotto.',
-                  'No automatic check: use the button below.',
+                  'Nessun controllo automatico (la scelta di base): usa il '
+                      'pulsante qui sotto.',
+                  'No automatic check (the default): use the button below.',
                 ),
               ),
             ])
