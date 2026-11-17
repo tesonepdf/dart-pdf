@@ -47,6 +47,8 @@ Future<PatchRunResult> runPatchPlan({
   void Function(double? fraction)? onProgress,
   bool Function()? isCancelled,
   void Function(String message)? log,
+  void Function(List<PatchStepInfo> steps)? onPlan,
+  void Function(int index)? onStepDone,
 }) async {
   final manifestUrl = assets[kPatchManifestName];
   // Release senza elenco delle patch: l'APK completo e' quello corrente.
@@ -122,6 +124,14 @@ Future<PatchRunResult> runPatchPlan({
         }
       }
 
+      onPlan?.call([
+        if (plan.useBase)
+          PatchStepInfo('APK base (build ${plan.base.build})', plan.base.size),
+        for (final e in plan.edges)
+          PatchStepInfo('Patch ${e.from} \u2192 ${e.to}', e.size),
+      ]);
+      var doneIndex = 0;
+
       var received = 0;
       final total = plan.downloadBytes;
       void bump(int delta) {
@@ -144,6 +154,7 @@ Future<PatchRunResult> runPatchPlan({
           await cleanUp();
           return (path: null, retry: false);
         }
+        onStepDone?.call(doneIndex++);
         current = basePath;
         currentIsTemp = true;
       } else {
@@ -161,6 +172,7 @@ Future<PatchRunResult> runPatchPlan({
             '$patchMb MB (build ${edge.from} -> ${edge.to})');
         await download(assets[edge.asset]!, patchPath,
             expectedSize: edge.size, onBytes: bump);
+        onStepDone?.call(doneIndex++);
         onProgress?.call(null);
         log?.call('applico la patch ${i + 1} di ${plan.edges.length} (ricostruisco l\'APK)');
         final out = i == plan.edges.length - 1

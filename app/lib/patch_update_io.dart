@@ -25,6 +25,8 @@ Future<PatchRunResult> buildPatchedApk({
   void Function(double? fraction)? onProgress,
   bool Function()? isCancelled,
   void Function(String message)? onLog,
+  void Function(List<PatchStepInfo> steps)? onPlan,
+  void Function(int index)? onStepDone,
   http.Client Function()? clientFactory,
 }) async {
   if (!assets.containsKey(kPatchManifestName)) {
@@ -49,6 +51,8 @@ Future<PatchRunResult> buildPatchedApk({
       forceFull: forceFull,
       onProgress: onProgress,
       isCancelled: isCancelled,
+      onPlan: onPlan,
+      onStepDone: onStepDone,
       log: (m) {
         debugPrint('Aggiornamento con patch: $m');
         AppLog.instance.info('Aggiornamenti', m);

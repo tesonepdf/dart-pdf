@@ -8,5 +8,7 @@ Future<PatchRunResult> buildPatchedApk({
   void Function(double? fraction)? onProgress,
   bool Function()? isCancelled,
   void Function(String message)? onLog,
+  void Function(List<PatchStepInfo> steps)? onPlan,
+  void Function(int index)? onStepDone,
 }) async =>
     const PatchRunResult.failed(plainApkIsCurrent: true);

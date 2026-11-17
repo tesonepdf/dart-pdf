@@ -202,3 +202,12 @@ class PatchRunResult {
   final String? apkPath;
   final bool plainApkIsCurrent;
 }
+
+/// Un pezzo da scaricare per l'aggiornamento (APK base o una patch), con la
+/// dimensione, per mostrarlo in lista nella finestra di download.
+class PatchStepInfo {
+  const PatchStepInfo(this.label, this.size);
+
+  final String label;
+  final int size;
+}

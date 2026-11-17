@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_log.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
+import 'patch_manifest.dart' show PatchStepInfo;
 import 'patch_update_stub.dart' if (dart.library.io) 'patch_update_io.dart';
 import 'update.dart';
 import 'update_installer.dart';
@@ -166,10 +167,16 @@ Future<_PatchStep> _tryPatched({
     installedBuild: installed,
     forceFull: forceFull,
     isCancelled: isCancelled,
-    onProgress: (f) => progress.value =
-        _UpdateProgress(fraction: f, detail: progress.value.detail),
-    onLog: (m) => progress.value =
-        _UpdateProgress(fraction: progress.value.fraction, detail: m),
+    onProgress: (f) {
+      final v = progress.value;
+      progress.value = _UpdateProgress(
+          fraction: f, detail: v.detail, steps: v.steps, done: v.done);
+    },
+    onLog: (m) => progress.value = progress.value.copyWith(detail: m),
+    onPlan: (steps) =>
+        progress.value = progress.value.copyWith(steps: steps, done: 0),
+    onStepDone: (i) =>
+        progress.value = progress.value.copyWith(done: i + 1),
   );
   final apk = result.apkPath;
   if (apk != null) {
@@ -265,9 +272,33 @@ Future<void> _openInBrowser(
 /// or [applying] once the download is done and the update is being applied
 /// (the AppImage restart).
 class _UpdateProgress {
-  const _UpdateProgress({this.fraction, this.applying = false, this.detail});
+  const _UpdateProgress({
+    this.fraction,
+    this.applying = false,
+    this.detail,
+    this.steps = const [],
+    this.done = 0,
+  });
   final double? fraction;
   final bool applying;
+
+  /// I pezzi da scaricare (APK base e patch) e quanti sono gia' scaricati.
+  final List<PatchStepInfo> steps;
+  final int done;
+
+  _UpdateProgress copyWith({
+    double? fraction,
+    String? detail,
+    List<PatchStepInfo>? steps,
+    int? done,
+  }) =>
+      _UpdateProgress(
+        fraction: fraction ?? this.fraction,
+        applying: applying,
+        detail: detail ?? this.detail,
+        steps: steps ?? this.steps,
+        done: done ?? this.done,
+      );
 
   /// Cosa sta facendo l'aggiornamento in questo momento (testo in italiano).
   final String? detail;
@@ -309,7 +340,26 @@ class _UpdateProgressDialog extends StatelessWidget {
                 const SizedBox(height: 8),
               ],
               Text(label),
-              if (value.detail != null) ...[
+              if (value.steps.length > 1) ...[
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      key: const ValueKey('update-steps-list'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < value.steps.length; i++)
+                          _UpdateStepRow(
+                            step: value.steps[i],
+                            done: i < value.done,
+                            current: i == value.done,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else if (value.detail != null) ...[
                 const SizedBox(height: 4),
                 Text(value.detail!),
               ],
@@ -328,6 +378,43 @@ class _UpdateProgressDialog extends StatelessWidget {
           child: Text(appL10n(context).cancel),
         ),
       ],
+    );
+  }
+}
+
+/// Una riga della lista dei pezzi da scaricare: spunta blu se scaricato,
+/// rotellina se e' quello in corso, cerchio vuoto se deve ancora partire.
+class _UpdateStepRow extends StatelessWidget {
+  const _UpdateStepRow(
+      {required this.step, required this.done, required this.current});
+
+  final PatchStepInfo step;
+  final bool done;
+  final bool current;
+
+  @override
+  Widget build(BuildContext context) {
+    final mb = (step.size / (1024 * 1024)).toStringAsFixed(1);
+    final Widget icon = done
+        ? const Icon(Icons.check_circle,
+            key: ValueKey('update-step-done'), color: Colors.blue, size: 22)
+        : current
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5))
+            : const Icon(Icons.radio_button_unchecked,
+                color: Colors.grey, size: 22);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 24, height: 24, child: Center(child: icon)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(step.label)),
+          Text('$mb MB'),
+        ],
+      ),
     );
   }
 }
