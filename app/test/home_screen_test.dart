@@ -139,4 +139,16 @@ void main() {
     expect(ran, 1);
     expect(key('home-screen'), findsNothing);
   });
+
+  testWidgets('un titolo lungo va a capo e si legge per intero',
+      (tester) async {
+    const long = 'Verbale della riunione del consiglio di amministrazione '
+        'con allegati e note finali del mese di novembre duemilaventisei.pdf';
+    await tester.runAsync(() => recents.add(title: long, path: '/lungo.pdf'));
+    await pumpHome(tester);
+
+    final text = tester.widget<Text>(find.text(long));
+    expect(text.maxLines, isNull);
+    expect(text.overflow, isNull);
+  });
 }

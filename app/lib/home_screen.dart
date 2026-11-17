@@ -208,8 +208,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 44,
                       height: 58,
                     ),
-                    title: Text(e.title,
-                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    // Il titolo va a capo quanto serve: si legge per intero.
+                    title: Text(e.title),
                     subtitle: Text(_subtitle(e)),
                     trailing: IconButton(
                       key: ValueKey('home-star-${e.id}'),

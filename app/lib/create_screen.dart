@@ -154,8 +154,8 @@ class CreateScreen extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(_iconOf(c.kind),
                         color: theme.colorScheme.primary),
-                    title: Text(c.title,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    // Il titolo va a capo quanto serve: si legge per intero.
+                    title: Text(c.title),
                     subtitle: Text(_subtitle(c)),
                     onTap: () {
                       Navigator.of(context).pop();
