@@ -563,6 +563,101 @@ Color _inlineTextHandleColor(BuildContext context) {
 /// [PdfEditingController.tool] is armed. It sits innermost in the page
 /// overlay stack, so its recognizers win the arena over the viewer's
 /// text-selection drag.
+/// Soglie di schermo (breakpoint) sul lato corto, in punti logici.
+/// Telefono: sotto [kScreenCompactMax]. Tablet: da [kScreenCompactMax] fino a
+/// [kScreenExpandedMin]. Desktop: da [kScreenExpandedMin] in su.
+const double kScreenCompactMax = 600;
+const double kScreenExpandedMin = 1100;
+
+/// Misure e tempi dei pulsanti della casella di testo (frecce, sposta,
+/// chiudi, ridimensiona). Due serie, scelte da [TextEditButtonMetrics.pick]:
+/// - [classic]: i valori della build #458, quelli piccoli. Android (telefono
+///   e tablet), iPhone, Mac, mouse e tutto il resto.
+/// - [large]: i valori della build #459, grandi e distanziati. Solo col dito
+///   nella app web su Windows, con schermo da [kScreenCompactMax] in su.
+/// Non rimettere numeri scritti a mano nell'overlay: si cambiano qui.
+class TextEditButtonMetrics {
+  const TextEditButtonMetrics({
+    required this.d,
+    required this.closeSize,
+    required this.closeHit,
+    required this.arrowHit,
+    required this.gap,
+    required this.arrowIconSize,
+    required this.bigIconSize,
+    required this.arrowStep,
+    required this.rowStep,
+    required this.repeatDelayMs,
+    required this.repeatEveryMs,
+    required this.stepFactor,
+    required this.dragFactor,
+  });
+
+  final double d;
+  final double closeSize;
+  final double closeHit;
+  final double arrowHit;
+  final double gap;
+  final double arrowIconSize;
+  final double bigIconSize;
+  final double arrowStep;
+  final double rowStep;
+  final int repeatDelayMs;
+  final int repeatEveryMs;
+
+  /// Moltiplicatore del passo delle frecce (1 = passo pieno).
+  final double stepFactor;
+
+  /// Moltiplicatore del trascinamento di sposta e ridimensiona.
+  final double dragFactor;
+
+  static const classic = TextEditButtonMetrics(
+    d: 8.4,
+    closeSize: 8.64,
+    closeHit: 16.0,
+    arrowHit: 8.4,
+    gap: 2.0,
+    arrowIconSize: 5.6,
+    bigIconSize: 8.4,
+    arrowStep: 16.0,
+    rowStep: 20.0,
+    repeatDelayMs: 350,
+    repeatEveryMs: 90,
+    stepFactor: 1.0,
+    dragFactor: 1.0,
+  );
+
+  static const large = TextEditButtonMetrics(
+    d: 30.0,
+    closeSize: 34.0,
+    closeHit: 44.0,
+    arrowHit: 40.0,
+    gap: 4.0,
+    arrowIconSize: 22.0,
+    bigIconSize: 22.0,
+    arrowStep: 46.0,
+    rowStep: 46.0,
+    repeatDelayMs: 600,
+    repeatEveryMs: 180,
+    stepFactor: 0.5,
+    dragFactor: 0.6,
+  );
+
+  /// Sceglie la serie. [large] solo con dito, web, Windows e lato corto dello
+  /// schermo da [kScreenCompactMax] in su; in ogni altro caso [classic].
+  static TextEditButtonMetrics pick({
+    required PointerDeviceKind? pointerKind,
+    required double shortestSide,
+    required bool isWeb,
+    required TargetPlatform platform,
+  }) {
+    final touch = pointerKind == PointerDeviceKind.touch;
+    final webWindows = isWeb && platform == TargetPlatform.windows;
+    if (touch && webWindows && shortestSide >= kScreenCompactMax) return large;
+    return classic;
+  }
+}
+
 class EditingPageOverlay extends StatefulWidget {
   const EditingPageOverlay({
     super.key,
@@ -4017,16 +4112,24 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     );
   }
 
+  /// Misure e tempi dei pulsanti della casella di testo per questo schermo.
+  TextEditButtonMetrics get _editMetrics => TextEditButtonMetrics.pick(
+        pointerKind: _lastPointerKind,
+        shortestSide: MediaQuery.sizeOf(context).shortestSide,
+        isWeb: kIsWeb,
+        platform: defaultTargetPlatform,
+      );
+
   void _startLineCursorMove(LogicalKeyboardKey direction) {
     _stopLineCursorMove();
     _moveTextEditBox(direction);
-    final touch = _lastPointerKind == PointerDeviceKind.touch;
+    final m = _editMetrics;
     _lineCursorRepeatTimer =
-        Timer(Duration(milliseconds: touch ? 600 : 350), () {
+        Timer(Duration(milliseconds: m.repeatDelayMs), () {
       if (!mounted || (_textEditRect == null && !_padForSelection)) return;
       _moveTextEditBox(direction);
       _lineCursorRepeatTimer = Timer.periodic(
-        Duration(milliseconds: touch ? 180 : 90),
+        Duration(milliseconds: m.repeatEveryMs),
         (_) => _moveTextEditBox(direction),
       );
     });
@@ -4044,9 +4147,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// for the horizontal or vertical arrows, carried through zoom and /Rotate.
   (double dx, double dy) _arrowPageDelta(LogicalKeyboardKey direction) {
     final prefs = _controller.preferences;
-    // col dito il passo e' la meta': una pressione sposta meno
-    final scale = _geometry.scale *
-        (_lastPointerKind == PointerDeviceKind.touch ? 0.5 : 1.0);
+    final scale = _geometry.scale * _editMetrics.stepFactor;
     var viewDx = 0.0, viewDy = 0.0;
     if (direction == LogicalKeyboardKey.arrowLeft) {
       viewDx = -prefs.lineArrowStepX * scale;
@@ -4550,16 +4651,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// ride the box, so a zoom or a move carries them along.
   List<Widget> _buildEditArrows(Rect rect) {
     final scheme = Theme.of(context).colorScheme;
-    // Col dito (Android, anche web, telefoni) i pulsanti sono grandi e
-    // distanziati; col mouse restano quelli piccoli di prima.
-    final touch = _lastPointerKind == PointerDeviceKind.touch;
-    final d = touch ? 30.0 : 8.4;
-    final closeSize = touch ? 34.0 : 8.64;
-    final closeHit = touch ? 44.0 : 16.0;
-    final arrowHit = touch ? 40.0 : 8.4;
-    final gap = touch ? 4.0 : 2.0;
-    final arrowIconSize = touch ? 22.0 : 5.6;
-    final bigIconSize = touch ? 22.0 : 8.4;
+    // Misure scelte da TextEditButtonMetrics (piccole su Android, grandi solo
+    // col dito nella web app su Windows).
+    final m = _editMetrics;
+    final d = m.d;
+    final closeSize = m.closeSize;
+    final closeHit = m.closeHit;
+    final arrowHit = m.arrowHit;
+    final gap = m.gap;
+    final arrowIconSize = m.arrowIconSize;
+    final bigIconSize = m.bigIconSize;
     final size = _geometry.viewSize;
     Widget button(Offset center, IconData icon, Color color,
         {LogicalKeyboardKey? direction}) {
@@ -4642,8 +4743,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         top: top.toDouble(),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPanUpdate: (details) =>
-              onDrag(touch ? details.delta * 0.6 : details.delta),
+          onPanUpdate: (details) => onDrag(details.delta * m.dragFactor),
           child: Listener(
             behavior: HitTestBehavior.opaque,
             onPointerDown: (_) => _holdChipFocus(),
@@ -4682,8 +4782,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // casella, per non coprirne il testo). La freccia destra sta a destra.
     final c = rect.center;
     final columnX = rect.left - gap - arrowHit / 2;
-    final arrowStep = touch ? 46.0 : 16.0;
-    final rowStep = touch ? 46.0 : 20.0;
+    final arrowStep = m.arrowStep;
+    final rowStep = m.rowStep;
     final upY = c.dy - arrowStep;
     final rowY = math.min(upY, rect.top - gap - closeHit / 2);
     final firstX = columnX + arrowHit / 2 + 3 + closeHit / 2;
