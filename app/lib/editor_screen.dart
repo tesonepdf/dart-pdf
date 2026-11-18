@@ -6347,7 +6347,16 @@ class _EditorScreenState extends State<EditorScreen>
         requiresDocument: true,
         icon: Icons.edit_note,
         title: 'Rendi compilabile…',
-        searchTerms: const ['campi', 'moduli', 'righe', 'compilare', 'acroform'],
+        searchTerms: const [
+          'campi',
+          'moduli',
+          'righe',
+          'compila',
+          'compilare',
+          'compilabile',
+          'acroform',
+          'scansione'
+        ],
         run: () {
           final tab = _active;
           if (tab != null) unawaited(_makeFillable(tab));
@@ -6550,10 +6559,36 @@ class _EditorScreenState extends State<EditorScreen>
     final session = tab?.session;
     final hasDocument = session != null;
     final entries = <_MenuEntry>[];
+    // Il nome della macroarea e quello del blocco trovano tutte le voci che
+    // contengono: scrivendo "firma" escono anche tutte quelle di "Compila e
+    // firma", scrivendo "ocr" tutte quelle del gruppo OCR.
     void add(AppCommand command, String area,
-            {String? section, bool toggle = false}) =>
-        entries.add(
-            (command: command, area: area, section: section, toggle: toggle));
+        {String? section, bool toggle = false}) {
+      String? areaTitle;
+      for (final (id, title, _) in _menuAreas) {
+        if (id == area) areaTitle = title;
+      }
+      final extra = [
+        if (areaTitle != null) areaTitle,
+        if (section != null && section.isNotEmpty) section,
+      ];
+      final found = extra.isEmpty
+          ? command
+          : AppCommand(
+              id: command.id,
+              label: command.label,
+              icon: command.icon,
+              source: command.source,
+              run: command.run,
+              shortcut: command.shortcut,
+              subtitle: command.subtitle,
+              enabled: command.enabled,
+              disabledReason: command.disabledReason,
+              selected: command.selected,
+              searchTerms: [...command.searchTerms, ...extra],
+            );
+      entries.add((command: found, area: area, section: section, toggle: toggle));
+    }
     AppCommand plain(
             String id, IconData icon, String label, VoidCallback run) =>
         AppCommand(
