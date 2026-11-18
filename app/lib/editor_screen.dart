@@ -4474,7 +4474,29 @@ class _EditorScreenState extends State<EditorScreen>
       // Saving never touches the edit session, so nothing notifies the mirror -
       // tell it directly. The bytes are on the user's own disk now and the
       // recovery copy has nothing left to protect.
-      unawaited(_autosave.noteSaved(tab));
+      // Android, file arrivato senza percorso (es. WhatsApp): la copia nella
+      // cache e' ancora l'originale. Si riscrive con i byte appena salvati,
+      // cosi' la sessione riapre il documento modificato. La copia di
+      // recupero si cancella solo se la riscrittura riesce.
+      var snapshotOk = true;
+      if (path == null && result.savedName != null) {
+        snapshotOk = false;
+        try {
+          final key = await cacheOpenedPdf(bytes);
+          if (key != null && mounted && _tabs.contains(tab)) {
+            tab.cachePath = key;
+            _ownSnapshot.add(tab);
+            _autosave.noteMetadataChanged(tab);
+            unawaited(_persistSession());
+            snapshotOk = true;
+          }
+        } catch (e) {
+          AppDevTools.instance.addLog(
+              'save snapshot failed: $e', level: DevLogLevel.error);
+        }
+        if (!mounted) return;
+      }
+      if (snapshotOk) unawaited(_autosave.noteSaved(tab));
       final thumbnailEntry = _tabThumbnailEntry(tab);
       if (thumbnailEntry != null) {
         // The stored thumbnail follows the file: a restored tab and the
