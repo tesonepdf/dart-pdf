@@ -87,6 +87,7 @@ import 'page_choice.dart';
 import 'page_numbers.dart';
 import 'comic_book.dart';
 import 'epub_book.dart';
+import 'make_fillable.dart';
 import 'watermark.dart';
 import 'pdf_conversions.dart';
 import 'photos_to_pdf_dialog.dart';
@@ -5583,6 +5584,76 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Rende compilabile il documento: cerca le righe su cui scrivere e le
+  /// caselline, e ci mette sopra campi di modulo veri. Si sceglie dove (tutto,
+  /// la pagina, alcune pagine o una zona). Il risultato e' una copia in una
+  /// scheda nuova, salvata subito: l'originale non cambia e la modifica e'
+  /// una sola, quindi Annulla e Ripeti restano attivi.
+  Future<void> _makeFillable(DocumentTab tab) async {
+    final session = tab.session;
+    if (session == null) return;
+    try {
+      session.finishInk();
+      final count = session.document.pageCount;
+      final current = (tab.viewer?.currentPage ?? 0).clamp(0, count - 1);
+      final scope = await askFillableScope(context,
+          pageCount: count, currentPage: current);
+      if (scope == null || !mounted) return;
+      final bytes = Uint8List.fromList(session.bytes);
+      final document = session.document.openAppended(bytes);
+      var pages = scope.pages ?? [for (var i = 0; i < count; i++) i];
+      PdfRect? zone;
+      if (scope.zone) {
+        final pick = await pickPageZone(
+          context,
+          name: tab.title,
+          bytes: bytes,
+          document: document,
+          initialPage: current,
+        );
+        if (pick == null || !mounted) return;
+        pages = [pick.page];
+        zone = pick.region;
+      }
+      _toast('Cerco le righe su cui scrivere…',
+          duration: const Duration(seconds: 4));
+      final found = await findFillableSpots(document, pages, zone: zone);
+      if (!mounted) return;
+      final total =
+          found.spots.values.fold<int>(0, (sum, list) => sum + list.length);
+      if (total == 0) {
+        _toast(found.failed.isEmpty
+            ? 'Non ho trovato righe su cui scrivere.'
+            : 'Pagine non lette: ${found.failed.map((i) => i + 1).join(', ')}.');
+        return;
+      }
+      _readOnly = false;
+      final copy = DocumentTab.document(
+        title: fillableTabTitle(tab.title),
+        bytes: bytes,
+        preferences: _prefs,
+        initiallyDirty: true,
+      );
+      final copySession = copy.session;
+      if (copySession == null) {
+        throw StateError('scheda della copia senza sessione');
+      }
+      copySession.apply((editor) => applyFillable(editor, found.spots));
+      _addTab(copy);
+      final unread = found.failed.isEmpty
+          ? ''
+          : ' Pagine non lette: ${found.failed.map((i) => i + 1).join(', ')}.';
+      _toast('$total campi aggiunti. Annulla e Ripeti sono attivi.$unread');
+      // Il file nuovo si salva subito, cosi' compare nei recenti accanto
+      // all'originale.
+      await _save(copy);
+    } catch (e) {
+      AppDevTools.instance.addLog('make fillable failed: ${tab.title} - $e',
+          level: DevLogLevel.error);
+      if (mounted) _toast('Campi non aggiunti: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Mette la filigrana su ogni pagina (o dalla pagina scelta in poi), come una
   /// sola modifica che si può annullare.
   Future<void> _addWatermark(DocumentTab tab) async {
@@ -6271,6 +6342,17 @@ class _EditorScreenState extends State<EditorScreen>
           if (tab != null) unawaited(_addWatermark(tab));
         },
       ),
+      _MenuAction(
+        id: 'make-fillable',
+        requiresDocument: true,
+        icon: Icons.edit_note,
+        title: 'Rendi compilabile…',
+        searchTerms: const ['campi', 'moduli', 'righe', 'compilare', 'acroform'],
+        run: () {
+          final tab = _active;
+          if (tab != null) unawaited(_makeFillable(tab));
+        },
+      ),
       if (_active?.sourcePhoto != null)
         _MenuAction(
           id: 'photo-size',
@@ -6446,7 +6528,7 @@ class _EditorScreenState extends State<EditorScreen>
       'photo-size' ||
       'compare' =>
         'pages',
-      'digital-signature' || 'import-form-data' => 'sign',
+      'digital-signature' || 'import-form-data' || 'make-fillable' => 'sign',
       'ocr' || 'open-without-ocr' => 'ocr',
       'export-image' ||
       'export-text' ||
@@ -7464,6 +7546,7 @@ class _EditorScreenState extends State<EditorScreen>
     'number-pages': 'Numera le pagine',
     'remove-strip': 'Togli lo spazio vuoto',
     'watermark': 'Aggiungi una filigrana',
+    'make-fillable': 'Rendi compilabile con campi sulle righe',
     'photo-size': 'Scegli la misura delle foto',
     'compare': 'Confronta con un altro documento',
     'digital-signature': 'Firma il documento',
