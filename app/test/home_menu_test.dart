@@ -43,6 +43,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // La Home chiama remove() e clear() senza aspettarli, e lo store e' nato in
+  // setUp (fuori dal tempo finto): il loro primo await finisce nel tempo
+  // vero. Qui si lascia girare, poi si ridisegna.
+  Future<void> letStoreFinish(WidgetTester tester) async {
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('niente saluto e niente banner: si parte da Cosa vorresti fare?',
       (tester) async {
     await pumpHome(tester);
@@ -93,6 +102,7 @@ void main() {
 
     await tester.tap(key('home-select-remove'));
     await tester.pumpAndSettle();
+    await letStoreFinish(tester);
 
     expect(key('home-empty'), findsOneWidget);
     expect(key('home-select-count'), findsNothing);
@@ -122,6 +132,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(key('home-menu-clear'));
     await tester.pumpAndSettle();
+    await letStoreFinish(tester);
 
     expect(key('home-empty'), findsOneWidget);
   });
