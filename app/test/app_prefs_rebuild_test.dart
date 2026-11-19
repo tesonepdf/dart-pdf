@@ -129,6 +129,29 @@ void main() {
         print('MISURA ${e.key}: ridisegnati=${e.value ~/ ticks} '
             'presenti=${liveByType[e.key] ?? 0}');
       }
+      // Peso dei pulsanti: quanti elementi ha ogni pulsante (struttura, esatta)
+      // per tipo, come "peso:numero di pulsanti con quel peso".
+      int subtreeSize(Element element) {
+        var n = 1;
+        element.visitChildren((child) => n += subtreeSize(child));
+        return n;
+      }
+
+      final weights = <String, Map<int, int>>{};
+      for (final element in tester.allElements) {
+        final type = element.widget.runtimeType.toString();
+        if (!type.contains('Button')) continue;
+        final size = subtreeSize(element);
+        final bySize = weights.putIfAbsent(type, () => <int, int>{});
+        bySize[size] = (bySize[size] ?? 0) + 1;
+      }
+      for (final e in weights.entries) {
+        final sizes = e.value.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+        // ignore: avoid_print
+        print('MISURA PESO ${e.key}: '
+            '${sizes.map((s) => '${s.key}x${s.value}').join(' ')}');
+      }
       final expected =
           int.parse(File('test/rebuild_baseline.txt').readAsStringSync().trim());
       expect(total ~/ ticks, expected,
