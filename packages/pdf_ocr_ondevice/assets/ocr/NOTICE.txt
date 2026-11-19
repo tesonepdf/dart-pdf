@@ -2,7 +2,7 @@ DartPDF on-device OCR model bundle (ocr-models-v1)
 ==================================================
 
 These model files are redistributed for use by the `pdf_ocr_ondevice`
-package (https://github.com/ben-milanko/dart-pdf). They are DERIVED WORKS of
+package (https://github.com/tesonepdf/dart-pdf). They are DERIVED WORKS of
 PaddleOCR's PP-OCRv5 *mobile* models and are distributed under the same
 license, the Apache License, Version 2.0 (see LICENSE.txt).
 
