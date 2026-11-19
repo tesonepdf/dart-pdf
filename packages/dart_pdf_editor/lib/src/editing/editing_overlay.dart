@@ -3463,6 +3463,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   @override
   void dispose() {
+    _formNudgeTimer?.cancel();
     _polyLastTapTimer?.cancel();
     _selectTapTimer?.cancel();
     _lineCursorEntry?.remove();
@@ -4644,6 +4645,183 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _textEditBaseHeight = next.top - next.bottom;
     });
     _growBoxForNewLines();
+  }
+
+  // ---- Campo modulo selezionato (strumento Compila modulo) ----
+  // Oltre ai quadrati che ridimensionano: a sinistra freccia su, sinistra e
+  // giu', a destra la freccia destra (come nella casella di testo), sopra la
+  // freccia a 4 punte per spostare e il cestino per eliminare. Lo spostamento
+  // si vede come un contorno e si applica una volta sola al rilascio: una
+  // mossa sola da annullare.
+  Offset _formPending = Offset.zero;
+  Timer? _formNudgeTimer;
+
+  void _formStopNudge() {
+    _formNudgeTimer?.cancel();
+    _formNudgeTimer = null;
+  }
+
+  void _formAddPending(Offset step, Rect selected) {
+    final size = _geometry.viewSize;
+    final next = _formPending + step;
+    final moved = selected.shift(next);
+    final dx = moved.left < 0
+        ? -moved.left
+        : (moved.right > size.width ? size.width - moved.right : 0.0);
+    final dy = moved.top < 0
+        ? -moved.top
+        : (moved.bottom > size.height ? size.height - moved.bottom : 0.0);
+    final clamped = next + Offset(dx, dy);
+    if (clamped == _formPending || !mounted) return;
+    setState(() => _formPending = clamped);
+  }
+
+  void _formStartNudge(Offset direction, Rect selected) {
+    final m = _editMetrics;
+    final step = direction * 3.0;
+    _formStopNudge();
+    _formAddPending(step, selected);
+    _formNudgeTimer = Timer(Duration(milliseconds: m.repeatDelayMs), () {
+      _formNudgeTimer = Timer.periodic(
+        Duration(milliseconds: m.repeatEveryMs),
+        (_) => _formAddPending(step, selected),
+      );
+    });
+  }
+
+  void _formCommitMove() {
+    _formStopNudge();
+    final delta = _formPending;
+    if (delta == Offset.zero) return;
+    if (mounted) setState(() => _formPending = Offset.zero);
+    final origin = _geometry.toPagePoint(Offset.zero);
+    final moved = _geometry.toPagePoint(delta);
+    _controller.moveSelected(moved.$1 - origin.$1, moved.$2 - origin.$2);
+  }
+
+  List<Widget> _buildFormFieldChrome(Rect rect) {
+    final scheme = Theme.of(context).colorScheme;
+    final m = _editMetrics;
+    final size = _geometry.viewSize;
+    final hit = m.arrowHit;
+    final face = m.d;
+    // sopra i quadrati di ridimensionamento
+    const squares = 12.0;
+    final gap = m.gap + squares;
+
+    Widget face0(IconData icon, Color color, double iconSize) => Container(
+          width: face,
+          height: face,
+          decoration: BoxDecoration(
+            color: scheme.surface.withValues(alpha: 0.9),
+            shape: BoxShape.circle,
+            boxShadow: const [BoxShadow(blurRadius: 2, color: Colors.black26)],
+          ),
+          child: OverflowBox(
+            maxWidth: face,
+            maxHeight: face,
+            child: Icon(icon, size: iconSize, color: color),
+          ),
+        );
+
+    Positioned place(Offset center, String key, Widget child) {
+      final left =
+          (center.dx - hit / 2).clamp(0.0, math.max(0.0, size.width - hit));
+      final top =
+          (center.dy - hit / 2).clamp(0.0, math.max(0.0, size.height - hit));
+      return Positioned(
+        key: ValueKey(key),
+        left: left.toDouble(),
+        top: top.toDouble(),
+        child: SizedBox(
+          width: hit,
+          height: hit,
+          // il tocco qui non deve finire sulla pagina (deselezionerebbe)
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (event) => _chipPointer = event.pointer,
+            child: Center(child: child),
+          ),
+        ),
+      );
+    }
+
+    Positioned arrow(Offset center, IconData icon, Offset direction,
+        String key) {
+      return place(
+        center,
+        key,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          onPanStart: (_) {},
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: (_) => _formStartNudge(direction, rect),
+            onPointerUp: (_) => _formCommitMove(),
+            onPointerCancel: (_) => _formCommitMove(),
+            child: face0(icon, scheme.onSurface, m.arrowIconSize),
+          ),
+        ),
+      );
+    }
+
+    final c = rect.center;
+    final columnX = rect.left - gap - hit / 2;
+    final step = m.arrowStep;
+    final aboveY = rect.top - gap - hit / 2;
+    final rowY = aboveY >= 0 ? aboveY : rect.bottom + gap + hit / 2;
+    final rowStep = m.rowStep;
+    return [
+      if (_formPending != Offset.zero)
+        Positioned.fromRect(
+          rect: rect.shift(_formPending),
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.primary, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+      arrow(Offset(columnX, c.dy - step), Icons.keyboard_arrow_up,
+          const Offset(0, -1), 'pdf-form-chrome-up'),
+      arrow(Offset(columnX, c.dy), Icons.keyboard_arrow_left,
+          const Offset(-1, 0), 'pdf-form-chrome-left'),
+      arrow(Offset(columnX, c.dy + step), Icons.keyboard_arrow_down,
+          const Offset(0, 1), 'pdf-form-chrome-down'),
+      arrow(Offset(rect.right + gap + hit / 2, c.dy),
+          Icons.keyboard_arrow_right, const Offset(1, 0),
+          'pdf-form-chrome-right'),
+      // la freccia a 4 punte: si trascina per spostare il campo
+      place(
+        Offset(c.dx - rowStep / 2, rowY),
+        'pdf-form-chrome-move',
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          onPanUpdate: (details) =>
+              _formAddPending(details.delta * m.dragFactor, rect),
+          onPanEnd: (_) => _formCommitMove(),
+          onPanCancel: _formCommitMove,
+          child: face0(Icons.open_with, scheme.onSurface, m.bigIconSize),
+        ),
+      ),
+      // il cestino: elimina il campo (una sola mossa da annullare)
+      place(
+        Offset(c.dx + rowStep / 2, rowY),
+        'pdf-form-chrome-delete',
+        Semantics(
+          button: true,
+          label: pdfL10n(context).delete,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _controller.deleteSelected,
+            child: face0(Icons.delete_outline, scheme.error, m.bigIconSize),
+          ),
+        ),
+      ),
+    ];
   }
 
   /// The four arrows on the sides of the open text box (up above, down
@@ -8509,6 +8687,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _marqueeStart == null &&
         _textEditRect == null &&
         _pointers.rawPointer == null;
+    // il campo modulo selezionato con lo strumento Compila modulo: cestino,
+    // sposta e frecce attorno ai quadrati
+    final formChrome = _tool == PdfEditTool.form &&
+        selected != null &&
+        _controller.selectedFormWidgetCount > 0 &&
+        !dragging &&
+        _moveStart == null &&
+        _marqueeStart == null &&
+        _textEditRect == null &&
+        _controller.activeSavedAnnotation == null;
     return Listener(
       // raw events carry what pan callbacks drop: pressure and the
       // device kind (for Apple Pencil palm rejection); pointer-up is
@@ -9246,6 +9434,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   ),
                 ),
               if (_textEditRect != null) ..._buildEditArrows(_textEditRect!),
+              if (formChrome) ..._buildFormFieldChrome(selected!),
               if (_textEditRect != null &&
                   _controller.hasTouchInput &&
                   widget.showInlineTextStyleChip)
