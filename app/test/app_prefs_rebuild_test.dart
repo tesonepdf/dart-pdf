@@ -85,8 +85,11 @@ void main() {
       void onTick() => ticks++;
       prefs.addListener(onTick);
       var total = 0, shell = 0, editorScreen = 0;
+      final rebuiltByType = <String, int>{};
       debugOnRebuildDirtyWidget = (element, builtOnce) {
         total++;
+        final type = element.widget.runtimeType.toString();
+        rebuiltByType[type] = (rebuiltByType[type] ?? 0) + 1;
         if (element.widget is MaterialApp) shell++;
         if (element.widget is EditorScreen) editorScreen++;
       };
@@ -109,6 +112,23 @@ void main() {
       // invece l'interfaccia non e' stata toccata e il numero cambia, c'e' un
       // errore vero (qualcosa che si ridisegna senza motivo). La guardia sulla
       // finestra resta nei due controlli a zero qui sopra.
+      // Misure per la CI (annotazioni "misure"): per ogni tipo di elemento
+      // quanti se ne ridisegnano a ogni scatto e quanti ce ne sono in tutto.
+      final liveByType = <String, int>{};
+      for (final element in tester.allElements) {
+        final type = element.widget.runtimeType.toString();
+        liveByType[type] = (liveByType[type] ?? 0) + 1;
+      }
+      final ranked = rebuiltByType.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      // ignore: avoid_print
+      print('MISURA totale=${total ~/ ticks} elementi_in_tutto='
+          '${tester.allElements.length}');
+      for (final e in ranked.take(40)) {
+        // ignore: avoid_print
+        print('MISURA ${e.key}: ridisegnati=${e.value ~/ ticks} '
+            'presenti=${liveByType[e.key] ?? 0}');
+      }
       final expected =
           int.parse(File('test/rebuild_baseline.txt').readAsStringSync().trim());
       expect(total ~/ ticks, expected,

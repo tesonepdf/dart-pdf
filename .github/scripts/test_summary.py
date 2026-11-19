@@ -75,6 +75,7 @@ def short(error):
 def main():
     tests = {}
     passed = 0
+    misure = []
     with open(sys.argv[1], encoding='utf-8', errors='replace') as fh:
         for raw in fh:
             raw = raw.strip()
@@ -99,6 +100,9 @@ def main():
                 entry = tests.get(event.get('testID'))
                 if entry is not None:
                     entry['prints'].append(event.get('message', ''))
+                for row in event.get('message', '').split('\n'):
+                    if row.startswith('MISURA '):
+                        misure.append(row[len('MISURA '):])
             elif kind == 'error':
                 entry = tests.get(event['testID'])
                 if entry is not None:
@@ -153,6 +157,17 @@ def main():
         print('::error title=test falliti (altri)::'
               + escape(f'{len(chunks) - MAX_ANNOTATIONS} blocchi non mostrati'))
     print(f'::notice title=conteggio test::{passed} passati, {len(failed)} falliti')
+    chunk = ''
+    parts = []
+    for row in misure:
+        if chunk and len(chunk) + len(row) + 1 > LIMIT:
+            parts.append(chunk)
+            chunk = ''
+        chunk += row + '\n'
+    if chunk:
+        parts.append(chunk)
+    for i, part in enumerate(parts[:4], 1):
+        print(f'::notice title=misure {i}/{min(len(parts), 4)}::' + escape(part))
 
 
 main()

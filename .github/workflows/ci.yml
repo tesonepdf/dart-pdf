@@ -96,6 +96,9 @@ jobs:
           cp /tmp/test.err /tmp/logs/test-app.err
           if [ "$code" -ne 0 ]; then
             python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json /tmp/test.err
+          else
+            # Test passati: solo il conteggio e le misure, senza lo stderr.
+            python3 "$GITHUB_WORKSPACE/.github/scripts/test_summary.py" /tmp/test.json
           fi
           exit "$code"
 
