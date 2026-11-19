@@ -4678,7 +4678,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   void _formStartNudge(Offset direction, Rect selected) {
     final m = _editMetrics;
-    final step = direction * 3.0;
+    final step = direction * 1.5;
     _formStopNudge();
     _formAddPending(step, selected);
     _formNudgeTimer = Timer(Duration(milliseconds: m.repeatDelayMs), () {
@@ -4703,13 +4703,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final scheme = Theme.of(context).colorScheme;
     final m = _editMetrics;
     final size = _geometry.viewSize;
-    final hit = m.arrowHit;
-    final face = m.d;
-    // sopra i quadrati di ridimensionamento
-    const squares = 12.0;
-    final gap = m.gap + squares;
+    // Misure in pixel dello schermo, riportate nello spazio della pagina:
+    // restano piccole e costanti a qualsiasi zoom.
+    final cs = _chromeScale;
+    final hit = 24.0 * cs;
+    final face = 16.0 * cs;
+    final iconSize = 12.0 * cs;
+    final step = 24.0 * cs;
+    // oltre i quadrati di ridimensionamento
+    final gap = 12.0 * cs;
 
-    Widget face0(IconData icon, Color color, double iconSize) => Container(
+    Widget face0(IconData icon, Color color) => Container(
           width: face,
           height: face,
           decoration: BoxDecoration(
@@ -4760,18 +4764,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             onPointerDown: (_) => _formStartNudge(direction, rect),
             onPointerUp: (_) => _formCommitMove(),
             onPointerCancel: (_) => _formCommitMove(),
-            child: face0(icon, scheme.onSurface, m.arrowIconSize),
+            child: face0(icon, scheme.onSurface),
           ),
         ),
       );
     }
 
+    // tutto a sinistra, in colonna: sposta, su, sinistra, giu', cestino
     final c = rect.center;
     final columnX = rect.left - gap - hit / 2;
-    final step = m.arrowStep;
-    final aboveY = rect.top - gap - hit / 2;
-    final rowY = aboveY >= 0 ? aboveY : rect.bottom + gap + hit / 2;
-    final rowStep = m.rowStep;
     return [
       if (_formPending != Offset.zero)
         Positioned.fromRect(
@@ -4779,37 +4780,34 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           child: IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                border: Border.all(color: scheme.primary, width: 1.5),
+                border: Border.all(color: scheme.primary, width: 1.5 * cs),
               ),
             ),
           ),
         ),
+      // la freccia a 4 punte: si trascina per spostare il campo
+      place(
+        Offset(columnX, c.dy - 2 * step),
+        'pdf-form-chrome-move',
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          onPanUpdate: (details) =>
+              _formAddPending(details.delta * (m.dragFactor * 0.5), rect),
+          onPanEnd: (_) => _formCommitMove(),
+          onPanCancel: _formCommitMove,
+          child: face0(Icons.open_with, scheme.onSurface),
+        ),
+      ),
       arrow(Offset(columnX, c.dy - step), Icons.keyboard_arrow_up,
           const Offset(0, -1), 'pdf-form-chrome-up'),
       arrow(Offset(columnX, c.dy), Icons.keyboard_arrow_left,
           const Offset(-1, 0), 'pdf-form-chrome-left'),
       arrow(Offset(columnX, c.dy + step), Icons.keyboard_arrow_down,
           const Offset(0, 1), 'pdf-form-chrome-down'),
-      arrow(Offset(rect.right + gap + hit / 2, c.dy),
-          Icons.keyboard_arrow_right, const Offset(1, 0),
-          'pdf-form-chrome-right'),
-      // la freccia a 4 punte: si trascina per spostare il campo
-      place(
-        Offset(c.dx - rowStep / 2, rowY),
-        'pdf-form-chrome-move',
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {},
-          onPanUpdate: (details) =>
-              _formAddPending(details.delta * m.dragFactor, rect),
-          onPanEnd: (_) => _formCommitMove(),
-          onPanCancel: _formCommitMove,
-          child: face0(Icons.open_with, scheme.onSurface, m.bigIconSize),
-        ),
-      ),
       // il cestino: elimina il campo (una sola mossa da annullare)
       place(
-        Offset(c.dx + rowStep / 2, rowY),
+        Offset(columnX, c.dy + 2 * step),
         'pdf-form-chrome-delete',
         Semantics(
           button: true,
@@ -4817,10 +4815,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _controller.deleteSelected,
-            child: face0(Icons.delete_outline, scheme.error, m.bigIconSize),
+            child: face0(Icons.delete_outline, scheme.error),
           ),
         ),
       ),
+      // la freccia destra sta a destra del campo
+      arrow(Offset(rect.right + gap + hit / 2, c.dy),
+          Icons.keyboard_arrow_right, const Offset(1, 0),
+          'pdf-form-chrome-right'),
     ];
   }
 
