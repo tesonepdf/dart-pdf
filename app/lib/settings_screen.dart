@@ -1455,7 +1455,9 @@ class _TesoneBarTileState extends State<_TesoneBarTile> {
             'Con un documento aperto: in alto freccia, riflusso, altoparlante, '
             'ricerca e condividi; in basso Modifica PDF, Commento, Evidenzia, '
             'Disegna, Compila e firma, Altri strumenti. La barra Home/Crea/File '
-            'resta nascosta finche\' il documento e\' aperto.'),
+            'resta nascosta finche\' il documento e\' aperto. In alto c\'e\' '
+            'l\'icona con le due frecce per passare da una barra all\'altra: '
+            'l\'ultima scelta resta salvata.'),
         value: on,
         onChanged: (value) => TesoneBarSetting.instance.save(value),
       ),

@@ -7028,6 +7028,19 @@ class _EditorScreenState extends State<EditorScreen>
           builder: (context, open, _) =>
               open && phone ? const SizedBox.shrink() : child,
         );
+    // Cambia barra: dalla barra normale a quella stile tesone (stessa scelta
+    // delle Impostazioni, salvata sul dispositivo).
+    final tesoneSwitch = tab?.session == null
+        ? null
+        : IconButton(
+            key: const ValueKey('tesone-switch-on'),
+            tooltip: 'Cambia barra: stile tesone',
+            icon: const Icon(Icons.swap_horiz),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            onPressed: () => unawaited(TesoneBarSetting.instance.save(true)),
+          );
     final editorRow = parts == null
         ? null
         : parts.compact
@@ -7044,6 +7057,7 @@ class _EditorScreenState extends State<EditorScreen>
                   if (searchPart != null) searchPart,
                 ],
                 trailing: [
+                  if (tesoneSwitch != null) tesoneSwitch,
                   if (parts.controls(includeSave: false) case final more?) more,
                 ],
               )
@@ -7055,6 +7069,7 @@ class _EditorScreenState extends State<EditorScreen>
                   if (parts.search case final search?) search,
                 ],
                 trailing: [
+                  if (tesoneSwitch != null) tesoneSwitch,
                   if (parts.viewOptions case final viewOptions?) viewOptions,
                   if (parts.panelSwitch case final panels?) panels,
                   if (parts.save case final save?) save,
@@ -7757,6 +7772,12 @@ class _EditorScreenState extends State<EditorScreen>
               tooltip: 'Condividi',
               icon: const Icon(Icons.share_outlined),
               onPressed: () => unawaited(_shareDocument(tab)),
+            )),
+            slot(IconButton(
+              key: const ValueKey('tesone-switch-off'),
+              tooltip: 'Cambia barra: barra normale',
+              icon: const Icon(Icons.swap_horiz),
+              onPressed: () => unawaited(TesoneBarSetting.instance.save(false)),
             )),
             slot(IconButton(
               key: const ValueKey('tesone-more'),
