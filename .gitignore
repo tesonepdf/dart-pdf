@@ -95,3 +95,10 @@ _apk/
 # Python (strumenti in tool/)
 __pycache__/
 *.pyc
+
+# Note private: stanno nel repo privato delle note (cartella "note" accanto a questo repo)
+/DaFare.md
+/riferimenti.md
+/conflittiFusione.md
+/menu.md
+/note/
