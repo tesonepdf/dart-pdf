@@ -102,16 +102,20 @@ void main() {
       expect(shell, 0, reason: 'MaterialApp rebuilt on a stroke-width tick');
       expect(editorScreen, 0,
           reason: 'EditorScreen rebuilt on a stroke-width tick');
-      // Deterministic element-rebuild count for this document and window:
-      // 1,368 per tick when the shell rebuilt MaterialApp + EditorScreen,
-      // 1,034 without. What remains is PdfEditorView's own preference
-      // listener (a separate follow-up), so this ceiling only guards the
-      // shell half.
-      // Tetto 1150: il gruppo "Pagine" della griglia strumenti aggiunge circa
-      // 20 elementi alla barra; la guardia sulla finestra resta nei due
-      // controlli a zero qui sopra.
-      expect(total ~/ ticks, lessThanOrEqualTo(1150),
-          reason: 'element rebuilds per stroke-width tick');
+      // Quanti elementi vengono ridisegnati a ogni scatto con questo documento
+      // e questa finestra e' un numero esatto, che segue l'interfaccia: sta in
+      // test/rebuild_baseline.txt. Ogni volta che si aggiungono o si tolgono
+      // pulsanti o controlli il valore va portato al nuovo numero reale; se
+      // invece l'interfaccia non e' stata toccata e il numero cambia, c'e' un
+      // errore vero (qualcosa che si ridisegna senza motivo). La guardia sulla
+      // finestra resta nei due controlli a zero qui sopra.
+      final expected =
+          int.parse(File('test/rebuild_baseline.txt').readAsStringSync().trim());
+      expect(total ~/ ticks, expected,
+          reason: 'elementi ridisegnati per scatto: attesi $expected '
+              '(app/test/rebuild_baseline.txt). Se hai aggiunto o tolto '
+              'pulsanti, porta il valore nel file al numero reale; se non hai '
+              'toccato l\'interfaccia, e\' un errore vero.');
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 100));
