@@ -79,7 +79,6 @@ import 'paced_read.dart';
 import 'tab_drag.dart';
 import 'unsaved_changes.dart';
 import 'unsaved_changes_store.dart';
-import 'official_update.dart';
 import 'update.dart';
 import 'update_install_flow.dart';
 import 'save_folder.dart';
@@ -705,7 +704,6 @@ class _EditorScreenState extends State<EditorScreen>
     if (widget.autoCheckUpdates && _updates.supported) {
       _updates.addListener(_onUpdateStatus);
       unawaited(_startupUpdateCheck());
-      if (_ownsUpdates) unawaited(_startupOfficialCheck());
     }
   }
 
@@ -1022,60 +1020,6 @@ class _EditorScreenState extends State<EditorScreen>
       _updateInstaller.modeFor(_updates.downloadAssetName) !=
           UpdateApplyMode.unsupported;
 
-  /// Automatic check of the upstream project: popup once per official
-  /// release; "Later" leaves it highlighted in Settings (Updates > Official
-  /// repo) until it is marked as merged or a newer one is published.
-  bool _officialDialogOpen = false;
-
-  Future<void> _startupOfficialCheck({bool resume = false}) async {
-    final checker = OfficialUpdateChecker.instance;
-    await checker.ready;
-    if (!mounted || !checker.autoCheckAllowed(resume: resume)) return;
-    await checker.check();
-    if (!mounted ||
-        checker.status != OfficialUpdateStatus.newer ||
-        checker.isDismissed ||
-        _officialDialogOpen) {
-      return;
-    }
-    _officialDialogOpen = true;
-    // Asked once per official version, however the popup is closed (Later,
-    // Skip, back button): the next one appears only with a newer release.
-    unawaited(checker.dismissLatest());
-    final it = Localizations.localeOf(context).languageCode == 'it';
-    await showPdfDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        key: const ValueKey('official-update-dialog'),
-        icon: const Icon(Icons.new_releases_outlined),
-        content: Text(it
-            ? 'Nuova versione ufficiale: ${checker.latestLabel}.\n'
-                'Non si scarica: va integrata prima in chat, risolvendo i conflitti.'
-            : 'New official version: ${checker.latestLabel}.\n'
-                'It is not downloaded: merge it in chat first, resolving conflicts.'),
-        actions: [
-          TextButton(
-            key: const ValueKey('official-update-later'),
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              unawaited(checker.dismissLatest());
-            },
-            child: Text(it ? 'Dopo' : 'Later'),
-          ),
-          TextButton(
-            key: const ValueKey('official-update-skip'),
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              unawaited(checker.skipLatest());
-            },
-            child: Text(it ? 'Salta questa versione' : 'Skip this version'),
-          ),
-        ],
-      ),
-    ).whenComplete(() => _officialDialogOpen = false);
-  }
-
   /// Opens the `.pdf`s passed on the command line - how Linux delivers a file
   /// association / "open with" at cold start (the other runners answer
   /// `getInitialFiles` instead; Windows does so from its own command line, so
@@ -1186,9 +1130,6 @@ class _EditorScreenState extends State<EditorScreen>
       if (defaultTargetPlatform == TargetPlatform.android &&
           _updates.autoCheckAllowed(resume: true)) {
         unawaited(_updates.checkForUpdates(force: true));
-      }
-      if (_ownsUpdates && defaultTargetPlatform == TargetPlatform.android) {
-        unawaited(_startupOfficialCheck(resume: true));
       }
     }
     if (state == AppLifecycleState.inactive ||

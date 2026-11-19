@@ -265,7 +265,7 @@ typedef ReleaseChangelogFetcher = Future<String> Function();
 Future<String> fetchLatestReleaseChangelog({http.Client? client}) async {
   final latest = Uri.https(
     'api.github.com',
-    '/repos/ben-milanko/dart-pdf/releases/latest',
+    '/repos/tesonepdf/dart-pdf/releases/latest',
   );
   final owned = client == null;
   final c = client ?? http.Client();
@@ -285,7 +285,7 @@ Future<String> fetchLatestReleaseChangelog({http.Client? client}) async {
       throw http.ClientException('Latest release has no tag', latest);
     }
     final changelog = Uri.https('raw.githubusercontent.com',
-        '/ben-milanko/dart-pdf/$tag/app/$appChangelogAsset');
+        '/tesonepdf/dart-pdf/$tag/app/$appChangelogAsset');
     final file = await c
         .get(changelog, headers: const {'User-Agent': 'DartPDF-whats-new'});
     if (file.statusCode != 200) {

@@ -206,7 +206,7 @@ void main() {
         '## 12.0.0\n\n- Latest.\n');
     expect(requested.first.path, endsWith('/releases/latest'));
     expect(requested.last.toString(),
-        'https://raw.githubusercontent.com/ben-milanko/dart-pdf/app-v12.0.0/app/CHANGELOG.md');
+        'https://raw.githubusercontent.com/tesonepdf/dart-pdf/app-v12.0.0/app/CHANGELOG.md');
 
     final failing = MockClient((_) async => http.Response('', 404));
     expect(fetchLatestReleaseChangelog(client: failing),

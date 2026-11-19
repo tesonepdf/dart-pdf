@@ -19,7 +19,6 @@ import 'language_names.dart';
 import 'measure_scale_setting.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
-import 'official_update.dart';
 import 'open_with_rank.dart';
 import 'pdf_cache.dart';
 import 'recents.dart';
@@ -791,11 +790,8 @@ List<Widget> _appInformationChildren(BuildContext context) {
   ];
 }
 
-/// Opens the Updates screen (menu: next to Settings). Two drop-downs - this
-/// app's own releases and the upstream (official) ones - each with its own
-/// three check options and its own manual check button. Both can be open at
-/// once, and holding a title for half a second moves it up or down (the order
-/// is remembered).
+/// Opens the Updates screen (menu: next to Settings): this app's own
+/// releases, with the three check options and the manual check button.
 Future<void> showAppUpdates(
   BuildContext context, {
   required UpdateService updates,
@@ -864,11 +860,6 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
           ..._appInformationChildren(context),
         ],
       ),
-      'official': _SettingsSection(
-        title: _t(context, 'Repo ufficiale (ben-milanko)',
-            'Official repository (ben-milanko)'),
-        children: const [_OfficialUpdatePanel()],
-      ),
     };
     final ids = _order.where(sections.containsKey).toList();
     for (final id in sections.keys) {
@@ -933,162 +924,6 @@ class _UpdatesDialogState extends State<_UpdatesDialog> {
     );
   }
 }
-
-/// The upstream project's releases: compared with the version this copy is
-/// based on, opened in the browser (the builds are signed with another key,
-/// so they cannot be installed over this app).
-class _OfficialUpdatePanel extends StatelessWidget {
-  const _OfficialUpdatePanel();
-
-  static String _t(BuildContext context, String it, String en) =>
-      Localizations.localeOf(context).languageCode == 'it' ? it : en;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final checker = OfficialUpdateChecker.instance;
-    return ListenableBuilder(
-      listenable: checker,
-      builder: (context, _) {
-        final checking = checker.status == OfficialUpdateStatus.checking;
-        final status = switch (checker.status) {
-          OfficialUpdateStatus.newer => _t(
-              context,
-              'Nuova versione ufficiale: ${checker.latestLabel}',
-              'New official version: ${checker.latestLabel}'),
-          OfficialUpdateStatus.upToDate => _t(
-              context,
-              'Nessuna novita\' ufficiale oltre la ${checker.mergedLabel}.'
-                  '${checker.latestVersion == null ? '' : ' Ultima ufficiale trovata: ${checker.latestLabel}${checker.isSkipped ? ' (saltata)' : ''}.'}',
-              'Nothing newer upstream than ${checker.mergedLabel}.'
-                  '${checker.latestVersion == null ? '' : ' Latest upstream found: ${checker.latestLabel}${checker.isSkipped ? ' (skipped)' : ''}.'}'),
-          OfficialUpdateStatus.error => _t(context,
-              'Controllo non riuscito: ${checker.error}',
-              'Check failed: ${checker.error}'),
-          _ => '',
-        };
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _t(
-                context,
-                'Versione ufficiale da cui e\' partita questa copia: '
-                    '${checker.mergedLabel}. Le novita\' ufficiali si '
-                    'vedono qui, ma non si installano sopra questa app.',
-                'Official version this copy started from: '
-                    '${checker.mergedLabel}. Upstream news shows here but '
-                    'is not installed over this app.',
-              ),
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            for (final entry in [
-              (
-                UpdateCheckMode.everyOpen,
-                _t(context, 'A ogni apertura', 'Every time the app opens'),
-                _t(
-                  context,
-                  'Controlla ogni volta che apri l\'app o la riporti in primo '
-                      'piano. Non sul web.',
-                  'Checks every time you open the app or bring it to the '
-                      'foreground. Not on the web.',
-                ),
-              ),
-              (
-                UpdateCheckMode.startOnly,
-                _t(context, 'Solo all\'avvio da zero', 'Only on a cold start'),
-                _t(
-                  context,
-                  'Controlla solo quando l\'app parte da chiusa del tutto.',
-                  'Checks only when the app starts from fully closed.',
-                ),
-              ),
-              (
-                UpdateCheckMode.manual,
-                _t(context, 'Solo manuale', 'Manual only'),
-                _t(
-                  context,
-                  'Nessun controllo automatico (la scelta di base): usa il '
-                      'pulsante qui sotto.',
-                  'No automatic check (the default): use the button below.',
-                ),
-              ),
-            ])
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Material(
-                  color: checker.checkMode == entry.$1
-                      ? theme.colorScheme.primaryContainer
-                      : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    key: ValueKey('settings-official-mode-${entry.$1.name}'),
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => checker.setCheckMode(entry.$1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${checker.checkMode == entry.$1 ? '\u25CF' : '\u25CB'} ${entry.$2}',
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(entry.$3, style: theme.textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            OutlinedButton(
-              key: const ValueKey('settings-check-official-updates'),
-              onPressed: checking ? null : checker.check,
-              child: checking
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_t(context, 'Controlla versione ufficiale',
-                      'Check official version')),
-            ),
-            if (status.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(status, style: theme.textTheme.bodySmall),
-            ],
-            if (checker.isSkipped) ...[
-              const SizedBox(height: 8),
-              OutlinedButton(
-                key: const ValueKey('settings-official-restore'),
-                onPressed: checker.restoreSkipped,
-                child: Text(_t(context, 'Ripristina versione saltata',
-                    'Restore skipped version')),
-              ),
-            ],
-            if (checker.status == OfficialUpdateStatus.newer) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  OutlinedButton(
-                    key: const ValueKey('settings-official-merged'),
-                    onPressed: checker.markLatestMerged,
-                    child: Text(_t(context, 'Segna come integrata',
-                        'Mark as merged')),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
 
 /// The Settings "Updates" block: a "Check for updates" button and a status
 /// line that reflects the [UpdateService]'s latest result, with a Download
