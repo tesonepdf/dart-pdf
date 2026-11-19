@@ -71,7 +71,7 @@ class DownloadLinksTest(unittest.TestCase):
 
     def test_release_catalogue_remains_a_fallback(self):
         self.assertTrue(any(a.get("href") ==
-                            "https://github.com/ben-milanko/dart-pdf/releases/latest"
+                            "https://github.com/tesonepdf/dart-pdf/releases/latest"
                             for a in self.anchors))
 
 

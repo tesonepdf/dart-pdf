@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version = '0.1.0'
   s.summary = 'Native system PDF printing for Flutter.'
   s.description = 'Optional native printing with no bundled third-party PDF engine.'
-  s.homepage = 'https://github.com/ben-milanko/dart-pdf'
+  s.homepage = 'https://github.com/tesonepdf/dart-pdf'
   s.license = { :file => '../LICENSE' }
   s.author = 'Ben Milanko'
   s.source = { :path => '.' }
