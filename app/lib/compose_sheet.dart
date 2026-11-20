@@ -11,6 +11,7 @@ import 'package:pdf_document/pdf_document.dart';
 
 import 'file_io.dart';
 import 'l10n/app_l10n.dart';
+import 'strip_remove.dart' show rotateStripSelection, stripThicknessPt;
 
 /// Margine e spazio tra i ritagli sul foglio, in punti (1 pt = 1/72 pollice).
 const double kSheetMargin = 20;
@@ -662,23 +663,28 @@ Future<SheetCrop?> pickPageZone(
 
 /// La scelta fatta in [pickPageStrip]: la pagina (da 0), la striscia in
 /// frazioni della pagina vista (0..1, origine in alto a sinistra) e lo spazio
-/// che deve restare al suo posto, in punti.
+/// che deve restare al suo posto, in punti. [horizontal] e' vero quando la
+/// striscia e' orizzontale (conta l'altezza del rettangolo, su tutta la
+/// larghezza della pagina).
 class StripChoice {
   const StripChoice({
     required this.page,
     required this.strip,
     required this.gap,
+    this.horizontal = false,
   });
 
   final int page;
   final Rect strip;
   final double gap;
+  final bool horizontal;
 }
 
-/// Fa scegliere una striscia verticale di una pagina di [document]: si disegna
-/// il rettangolo sulla parte vuota (con i quadratini su angoli e lati per
-/// correggerlo) e con un cursore si decide quanto spazio lasciare, da zero
-/// (la striscia sparisce) fino a piu' della sua larghezza (si allarga).
+/// Fa scegliere una striscia di una pagina di [document], verticale o
+/// orizzontale (il tasto Gira cambia l'orientamento): si disegna il rettangolo
+/// sulla parte vuota (con i quadratini su angoli e lati per correggerlo) e con
+/// un cursore si decide quanto spazio lasciare, da zero (la striscia sparisce)
+/// fino a piu' del suo spessore (si allarga).
 /// Restituisce la scelta, o null se si torna indietro.
 Future<StripChoice?> pickPageStrip(
   BuildContext context, {
@@ -754,6 +760,10 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
   /// Solo in modalita' striscia: lo spazio da lasciare al posto della
   /// striscia, in punti.
   double _gap = 4;
+
+  /// Solo in modalita' striscia: vero se la striscia e' orizzontale (conta
+  /// l'altezza del rettangolo), falso se e' verticale (conta la larghezza).
+  bool _horizontal = false;
 
   /// Ingrandimento e spostamento dalla posizione centrata, in pixel.
   double _zoom = 1;
@@ -1045,7 +1055,27 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
     return pdfRegionDisplaySize(page.cropBox, page.rotation).width;
   }
 
-  double get _stripWidthPt => _sel == null ? 0 : _sel!.width * _pageWidthPt;
+  double get _pageHeightPt {
+    final page = widget.document.page(_page);
+    return pdfRegionDisplaySize(page.cropBox, page.rotation).height;
+  }
+
+  /// Lo spessore della striscia scelta, in punti: la larghezza se e' verticale,
+  /// l'altezza se e' orizzontale.
+  double get _stripWidthPt => _sel == null
+      ? 0
+      : stripThicknessPt(_pageWidthPt, _pageHeightPt, _sel!,
+          horizontal: _horizontal);
+
+  /// Gira la striscia di un quarto di giro: da verticale a orizzontale e
+  /// viceversa. Il rettangolo gia' disegnato gira con lei, attorno al centro.
+  void _rotateStrip() {
+    setState(() {
+      _horizontal = !_horizontal;
+      final sel = _sel;
+      if (sel != null) _sel = rotateStripSelection(sel, _aspect);
+    });
+  }
 
   /// Fino a dove arriva il cursore: il doppio della striscia (almeno 40 pt).
   double get _gapMax => math.max(_stripWidthPt * 2, 40.0);
@@ -1059,6 +1089,7 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
       page: _page,
       strip: sel,
       gap: _gapNow,
+      horizontal: _horizontal,
     ));
   }
 
@@ -1072,12 +1103,22 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
         : now > before + 0.5
             ? 'espandi'
             : 'invariato';
+    final kind = _horizontal ? 'orizzontale' : 'verticale';
     return [
       Text(
         ok
-            ? 'Spazio ora: ${mm(before)} mm. Dopo: ${mm(now)} mm ($what).'
-            : 'Disegna il rettangolo sulla parte vuota.',
+            ? 'Fascia $kind. Spazio ora: ${mm(before)} mm. '
+                'Dopo: ${mm(now)} mm ($what).'
+            : 'Fascia $kind. Disegna il rettangolo sulla parte vuota.',
         textAlign: TextAlign.center,
+      ),
+      Center(
+        child: TextButton.icon(
+          key: const ValueKey('strip-rotate'),
+          onPressed: _png == null ? null : _rotateStrip,
+          icon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+          label: const Text('Gira'),
+        ),
       ),
       Row(
         children: [
@@ -1157,7 +1198,11 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _SelectionPainter(
-                        sel == null ? null : _toViewport(sel)),
+                      sel == null ? null : _toViewport(sel),
+                      band: sel == null || !widget.stripMode
+                          ? null
+                          : _stripBand(sel),
+                    ),
                   ),
                 ),
               ],
@@ -1166,6 +1211,16 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
         ),
       );
     });
+  }
+
+  /// La fascia che verra' tolta, nelle coordinate dell'area di lavoro: tutta
+  /// la pagina in altezza (verticale) o in larghezza (orizzontale).
+  Rect _stripBand(Rect sel) {
+    final page = _toViewport(const Rect.fromLTWH(0, 0, 1, 1));
+    final r = _toViewport(sel);
+    return _horizontal
+        ? Rect.fromLTRB(page.left, r.top, page.right, r.bottom)
+        : Rect.fromLTRB(r.left, page.top, r.right, page.bottom);
   }
 
   @override
@@ -1184,7 +1239,8 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
               widget.stripMode
                   ? 'Disegna un rettangolo sulla parte vuota. Trascina i '
                       'quadratini su angoli e lati per sistemarlo, con due dita '
-                      'ingrandisci. Poi scegli quanto spazio lasciare.'
+                      'ingrandisci. Con Gira la fascia diventa orizzontale (o '
+                      'torna verticale). Poi scegli quanto spazio lasciare.'
                   : widget.pickOnce
                       ? 'Trascina per scegliere la zona da portare in Excel. Con '
                           'due dita ingrandisci; trascina i bordi per correggerla.'
@@ -1289,14 +1345,21 @@ class _CropPickerScreenState extends State<_CropPickerScreen> {
 
 /// Il rettangolo scelto, con le maniglie, nelle coordinate dell'area di lavoro.
 class _SelectionPainter extends CustomPainter {
-  const _SelectionPainter(this.rect);
+  const _SelectionPainter(this.rect, {this.band});
 
   final Rect? rect;
+
+  /// Solo per la striscia: la fascia intera che verra' tolta, piu' chiara.
+  final Rect? band;
 
   @override
   void paint(Canvas canvas, Size size) {
     final r = rect;
     if (r == null) return;
+    final b = band;
+    if (b != null) {
+      canvas.drawRect(b, Paint()..color = const Color(0x1A2196F3));
+    }
     canvas.drawRect(r, Paint()..color = const Color(0x332196F3));
     canvas.drawRect(
       r,
@@ -1329,7 +1392,8 @@ class _SelectionPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SelectionPainter old) => old.rect != rect;
+  bool shouldRepaint(_SelectionPainter old) =>
+      old.rect != rect || old.band != band;
 }
 
 /// Anteprima dei fogli A4: ogni ritaglio si trascina dove si vuole. I ritagli

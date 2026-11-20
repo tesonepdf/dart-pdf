@@ -5442,9 +5442,10 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
-  /// Toglie (o allarga) una striscia verticale vuota di una pagina: si disegna
-  /// il rettangolo sulla parte vuota, con un cursore si sceglie quanto spazio
-  /// lasciare, e la parte a sinistra e quella a destra si avvicinano. Il
+  /// Toglie (o allarga) una striscia vuota di una pagina, verticale o
+  /// orizzontale (tasto Gira): si disegna il rettangolo sulla parte vuota, con
+  /// un cursore si sceglie quanto spazio lasciare, e le due parti (sinistra e
+  /// destra, oppure sopra e sotto) si avvicinano. Il
   /// risultato e' una pagina nuova, piu' stretta, che prende il posto di
   /// quella scelta in una copia del documento, aperta in una scheda nuova e
   /// salvata come file. Il taglio e' una sola modifica: con le frecce Annulla
@@ -5469,6 +5470,7 @@ class _EditorScreenState extends State<EditorScreen>
         page: choice.page,
         strip: choice.strip,
         gap: choice.gap,
+        horizontal: choice.horizontal,
       );
       if (!mounted) return;
       _readOnly = false;
