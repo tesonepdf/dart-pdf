@@ -9016,7 +9016,12 @@ class _PdfViewerState extends State<PdfViewer>
 
     if (_trackpadIntent == _TrackpadIntent.zoom) {
       if (event.scale > 0 && event.scale != _trackpadScale) {
-        final target = _currentZoom * event.scale / _trackpadScale;
+        var ratio = event.scale / _trackpadScale;
+        // Sul web la rotella con ctrl (anche del mouse, su Windows) arriva
+        // come gesto pan-zoom con scala a scatti grandi: passo limitato a
+        // circa 2,5% per evento. Fuori dal web il pizzico resta com'era.
+        if (kIsWeb) ratio = math.exp(math.log(ratio).clamp(-0.025, 0.025));
+        final target = _currentZoom * ratio;
         _trackpadScale = event.scale;
         // pinch zooms around the gesture's start point and may cross the
         // fit-width seam into layout zoom
