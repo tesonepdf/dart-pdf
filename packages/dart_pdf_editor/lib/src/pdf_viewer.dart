@@ -2944,9 +2944,9 @@ class _PdfViewerState extends State<PdfViewer>
     _smoothZoom.stop();
     // InteractiveViewer's wheel feel is e^(-delta/200), but one mouse-wheel
     // notch sends ~100 (web), i.e. x1.65 per click: far too coarse. The
-    // exponent is capped at 0.1 (about 10% per event), so a notch is a small
-    // step while the tiny deltas of a trackpad pinch keep their old feel.
-    final exponent = (-event.scrollDelta.dy / 200).clamp(-0.1, 0.1);
+    // exponent is capped at 0.025 (about 2.5% per event), so a notch is a very
+    // small step while the tiny deltas of a trackpad pinch keep their old feel.
+    final exponent = (-event.scrollDelta.dy / 200).clamp(-0.025, 0.025);
     _zoomTo(_currentZoom * math.exp(exponent), event.localPosition);
   }
 
