@@ -2942,9 +2942,12 @@ class _PdfViewerState extends State<PdfViewer>
   void _applyWheelZoom(PointerScrollEvent event) {
     if (event.scrollDelta.dy == 0) return;
     _smoothZoom.stop();
-    // InteractiveViewer's wheel feel: e^(-delta/200)
-    _zoomTo(_currentZoom * math.exp(-event.scrollDelta.dy / 200),
-        event.localPosition);
+    // InteractiveViewer's wheel feel is e^(-delta/200), but one mouse-wheel
+    // notch sends ~100 (web), i.e. x1.65 per click: far too coarse. The
+    // exponent is capped at 0.1 (about 10% per event), so a notch is a small
+    // step while the tiny deltas of a trackpad pinch keep their old feel.
+    final exponent = (-event.scrollDelta.dy / 200).clamp(-0.1, 0.1);
+    _zoomTo(_currentZoom * math.exp(exponent), event.localPosition);
   }
 
   /// Applies an absolute zoom level in logical pixels per PDF point
