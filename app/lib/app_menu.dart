@@ -10,6 +10,7 @@ import 'package:dart_pdf_editor/dart_pdf_editor.dart'
     show PdfKeyboardAvailability;
 import 'package:material_ui/material_ui.dart';
 
+import 'app_info.dart';
 import 'command_palette.dart' show AppCommand;
 import 'middle_ellipsis_text.dart';
 
@@ -148,6 +149,16 @@ class _AppMenuPanel extends StatelessWidget {
                     onTap: () => Navigator.of(context).pop(onSearch),
                   ),
                   const Divider(height: 1),
+                  Padding(
+                    key: const ValueKey('app-menu-version'),
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
+                    child: Text(
+                      '${AppInfo.displayName} ${AppInfo.displayVersion}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                   for (final group in groups)
                     _group(context, group, keyboard: keyboard),
                   const SizedBox(height: 8),

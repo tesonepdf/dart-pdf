@@ -2887,6 +2887,21 @@ class _PdfViewerState extends State<PdfViewer>
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
+    // Sul web ctrl+rotella e pizzico arrivano come PointerScaleEvent e
+    // InteractiveViewer li applicherebbe interi (una tacca = x1,65): li
+    // prendiamo prima noi (questo Listener sta dentro InteractiveViewer) e
+    // limitiamo il passo come per la rotella.
+    if (event is PointerScaleEvent) {
+      if (_drawToolArmed) return;
+      GestureBinding.instance.pointerSignalResolver.register(event, (event) {
+        final scale = (event as PointerScaleEvent).scale;
+        if (scale <= 0 || scale == 1) return;
+        _smoothZoom.stop();
+        final exponent = math.log(scale).clamp(-0.025, 0.025);
+        _zoomTo(_currentZoom * math.exp(exponent), event.localPosition);
+      });
+      return;
+    }
     if (event is! PointerScrollEvent) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (event) {
       final scroll = event as PointerScrollEvent;
