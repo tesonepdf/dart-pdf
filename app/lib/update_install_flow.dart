@@ -12,6 +12,8 @@ import 'patch_update_stub.dart' if (dart.library.io) 'patch_update_io.dart';
 import 'update.dart';
 import 'update_installer.dart';
 import 'update_platform.dart';
+import 'windows_update_stub.dart'
+    if (dart.library.io) 'windows_update_io.dart';
 
 /// Runs the interactive "update now" flow for the update [updates] found: on
 /// desktop, downloads the artifact in a progress dialog and applies it in place
@@ -39,6 +41,18 @@ Future<void> startUpdateInstall(
   final mode = installer.modeFor(assetName);
   if (mode == UpdateApplyMode.unsupported) {
     await _openInBrowser(messenger, l10n, url);
+    return;
+  }
+
+  // Windows: only the changed files are downloaded and swapped in.
+  if (mode == UpdateApplyMode.patchFiles) {
+    await _startWindowsFilesUpdate(
+      context,
+      updates: updates,
+      messenger: messenger,
+      l10n: l10n,
+      fallbackUrl: updates.windowsZipUrl ?? url,
+    );
     return;
   }
 
@@ -129,6 +143,80 @@ Future<void> startUpdateInstall(
     messenger.showSnackBar(SnackBar(
       key: const ValueKey('update-handed-off'),
       content: Text(l10n.updateHandedOff),
+    ));
+  }
+}
+
+/// Windows: scarica solo i file cambiati e li sostituisce da solo (l'app si
+/// chiude e si riapre). Se non riesce, propone lo zip completo nel browser.
+Future<void> _startWindowsFilesUpdate(
+  BuildContext context, {
+  required UpdateService updates,
+  required ScaffoldMessengerState messenger,
+  required AppLocalizations l10n,
+  required String fallbackUrl,
+}) async {
+  final progress =
+      ValueNotifier<_UpdateProgress>(const _UpdateProgress(fraction: null));
+  var cancelled = false;
+  final from = AppInfo.displayVersion;
+  final to = updates.latest?.displayVersion ?? '?';
+
+  final dialogFuture = showPdfDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => _UpdateProgressDialog(
+      progress: progress,
+      onCancel: () => cancelled = true,
+      headline: 'Aggiorno da $from a $to',
+    ),
+  );
+
+  Object? failure;
+  var nothingToChange = false;
+  AppLog.instance
+      .info('Aggiornamenti', 'Inizio aggiornamento Windows a file: da $from a $to');
+  try {
+    await applyWindowsFilesUpdate(
+      assets: updates.latest?.assets ?? const <String, String>{},
+      assetSizes: updates.latest?.assetSizes ?? const <String, int>{},
+      isCancelled: () => cancelled,
+      onProgress: (fraction, detail) {
+        progress.value = _UpdateProgress(fraction: fraction, detail: detail);
+      },
+    );
+    // Se il processo e' ancora qui, non c'era niente da sostituire.
+    nothingToChange = true;
+  } on UpdateCancelledException {
+    AppLog.instance.info('Aggiornamenti', 'Aggiornamento annullato dall\'utente');
+  } catch (e) {
+    failure = e;
+  }
+
+  if (context.mounted) {
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+  await dialogFuture;
+  progress.dispose();
+
+  if (failure != null) {
+    final message =
+        failure is UpdateInstallException ? failure.message : '$failure';
+    AppLog.instance.error('Aggiornamenti', 'Aggiornamento non riuscito: $message');
+    messenger.showSnackBar(SnackBar(
+      key: const ValueKey('update-install-failed'),
+      content: Text(l10n.updateFailed(message)),
+      action: SnackBarAction(
+        label: l10n.editorDownload,
+        onPressed: () =>
+            launchUrl(Uri.parse(fallbackUrl), mode: LaunchMode.externalApplication),
+      ),
+    ));
+    return;
+  }
+  if (nothingToChange) {
+    messenger.showSnackBar(const SnackBar(
+      content: Text('I file dell\'app sono già aggiornati'),
     ));
   }
 }

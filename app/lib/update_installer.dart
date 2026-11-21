@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'update_platform.dart';
 import 'update_platform_stub.dart'
     if (dart.library.io) 'update_platform_io.dart';
+import 'windows_files.dart' show kWindowsFilesManifestName;
 
 /// Thrown when the user cancels an in-progress update download.
 class UpdateCancelledException implements Exception {
@@ -81,8 +82,13 @@ class UpdateInstaller {
             ? UpdateApplyMode.inPlaceRelaunch
             : UpdateApplyMode.unsupported;
       case TargetPlatform.macOS:
-      case TargetPlatform.windows:
         return UpdateApplyMode.openArtifact;
+      case TargetPlatform.windows:
+        // The rolling Windows release lists its files: only the changed ones
+        // are downloaded. Older releases keep the installer hand-off.
+        return assetName == kWindowsFilesManifestName
+            ? UpdateApplyMode.patchFiles
+            : UpdateApplyMode.openArtifact;
       case TargetPlatform.android:
         return assetName.toLowerCase().endsWith('.apk')
             ? UpdateApplyMode.openArtifact
@@ -114,7 +120,9 @@ class UpdateInstaller {
     void Function()? onApplying,
   }) async {
     final mode = modeFor(assetName);
-    if (mode == UpdateApplyMode.unsupported) {
+    // patchFiles has its own flow (windows_update_io.dart): no single artifact.
+    if (mode == UpdateApplyMode.unsupported ||
+        mode == UpdateApplyMode.patchFiles) {
       return UpdateInstallOutcome.unsupported;
     }
 
@@ -143,6 +151,7 @@ class UpdateInstaller {
       case UpdateApplyMode.openArtifact:
         await _applyByHandoff(bytes, assetName);
         return UpdateInstallOutcome.handedOff;
+      case UpdateApplyMode.patchFiles:
       case UpdateApplyMode.unsupported:
         return UpdateInstallOutcome.unsupported;
     }

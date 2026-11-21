@@ -9,9 +9,15 @@ enum UpdateApplyMode {
 
   /// Download the artifact and hand it to the OS: run the installer
   /// (`.dmg` / `.exe`) or reveal it so the user completes the update. Used on
-  /// macOS and Windows, where swapping a running app bundle is fragile, and on
-  /// Android, where the package installer requires user confirmation.
+  /// macOS, where swapping a running app bundle is fragile, on a Windows
+  /// release that only has an installer, and on Android, where the package
+  /// installer requires user confirmation.
   openArtifact,
+
+  /// Windows: download only the files that changed (each one gzip-compressed
+  /// in the release and named by its SHA-256), check them, and let a small
+  /// helper script swap them in and relaunch the app. No installer, no zip.
+  patchFiles,
 
   /// No supported in-app apply path (web, iOS, a Linux tarball install, or
   /// a release with no direct artifact). Callers fall back to the browser

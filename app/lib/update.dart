@@ -9,6 +9,8 @@ import 'app_info.dart' show AppInfo;
 import 'devtools.dart';
 import 'update_distribution_stub.dart'
     if (dart.library.io) 'update_distribution_io.dart';
+import 'windows_files.dart'
+    show kWindowsFilesManifestName, kWindowsZipName;
 
 /// The rolling GitHub prerelease populated by the nightly desktop workflow
 /// (Windows + macOS).
@@ -21,6 +23,10 @@ const dartPdfAndroidTag = String.fromEnvironment(
   'PDF_ANDROID_TAG',
   defaultValue: 'app-android-latest',
 );
+
+/// The single GitHub release used by the Windows build: one gzip file per
+/// changed file (named by its SHA-256), the file list and the full zip.
+const dartPdfWindowsTag = 'app-windows-latest';
 
 /// A parsed semantic version (`major.minor.patch`), tolerant of the leading
 /// `app-v` / `v` that the release tags carry, an optional `+build` metadata
@@ -108,6 +114,7 @@ class ReleaseInfo {
     this.assetSizes = const {},
     this.isNightly = false,
     this.isAndroidUpdate = false,
+    this.isWindowsUpdate = false,
     this.commitSha,
     this.buildNumber,
     this.versionText,
@@ -132,6 +139,10 @@ class ReleaseInfo {
 
   /// Whether this is the rolling APK release produced from the tip of `main`.
   final bool isAndroidUpdate;
+
+  /// Whether this is the rolling Windows release produced from the tip of
+  /// `main`.
+  final bool isWindowsUpdate;
 
   /// Source commit recorded by a rolling release workflow, when present.
   final String? commitSha;
@@ -163,7 +174,8 @@ class ReleaseInfo {
 
   /// Stable identity used by "Later". A rolling tag alone is insufficient:
   /// each rolling release reuses its tag, so include its source commit.
-  String get identity => (isNightly || isAndroidUpdate) && commitSha != null
+  String get identity =>
+      (isNightly || isAndroidUpdate || isWindowsUpdate) && commitSha != null
       ? '$tagName@$commitSha'
       : tagName;
 
@@ -202,15 +214,17 @@ class ReleaseInfo {
     // "up to date".
     if (json['prerelease'] == true &&
         tag != dartPdfNightlyTag &&
-        tag != dartPdfAndroidTag) {
+        tag != dartPdfAndroidTag &&
+        tag != dartPdfWindowsTag) {
       return null;
     }
     if (tag == null) return null;
     final notes = (json['body'] as String?)?.trim() ?? '';
     final isNightly = tag == dartPdfNightlyTag;
     final isAndroidUpdate = tag == dartPdfAndroidTag;
+    final isWindowsUpdate = tag == dartPdfWindowsTag;
     final version = AppVersion.tryParse(tag) ??
-        (isNightly || isAndroidUpdate
+        (isNightly || isAndroidUpdate || isWindowsUpdate
             ? AppVersion.tryParse(
                 _versionMarker.firstMatch(notes)?.group(1) ?? '')
             : null);
@@ -246,6 +260,7 @@ class ReleaseInfo {
       assetSizes: assetSizes,
       isNightly: isNightly,
       isAndroidUpdate: isAndroidUpdate,
+      isWindowsUpdate: isWindowsUpdate,
       commitSha: commitSha,
       buildNumber: _buildMarker.firstMatch(notes)?.group(1),
       versionText: _versionMarker.firstMatch(notes)?.group(1),
@@ -548,6 +563,10 @@ class UpdateService extends ChangeNotifier {
     return release.assetSizes[name];
   }
 
+  /// Windows: the full zip of the latest build, offered in the browser when
+  /// the file-by-file update cannot run.
+  String? get windowsZipUrl => _latest?.assets[kWindowsZipName];
+
   /// Queries GitHub for a newer release. Throttled to [_checkInterval] unless
   /// [force] is set (the Settings "Check now" button forces). Never throws -
   /// failures land in [status]/[error].
@@ -579,9 +598,19 @@ class UpdateService extends ChangeNotifier {
           .toList()
         ..sort((a, b) => b.version.compareTo(a.version));
       final androidReleases = releases.where((r) => r.isAndroidUpdate).toList();
-      ReleaseInfo? newest = _targetPlatform == TargetPlatform.android
-          ? (androidReleases.isEmpty ? null : androidReleases.first)
-          : (stableReleases.isEmpty ? null : stableReleases.first);
+      final windowsReleases = releases
+          .where((r) => r.isWindowsUpdate && _platformAssetName(r.assets) != null)
+          .toList();
+      ReleaseInfo? newest;
+      if (_targetPlatform == TargetPlatform.android) {
+        newest = androidReleases.isEmpty ? null : androidReleases.first;
+      } else if (_targetPlatform == TargetPlatform.windows &&
+          windowsReleases.isNotEmpty) {
+        // The rolling Windows release (updated file by file) comes first.
+        newest = windowsReleases.first;
+      } else {
+        newest = stableReleases.isEmpty ? null : stableReleases.first;
+      }
       if (nightlyUpdates) {
         final nightlies = releases
             .where(
@@ -651,7 +680,11 @@ class UpdateService extends ChangeNotifier {
     }
     final versionOrder = release.version.compareTo(current);
     if (versionOrder != 0) return versionOrder > 0;
-    if (!release.isNightly && !release.isAndroidUpdate) return false;
+    if (!release.isNightly &&
+        !release.isAndroidUpdate &&
+        !release.isWindowsUpdate) {
+      return false;
+    }
     return !_sameCommit(release.commitSha, currentBuildCommit);
   }
 
@@ -687,6 +720,7 @@ class UpdateService extends ChangeNotifier {
           'dartpdf-macos.dmg',
         ],
       TargetPlatform.windows => [
+          if (_architecture == 'x64') kWindowsFilesManifestName,
           'dartpdf-${nightly}windows-$_architecture-installer.exe',
           'dartpdf-windows-$_architecture-installer.exe',
           if (_architecture == 'x64') ...[

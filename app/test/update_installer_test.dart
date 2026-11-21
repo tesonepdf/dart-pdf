@@ -126,6 +126,14 @@ void main() {
       );
     });
 
+    test('Windows with the file list updates file by file', () {
+      expect(
+        UpdateInstaller(ops: _FakeOps(platform: TargetPlatform.windows))
+            .modeFor('windows-files.json'),
+        UpdateApplyMode.patchFiles,
+      );
+    });
+
     test('a missing asset name is unsupported', () {
       final installer =
           UpdateInstaller(ops: _FakeOps(platform: TargetPlatform.macOS));

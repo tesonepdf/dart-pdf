@@ -114,6 +114,19 @@ jobs:
             version = $env:VERSIONE
             files   = @($files)
           } | ConvertTo-Json -Depth 5 | Set-Content -Path windows-files.json -Encoding utf8
+          # Ogni file compresso (gzip) e chiamato con il suo SHA-256: l'app
+          # scarica solo quelli che non ha gia', senza zip da aprire.
+          New-Item -ItemType Directory -Path files -Force | Out-Null
+          $visti = @{}
+          foreach ($f in $files) {
+            if ($visti.ContainsKey($f.sha256)) { continue }
+            $visti[$f.sha256] = $true
+            $src = [IO.File]::OpenRead((Join-Path $bundle $f.path))
+            $dst = [IO.File]::Create((Join-Path (Get-Location) "files/$($f.sha256).gz"))
+            $gz = New-Object IO.Compression.GZipStream($dst, [IO.Compression.CompressionLevel]::Optimal)
+            $src.CopyTo($gz)
+            $gz.Dispose(); $dst.Dispose(); $src.Dispose()
+          }
           Compress-Archive -Path "$bundle/*" -DestinationPath windows-x64.zip -Force
 
       - uses: actions/upload-artifact@v7
@@ -122,6 +135,7 @@ jobs:
           path: |
             app/windows-x64.zip
             app/windows-files.json
+            app/files
           retention-days: 7
 
   release:
@@ -166,20 +180,52 @@ jobs:
           title="DartPDF Windows ${VERSIONE}#${NUMERO}"
           notes="$(printf 'Build #%s\nNuova versione Windows disponibile.\nCosa cambia:\n- %s\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$subject" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
-          if gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$WINDOWS_TAG" windows-x64.zip windows-files.json \
-              --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$WINDOWS_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$title" \
-              --notes "$notes" \
-              --prerelease=false \
-              --latest=false
-          else
-            gh release create "$WINDOWS_TAG" windows-x64.zip windows-files.json \
+          # 1) la release deve esistere (alla prima volta si crea con una nota
+          #    provvisoria, senza il numero build: l'app la ignora finche' non
+          #    e' pronta)
+          if ! gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$WINDOWS_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
               --title "$title" \
-              --notes "$notes" \
+              --notes "Windows in pubblicazione" \
               --latest=false
           fi
+
+          # 2) i file compressi che non ci sono ancora, a blocchi di 15
+          gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > esistenti.txt
+          : > nuovi.txt
+          for f in dl/files/*.gz; do
+            n="$(basename "$f")"
+            grep -qxF "$n" esistenti.txt || echo "$f" >> nuovi.txt
+          done
+          echo "File nuovi da caricare: $(wc -l < nuovi.txt) su $(ls dl/files | wc -l)"
+          if [[ -s nuovi.txt ]]; then
+            split -l 15 nuovi.txt blocco_
+            for b in blocco_*; do
+              mapfile -t elenco < "$b"
+              gh release upload "$WINDOWS_TAG" "${elenco[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            done
+          fi
+
+          # 3) zip completo (prima installazione) ed elenco dei file
+          gh release upload "$WINDOWS_TAG" windows-x64.zip windows-files.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+          # 4) per ultimo titolo e note con il numero build: da qui l'app vede la
+          #    build nuova, quando tutti i file ci sono gia'
+          gh release edit "$WINDOWS_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --notes "$notes" \
+            --prerelease=false \
+            --latest=false
+
+          # 5) via i file compressi che la build nuova non usa piu'
+          python3 -c 'import json; m = json.load(open("windows-files.json", encoding="utf-8-sig")); print("\n".join(sorted(f["sha256"] + ".gz" for f in m["files"])))' > usati.txt
+          gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+            | grep -E '^[0-9a-f]{64}\.gz$' | grep -vxFf usati.txt > obsoleti.txt || true
+          while read -r nome; do
+            [[ -n "$nome" ]] && gh release delete-asset "$WINDOWS_TAG" "$nome" --repo "$GITHUB_REPOSITORY" --yes
+          done < obsoleti.txt
+          echo "Pubblicata la build Windows ${VERSIONE}#${NUMERO}"
