@@ -45,7 +45,7 @@ class AppInfo {
   /// version of the release it is heading towards, so a nightly adds its
   /// source commit to tell one night's build from the next.
   static String get displayVersion => !isNightly && buildNumber.isNotEmpty
-      ? '#$buildNumber' // one number: version and build number are the same
+      ? '$version#$buildNumber' // identificativo unico VERSIONE#BUILD
       : formatDisplayVersion(
           version: version,
           nightly: isNightly,

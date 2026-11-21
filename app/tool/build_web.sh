@@ -39,7 +39,7 @@ if [ -z "$BUILD_VERSION" ] || [ -z "$BUILD_NUMBER" ]; then
   read -r year day hour minute < <(
     TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
   )
-  BUILD_VERSION="${BUILD_VERSION:-$((year - 2020)).${day}.${hour}${minute}}"
+  BUILD_VERSION="${BUILD_VERSION:-$((year % 10)).${day}.${hour}${minute}}"
   BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$REPO_ROOT" rev-list --count HEAD)}"
 fi
 

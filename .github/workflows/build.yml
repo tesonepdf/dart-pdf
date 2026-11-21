@@ -81,7 +81,15 @@ jobs:
           read -r year day hour minute < <(
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
-          version="$((year - 2020)).${day}.${hour}${minute}"
+          # cifra dell'anno . giorno dell'anno (3 cifre) . ora e minuti (Roma)
+          version="$((year % 10)).${day}.${hour}${minute}"
+          # L'identificativo scritto in testa al messaggio del commit
+          # (VERSIONE#BUILD) ha la precedenza: cosi' commit, Actions, release
+          # e app mostrano sempre la stessa stringa.
+          subject="$(git log -1 --format=%s HEAD)"
+          if [[ "$subject" =~ ^([0-9]+\.[0-9]+\.[0-9]+)#[0-9]+ ]]; then
+            version="${BASH_REMATCH[1]}"
+          fi
           # Numero build = numero del commit, lo stesso scritto in testa al
           # messaggio (hook .githooks/commit-msg) e quindi su Vercel:
           # ufficiale = commit di main + 25 (allineato alle run di Actions);
@@ -91,12 +99,16 @@ jobs:
           else
             number="$(( $(git rev-list --count HEAD) + 25 ))"
           fi
+          if [[ "$subject" =~ ^[0-9]+\.[0-9]+\.[0-9]+#([0-9]+) && "${BASH_REMATCH[1]}" != "$number" ]]; then
+            echo "::warning::Il numero nel messaggio del commit (${BASH_REMATCH[1]}) e' diverso dal numero build calcolato ($number)"
+          fi
           echo "VERSIONE=${version}" >> "$GITHUB_ENV"
           echo "NUMERO=${number}" >> "$GITHUB_ENV"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "number=${number}" >> "$GITHUB_OUTPUT"
 
   apk:
+    name: "APK ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}"
     needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -290,6 +302,7 @@ jobs:
           retention-days: 7
 
   release:
+    name: "Release ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}"
     needs: [apk, version]
     if: ${{ !cancelled() && needs.apk.result == 'success' }}
     runs-on: ubuntu-latest
@@ -337,7 +350,7 @@ jobs:
           # e' arrivato un altro push.
           current_build="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
           if [[ -z "$current_build" || "$NUMERO" -ne "$current_build" ]]; then
-            android_title="$APP_LABEL #${NUMERO}${NUM_SUFFIX}"
+            android_title="$APP_LABEL ${VERSIONE}#${NUMERO}${NUM_SUFFIX}"
             android_notes="$(printf 'Build #%s%s\nNuova versione Android disponibile. Scegli tu se scaricarla e installarla.\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$NUM_SUFFIX" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
             # Patch tra APK: confronta con l'APK precedente della release e decide
@@ -366,10 +379,10 @@ jobs:
             prev_sha="$(gh release view "$android_tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- main-sha: \([0-9a-f]\{7,40\}\) -->.*/\1/p' | head -n1 || true)"
             changes=""
             if [[ -n "$prev_sha" ]]; then
-              changes="$(git log --format='%s' "$prev_sha..$GITHUB_SHA" 2>/dev/null | sed -E 's/^#[0-9]+ +//; s/ *\[completo\]//g' | head -n 15 | sed 's/^/- /' || true)"
+              changes="$(git log --format='%s' "$prev_sha..$GITHUB_SHA" 2>/dev/null | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//; s/ *\[completo\]//g' | head -n 15 | sed 's/^/- /' || true)"
             fi
             if [[ -z "$changes" ]]; then
-              changes="- $(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^#[0-9]+ +//; s/ *\[completo\]//g')"
+              changes="- $(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//; s/ *\[completo\]//g')"
             fi
             if [[ "$(jq -r .full plan/decision.json)" == "true" ]]; then
               kind="full"

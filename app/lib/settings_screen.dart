@@ -1424,23 +1424,23 @@ class _BuildCheckTileState extends State<_BuildCheckTile> {
           null => (
               Icons.hourglass_empty,
               scheme.onSurfaceVariant,
-              'Controllo i test della build #${AppInfo.buildNumber}…'
+              'Controllo i test della build ${AppInfo.displayVersion}…'
             ),
           BuildCheckState.passed => (
               Icons.check_circle,
               Colors.green,
-              'Test automatici superati (build #${AppInfo.buildNumber})'
+              'Test automatici superati (build ${AppInfo.displayVersion})'
             ),
           BuildCheckState.failed => (
               Icons.cancel,
               scheme.error,
-              'Test automatici FALLITI (build #${AppInfo.buildNumber}). '
+              'Test automatici FALLITI (build ${AppInfo.displayVersion}). '
                   'Tocca per i dettagli'
             ),
           BuildCheckState.running => (
               Icons.autorenew,
               Colors.orange,
-              'Test automatici ancora in corso (build #${AppInfo.buildNumber}). '
+              'Test automatici ancora in corso (build ${AppInfo.displayVersion}). '
                   'Tocca per ricontrollare'
             ),
           BuildCheckState.notStarted => (
@@ -1697,7 +1697,7 @@ class _BuildRunTileState extends State<_BuildRunTile> {
         run.number != null &&
         AppInfo.buildNumber.isNotEmpty &&
         '${run.number}' != AppInfo.buildNumber) {
-      details.add('Questa app è la build #${AppInfo.buildNumber}');
+      details.add('Questa app è la build ${AppInfo.displayVersion}');
     }
     final progress = (run != null &&
             run.state == BuildRunState.running &&

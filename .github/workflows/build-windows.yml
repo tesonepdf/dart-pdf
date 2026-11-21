@@ -45,14 +45,26 @@ jobs:
           read -r year day hour minute < <(
             TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
           )
-          version="$((year - 2020)).${day}.${hour}${minute}"
+          # cifra dell'anno . giorno dell'anno (3 cifre) . ora e minuti (Roma)
+          version="$((year % 10)).${day}.${hour}${minute}"
+          # L'identificativo scritto in testa al messaggio del commit
+          # (VERSIONE#BUILD) ha la precedenza: cosi' commit, Actions, release
+          # e app mostrano sempre la stessa stringa.
+          subject="$(git log -1 --format=%s HEAD)"
+          if [[ "$subject" =~ ^([0-9]+\.[0-9]+\.[0-9]+)#[0-9]+ ]]; then
+            version="${BASH_REMATCH[1]}"
+          fi
           # Numero build = numero del commit (stesso di APK e Web):
           # commit di main + 25.
           number="$(( $(git rev-list --count HEAD) + 25 ))"
+          if [[ "$subject" =~ ^[0-9]+\.[0-9]+\.[0-9]+#([0-9]+) && "${BASH_REMATCH[1]}" != "$number" ]]; then
+            echo "::warning::Il numero nel messaggio del commit (${BASH_REMATCH[1]}) e' diverso dal numero build calcolato ($number)"
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "number=${number}" >> "$GITHUB_OUTPUT"
 
   windows:
+    name: "Windows ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}"
     needs: version
     runs-on: windows-latest
     timeout-minutes: 60
@@ -113,6 +125,7 @@ jobs:
           retention-days: 7
 
   release:
+    name: "Release Windows ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}"
     needs: [windows, version]
     if: ${{ !cancelled() && needs.windows.result == 'success' }}
     runs-on: ubuntu-latest
@@ -149,8 +162,8 @@ jobs:
             exit 0
           fi
 
-          subject="$(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^#[0-9]+ +//')"
-          title="DartPDF Windows #${NUMERO}"
+          subject="$(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//')"
+          title="DartPDF Windows ${VERSIONE}#${NUMERO}"
           notes="$(printf 'Build #%s\nNuova versione Windows disponibile.\nCosa cambia:\n- %s\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$subject" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
           if gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

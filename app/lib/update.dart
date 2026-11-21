@@ -110,6 +110,7 @@ class ReleaseInfo {
     this.isAndroidUpdate = false,
     this.commitSha,
     this.buildNumber,
+    this.versionText,
   });
 
   final AppVersion version;
@@ -138,11 +139,16 @@ class ReleaseInfo {
   /// CI build number recorded by a rolling release workflow, when present.
   final String? buildNumber;
 
+  /// Version exactly as written in the release notes (e.g. `6.325.0931`):
+  /// [AppVersion] holds integers and would drop the leading zero of the time.
+  final String? versionText;
+
   /// Human-readable build label for update banners and buttons.
   String get displayVersion {
-    // One number only: a numbered build is shown as just "#87" (the version
-    // and the build number are the same thing for the user).
-    if (!isNightly && buildNumber != null) return '#$buildNumber';
+    // Numbered builds are shown as VERSION#BUILD (e.g. "6.325.1049#87").
+    if (!isNightly && buildNumber != null) {
+      return '${versionText ?? version}#$buildNumber';
+    }
     final base = isNightly ? _nightlyDisplayVersion() : version.toString();
     return buildNumber == null ? base : '$base #$buildNumber';
   }
@@ -242,6 +248,7 @@ class ReleaseInfo {
       isAndroidUpdate: isAndroidUpdate,
       commitSha: commitSha,
       buildNumber: _buildMarker.firstMatch(notes)?.group(1),
+      versionText: _versionMarker.firstMatch(notes)?.group(1),
     );
   }
 }

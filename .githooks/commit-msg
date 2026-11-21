@@ -1,20 +1,35 @@
 #!/bin/sh
-# Mette davanti al messaggio il numero del commit (#N): lo stesso numero della
-# build su GitHub Actions e di Vercel.
-#  - main: N = commit del ramo + 25 (allinea il numero alla run di Actions)
-#  - prova-sviluppatore: N = 10013 + commit non ancora presenti in main
+# Mette davanti al messaggio l'identificativo unico VERSIONE#BUILD, per esempio
+#   6.325.1049#487 — descrizione
+# E' la stessa stringa di Actions (APK, Windows, Web, CI, Secret scan), delle
+# release, di Vercel e dell'app. Si calcola con tool/identificativo.py; se non
+# c'e' Python si ripiega sul solo "#N". I messaggi che hanno gia' un
+# identificativo (o un "#N") non si toccano.
 f="$1"
 first=$(head -n1 "$f")
 case "$first" in
-  "#"[0-9]*|Merge*|fixup!*|squash!*|Revert*) exit 0 ;;
+  "#"[0-9]*|[0-9]*.[0-9]*.[0-9]*"#"[0-9]*|Merge*|fixup!*|squash!*|Revert*) exit 0 ;;
 esac
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-if [ "$branch" = "prova-sviluppatore" ]; then
-  base=$(git rev-parse --verify -q origin/main || git rev-parse --verify -q main)
-  n=$(( 10013 + $(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0) + 1 ))
+root=$(git rev-parse --show-toplevel 2>/dev/null)
+id=""
+for py in python3 python py; do
+  if command -v "$py" >/dev/null 2>&1 && [ -f "$root/tool/identificativo.py" ]; then
+    id=$("$py" "$root/tool/identificativo.py" --solo-id 2>/dev/null) && [ -n "$id" ] && break
+    id=""
+  fi
+done
+if [ -z "$id" ]; then
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ "$branch" = "prova-sviluppatore" ]; then
+    base=$(git rev-parse --verify -q origin/main || git rev-parse --verify -q main)
+    n=$(( 10013 + $(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0) + 1 ))
+  else
+    n=$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 + 25 ))
+  fi
+  id="#$n"
+  printf '%s %s\n' "$id" "$first" > "$f.tmp"
 else
-  n=$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 + 25 ))
+  printf '%s — %s\n' "$id" "$first" > "$f.tmp"
 fi
-printf '#%s %s\n' "$n" "$first" > "$f.tmp"
 tail -n +2 "$f" >> "$f.tmp"
 mv "$f.tmp" "$f"

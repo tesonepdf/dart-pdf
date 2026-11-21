@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_info.dart';
 import 'app_log.dart';
 import 'l10n/app_l10n.dart';
 import 'l10n/app_localizations.dart';
@@ -51,8 +52,8 @@ Future<void> startUpdateInstall(
     builder: (context) => _UpdateProgressDialog(
       progress: progress,
       onCancel: () => cancelled = true,
-      headline: 'Aggiorno dalla build ${updates.currentBuildNumber} '
-          'alla ${updates.latest?.buildNumber ?? "?"}',
+      headline: 'Aggiorno da ${AppInfo.displayVersion} '
+          'a ${updates.latest?.displayVersion ?? "?"}',
     ),
   );
 
@@ -60,8 +61,8 @@ Future<void> startUpdateInstall(
   Object? failure;
   AppLog.instance.info(
       'Aggiornamenti',
-      'Inizio aggiornamento: dalla build ${updates.currentBuildNumber} '
-      'alla ${updates.latest?.buildNumber ?? "?"}');
+      'Inizio aggiornamento: da ${AppInfo.displayVersion} '
+      'a ${updates.latest?.displayVersion ?? "?"}');
   try {
     // Android: prima la strada leggera (solo le patch); se non c'e' o qualcosa
     // non torna, si scarica l'APK completo come sempre.
@@ -214,8 +215,8 @@ Future<void> startReinstallAll(
     builder: (context) => _UpdateProgressDialog(
       progress: progress,
       onCancel: () => cancelled = true,
-      headline: 'Aggiorno dalla build ${updates.currentBuildNumber} '
-          'alla ${updates.latest?.buildNumber ?? "?"}',
+      headline: 'Aggiorno da ${AppInfo.displayVersion} '
+          'a ${updates.latest?.displayVersion ?? "?"}',
     ),
   );
 
