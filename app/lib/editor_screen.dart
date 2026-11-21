@@ -6422,8 +6422,8 @@ class _EditorScreenState extends State<EditorScreen>
             autoOcr: _autoOcr,
           ),
         ),
-        // Aggiornamenti: accanto a Impostazioni (il mio repo e quello
-        // ufficiale, tutti e due aperti nella stessa schermata).
+        // Aggiornamenti: accanto a Impostazioni (aggiornamenti dell'app e
+        // informazioni, nella stessa schermata).
         _MenuAction(
             id: 'updates',
             icon: Icons.system_update_outlined,

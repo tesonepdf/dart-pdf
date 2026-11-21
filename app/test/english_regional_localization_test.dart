@@ -11,7 +11,7 @@ import 'test_finders.dart';
 
 void main() {
   for (final region in ['AU', 'GB', 'US']) {
-    testWidgets('Updates+ license label follows English $region',
+    testWidgets('Updates license label follows English $region',
         (tester) async {
       SharedPreferences.setMockInitialValues({});
       final updates = UpdateService(
@@ -26,12 +26,12 @@ void main() {
         home: Scaffold(body: Builder(builder: (context) {
           return TextButton(
             onPressed: () => showAppUpdates(context, updates: updates),
-            child: const Text('Updates+'),
+            child: const Text('Updates'),
           );
         })),
       ));
       await tester.pumpAndSettle();
-      await tapMenuText(tester, 'Updates+');
+      await tapMenuText(tester, 'Updates');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await expandSettingsSections(tester, settle: false);

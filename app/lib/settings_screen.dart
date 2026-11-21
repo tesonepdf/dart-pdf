@@ -102,7 +102,7 @@ Future<void> _showDefaultAppSetup(BuildContext context) {
 }
 
 /// Opens the app settings sheet: theme mode, recent-files management and
-/// editor preferences. App information is available from the Updates+ screen
+/// editor preferences. App information is available from the Updates screen
 /// ([showAppUpdates]). Style defaults (tool colours, stroke,
 /// font) are edited live from the editor toolbar and persist through
 /// [PdfEditingPreferences], so they aren't duplicated here.
@@ -712,7 +712,7 @@ class _ArrowStepsSection extends StatelessWidget {
 }
 
 String appUpdatesPlusTitle(BuildContext context) =>
-    '${appL10n(context).settingsUpdates}+';
+    appL10n(context).settingsUpdates;
 
 List<Widget> _appInformationChildren(BuildContext context) {
   final theme = Theme.of(context);
@@ -804,86 +804,21 @@ Future<void> showAppUpdates(
   );
 }
 
-class _UpdatesDialog extends StatefulWidget {
+class _UpdatesDialog extends StatelessWidget {
   const _UpdatesDialog({required this.updates, this.installer});
 
   final UpdateService updates;
   final UpdateInstaller? installer;
 
   @override
-  State<_UpdatesDialog> createState() => _UpdatesDialogState();
-}
-
-class _UpdatesDialogState extends State<_UpdatesDialog> {
-  static const _orderKey = 'dart_pdf_editor_app.updates_order';
-
-  /// L'ordine scelto dall'utente per i blocchi (id), salvato.
-  List<String> _order = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOrder();
-  }
-
-  Future<void> _loadOrder() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getStringList(_orderKey);
-      if (saved != null && mounted) setState(() => _order = saved);
-    } catch (_) {
-      // senza archivio resta l'ordine di fabbrica
-    }
-  }
-
-  Future<void> _saveOrder(List<String> ids) async {
-    setState(() => _order = ids);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_orderKey, ids);
-    } catch (_) {}
-  }
-
-  static String _t(BuildContext context, String it, String en) =>
-      Localizations.localeOf(context).languageCode == 'it' ? it : en;
-
-  @override
   Widget build(BuildContext context) {
-    final sections = <String, Widget>{
-      'own': _SettingsSection(
-        title: _t(context, 'Il mio repo (tesonepdf)',
-            'My repository (tesonepdf)'),
-        children: [
-          _OwnUpdatePanel(
-              updates: widget.updates, installer: widget.installer),
-          const Divider(height: 24),
-          ..._appInformationChildren(context),
-        ],
-      ),
-    };
-    final ids = _order.where(sections.containsKey).toList();
-    for (final id in sections.keys) {
-      if (!ids.contains(id)) ids.add(id);
-    }
-    // Tenendo premuto 500 ms sul titolo di un blocco lo si sposta su o giu'.
-    final Widget body = ReorderableListView(
-      key: const ValueKey('updates-sections'),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) newIndex -= 1;
-        final moved = List<String>.of(ids);
-        moved.insert(newIndex, moved.removeAt(oldIndex));
-        unawaited(_saveOrder(moved));
-      },
+    final Widget body = Column(
+      key: const ValueKey('updates-body'),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < ids.length; i++)
-          ReorderableDelayedDragStartListener(
-            key: ValueKey('updates-section-${ids[i]}'),
-            index: i,
-            child: sections[ids[i]]!,
-          ),
+        _OwnUpdatePanel(updates: updates, installer: installer),
+        const Divider(height: 24),
+        ..._appInformationChildren(context),
       ],
     );
     // sul telefono la schermata occupa tutto lo schermo

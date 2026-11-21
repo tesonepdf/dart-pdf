@@ -405,11 +405,11 @@ void main() {
       }
     });
 
-    testWidgets('Updates+ opens it from the Information block', (tester) async {
+    testWidgets('Updates opens it from the Information block', (tester) async {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
       await openAppMenu(tester);
-      await tapMenuText(tester, 'Updates+');
+      await tapMenuText(tester, 'Updates');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
 
@@ -444,7 +444,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
       await tester.pump();
       await openAppMenu(tester);
-      await tapMenuText(tester, 'Updates+');
+      await tapMenuText(tester, 'Updates');
       await tester.pumpAndSettle();
       await expandSettingsSections(tester);
 
@@ -480,7 +480,7 @@ void main() {
         await tester.pumpWidget(MaterialApp(home: EditorScreen(prefs: prefs)));
         await tester.pump();
         await openAppMenu(tester);
-        await tapMenuText(tester, 'Updates+');
+        await tapMenuText(tester, 'Updates');
         await tester.pumpAndSettle();
         await expandSettingsSections(tester);
         final tile = find.byKey(ValueKey(key));
