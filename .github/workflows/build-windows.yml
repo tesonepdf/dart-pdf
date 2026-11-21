@@ -1,0 +1,172 @@
+name: Build Windows UFFICIALE (main)
+
+run-name: ${{ github.event.head_commit.message || 'Build Windows a comando' }}
+
+# Build Windows separata dall'APK e dal Web: ha il suo nome, la sua coda e la
+# sua release (app-windows-latest). A ogni push su main compila lo zip
+# portatile (windows-x64.zip) e un elenco dei file con codice di controllo
+# (windows-files.json), poi li pubblica. Se un'altra build Windows e' in corso,
+# questa aspetta; se nel frattempo ne arriva una piu' nuova, GitHub scarta
+# quella in attesa e tiene la piu' nuova (contiene gia' le precedenti).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.50.0'
+  WINDOWS_TAG: app-windows-latest
+
+jobs:
+  version:
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.app-version.outputs.version }}
+      number: ${{ steps.app-version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Calcola versione e numero build
+        id: app-version
+        run: |
+          commit_epoch="$(git log -1 --format=%ct HEAD)"
+          read -r year day hour minute < <(
+            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
+          )
+          version="$((year - 2020)).${day}.${hour}${minute}"
+          # Numero build = numero del commit (stesso di APK e Web):
+          # commit di main + 25.
+          number="$(( $(git rev-list --count HEAD) + 25 ))"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compila Windows
+        working-directory: app
+        shell: pwsh
+        run: |
+          flutter build windows --release --build-name="${{ needs.version.outputs.version }}" --build-number="${{ needs.version.outputs.number }}"
+          if ($LASTEXITCODE -ne 0) { throw "flutter build windows non riuscito ($LASTEXITCODE)" }
+
+      - name: Crea lo zip portatile e l'elenco dei file
+        working-directory: app
+        shell: pwsh
+        env:
+          NUMERO: ${{ needs.version.outputs.number }}
+          VERSIONE: ${{ needs.version.outputs.version }}
+        run: |
+          $bundle = (Resolve-Path "build/windows/x64/runner/Release").Path
+          Copy-Item "$env:SystemRoot\System32\msvcp140.dll",
+                    "$env:SystemRoot\System32\vcruntime140.dll",
+                    "$env:SystemRoot\System32\vcruntime140_1.dll" `
+                    -Destination $bundle -Force
+          # Elenco dei file con codice di controllo (base per gli
+          # aggiornamenti a patch di Windows).
+          $files = Get-ChildItem -Path $bundle -Recurse -File | ForEach-Object {
+            [ordered]@{
+              path   = $_.FullName.Substring($bundle.Length + 1).Replace('\', '/')
+              size   = $_.Length
+              sha256 = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
+            }
+          }
+          [ordered]@{
+            build   = [int]$env:NUMERO
+            version = $env:VERSIONE
+            files   = @($files)
+          } | ConvertTo-Json -Depth 5 | Set-Content -Path windows-files.json -Encoding utf8
+          Compress-Archive -Path "$bundle/*" -DestinationPath windows-x64.zip -Force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: |
+            app/windows-x64.zip
+            app/windows-files.json
+          retention-days: 7
+
+  release:
+    needs: [windows, version]
+    if: ${{ !cancelled() && needs.windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows
+          path: dl
+
+      - name: Pubblica la Release Windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSIONE: ${{ needs.version.outputs.version }}
+          NUMERO: ${{ needs.version.outputs.number }}
+        run: |
+          trap 'echo "::error::Pubblica la Release Windows fallita alla riga $LINENO: $BASH_COMMAND"' ERR
+          ls -la dl
+          # riprova i comandi gh se GitHub risponde con un errore momentaneo
+          gh() { local i; for i in 1 2 3 4; do command gh "$@" && return 0; echo "gh $1 $2: tentativo $i fallito"; sleep 8; done; return 1; }
+          cp dl/windows-x64.zip windows-x64.zip
+          cp dl/windows-files.json windows-files.json
+
+          # Il canale Windows non torna indietro: se e' gia' pubblicata una
+          # build piu' alta di questa, non la tocco.
+          current_build="$(gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- app-build: \([0-9][0-9]*\) -->.*/\1/p' | head -n1 || true)"
+          if [[ -n "$current_build" && "$current_build" -gt "$NUMERO" ]]; then
+            echo "Il canale Windows e' gia' alla build $current_build (> $NUMERO): non lo sposto."
+            exit 0
+          fi
+
+          subject="$(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^#[0-9]+ +//')"
+          title="DartPDF Windows #${NUMERO}"
+          notes="$(printf 'Build #%s\nNuova versione Windows disponibile.\nCosa cambia:\n- %s\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$subject" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+
+          if gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$WINDOWS_TAG" windows-x64.zip windows-files.json \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$WINDOWS_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$title" \
+              --notes "$notes" \
+              --prerelease=false \
+              --latest=false
+          else
+            gh release create "$WINDOWS_TAG" windows-x64.zip windows-files.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --latest=false
+          fi

@@ -79,7 +79,8 @@ def modo_apk():
     git("push")
     sha = git("rev-parse", "HEAD")
     print(f"Pushato {sha[:7]}: attendo la build APK...")
-    esito = aspetta_run(lambda runs: next((r for r in runs if r["head_sha"] == sha and r["event"] == "push"), None))
+    esito = aspetta_run(lambda runs: next((r for r in runs if r["head_sha"] == sha and r["event"] == "push"
+                                           and r["path"].endswith("/build.yml")), None))
     if esito != "success":
         esci(f"La build e' finita con esito: {esito}. Controlla Actions su GitHub.")
     scarica(False)
@@ -89,7 +90,7 @@ def modo_windows():
     if not shutil.which("gh"):
         esci("Serve GitHub CLI (gh). In alternativa: GitHub > Actions > Run workflow.")
     partenza = datetime.now(timezone.utc)
-    r = subprocess.run(["gh", "workflow", "run", "build.yml", "--repo", REPO, "--ref", "main"])
+    r = subprocess.run(["gh", "workflow", "run", "build-windows.yml", "--repo", REPO, "--ref", "main"])
     if r.returncode != 0:
         esci("Non sono riuscito ad avviare la build (gh loggata? permessi Actions?).")
     print("Build Windows avviata: attendo...")
@@ -97,7 +98,8 @@ def modo_windows():
     def trova(runs):
         for run in runs:
             creato = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-            if run["event"] == "workflow_dispatch" and creato >= partenza.replace(microsecond=0):
+            if (run["event"] == "workflow_dispatch" and run["path"].endswith("/build-windows.yml")
+                    and creato >= partenza.replace(microsecond=0)):
                 return run
         return None
 

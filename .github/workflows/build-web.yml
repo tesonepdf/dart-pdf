@@ -1,0 +1,83 @@
+name: Build Web (main)
+
+run-name: ${{ github.event.head_commit.message || 'Build Web a comando' }}
+
+# Build della web app separata dall'APK e da Windows: ha il suo nome, la sua
+# coda e il suo esito verde/rosso. Compila la web app con lo stesso numero
+# build degli altri (commit + 25) e tiene il risultato come file della build
+# per 7 giorni. La web app online la pubblica Vercel.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.50.0'
+
+jobs:
+  version:
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.app-version.outputs.version }}
+      number: ${{ steps.app-version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Calcola versione e numero build
+        id: app-version
+        run: |
+          commit_epoch="$(git log -1 --format=%ct HEAD)"
+          read -r year day hour minute < <(
+            TZ=Europe/Rome date -d "@${commit_epoch}" '+%Y %j %H %M'
+          )
+          version="$((year - 2020)).${day}.${hour}${minute}"
+          # Numero build = numero del commit (stesso di APK e Windows):
+          # commit di main + 25.
+          number="$(( $(git rev-list --count HEAD) + 25 ))"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compila la web app
+        working-directory: app
+        env:
+          DART: dart
+          FLUTTER: flutter
+          PDF_BUILD_VERSION: ${{ needs.version.outputs.version }}
+          PDF_BUILD_NUMBER: ${{ needs.version.outputs.number }}
+        run: bash tool/build_web.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DartPDF-Web
+          path: app/build/web
+          retention-days: 7
