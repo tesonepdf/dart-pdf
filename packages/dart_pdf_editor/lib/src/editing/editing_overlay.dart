@@ -8149,7 +8149,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final italian = Localizations.localeOf(context).languageCode == 'it';
     final above = area.top - 56 * scale >= 0;
     final width = _geometry.viewSize.width;
-    final half = 120 * scale;
+    final half = 230 * scale;
     final anchor = Offset(
       width <= 2 * half ? width / 2 : area.center.dx.clamp(half, width - half),
       above ? area.top - 8 * scale : area.bottom + 8 * scale,
@@ -8172,7 +8172,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
               elevation: 3,
               borderRadius: BorderRadius.circular(22),
               child: Padding(
-                padding: const EdgeInsets.only(left: 14, right: 6),
+                padding: const EdgeInsets.only(left: 14, right: 4),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(italian ? 'Ridimensiona contenuto' : 'Resize content'),
                   const SizedBox(width: 6),
@@ -8180,6 +8180,20 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     key: const ValueKey('pdf-area-scale-switch'),
                     value: _controller.contentAreaScales,
                     onChanged: (v) => _controller.contentAreaScales = v,
+                  ),
+                  TextButton(
+                    key: const ValueKey('pdf-area-scale-undo'),
+                    onPressed: _controller.canUndo ? _controller.undo : null,
+                    child: Text(italian ? 'Annulla' : 'Undo'),
+                  ),
+                  TextButton(
+                    key: const ValueKey('pdf-area-scale-close'),
+                    onPressed: () {
+                      final save = _controller.onSaveRequested;
+                      _controller.contentAreaMode = false;
+                      save?.call();
+                    },
+                    child: Text(italian ? 'Chiudi e salva' : 'Close and save'),
                   ),
                 ]),
               ),

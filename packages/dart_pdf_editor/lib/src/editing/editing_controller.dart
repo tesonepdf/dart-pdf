@@ -11300,10 +11300,12 @@ class PdfEditingController extends ChangeNotifier {
     return [
       for (final element in elementsOn(page).elements)
         if (element.bounds case final b?)
-          if (b.left >= area.left - slack &&
-              b.right <= area.right + slack &&
-              b.bottom >= area.bottom - slack &&
-              b.top <= area.top + slack)
+          // dentro l'area se il centro dell'oggetto cade nel rettangolo
+          // (anche quando l'oggetto sporge un po' dal bordo)
+          if ((b.left + b.right) / 2 >= area.left - slack &&
+              (b.left + b.right) / 2 <= area.right + slack &&
+              (b.bottom + b.top) / 2 >= area.bottom - slack &&
+              (b.bottom + b.top) / 2 <= area.top + slack)
             element.id,
     ];
   }

@@ -8027,7 +8027,15 @@ class _EditorScreenState extends State<EditorScreen>
         label: label,
         enabled: onTap != null || (c?.enabled ?? false),
         selected: c?.selected ?? false,
-        run: onTap ?? c?.run ?? () {},
+        // uno strumento gia' attivo si spegne con un secondo tocco
+        run: onTap ??
+            ((c?.selected ?? false) &&
+                    command!.startsWith('tool-') &&
+                    command != 'tool-select' &&
+                    byId.containsKey('tool-select')
+                ? byId['tool-select']!.run
+                : c?.run) ??
+            () {},
         choices: [
           for (final x in choices)
             if (x != null) x,
