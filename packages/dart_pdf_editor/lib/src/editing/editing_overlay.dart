@@ -3792,6 +3792,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   @override
   void dispose() {
+    _hoverTimer?.cancel();
     _formNudgeTimer?.cancel();
     _polyLastTapTimer?.cancel();
     _selectTapTimer?.cancel();
@@ -7953,7 +7954,35 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   int _hoverMaxUs = 0;
   DateTime _hoverReported = DateTime.now();
 
+  // Le linee guida seguono il mouse subito; il resto (che forma dare alla
+  // freccia, cosa c'e' sotto) al massimo ogni 40 ms: un controllo pesante a
+  // ogni pixel ritardava il disegno e le linee inseguivano la freccia.
+  DateTime _hoverLastWork = DateTime.fromMillisecondsSinceEpoch(0);
+  PointerHoverEvent? _hoverDeferred;
+  Timer? _hoverTimer;
+
   void _onHover(PointerHoverEvent event) {
+    if (event.kind != PointerDeviceKind.touch) {
+      _trackGuide(event.localPosition, event.position);
+    }
+    if (DateTime.now().difference(_hoverLastWork).inMilliseconds >= 40) {
+      _hoverTimer?.cancel();
+      _hoverTimer = null;
+      _hoverDeferred = null;
+      _runHover(event);
+      return;
+    }
+    _hoverDeferred = event;
+    _hoverTimer ??= Timer(const Duration(milliseconds: 40), () {
+      _hoverTimer = null;
+      final last = _hoverDeferred;
+      _hoverDeferred = null;
+      if (mounted && last != null) _runHover(last);
+    });
+  }
+
+  void _runHover(PointerHoverEvent event) {
+    _hoverLastWork = DateTime.now();
     final report = PdfEditingPreferences.onDiagnostic;
     if (report == null) {
       _onHoverWork(event);
@@ -9338,6 +9367,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           },
           onHover: _onHover,
           onExit: (_) {
+            _hoverTimer?.cancel();
+            _hoverTimer = null;
+            _hoverDeferred = null;
             _guideGlobal = null;
             if (_pickPosition == null &&
                 _guideCursor == null &&
