@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'app_log.dart';
+import 'app_perf.dart';
 
 // The perf_log entry, NOT the package entry: main.dart runs before the
 // deferred app.dart loading unit (the splash), and importing the entry here
@@ -44,6 +45,9 @@ Future<void> main(List<String> args) async {
   PdfEditingPreferences.onWriteError = (e, s) => AppLog.instance
       .error('Salvataggio scelte degli strumenti (colore, spessore...)', e, s);
 
+  AppPerf.instance.install();
+  PdfEditingPreferences.onHoverTime =
+      (us) => AppPerf.instance.mouse.add(us / 1000.0);
   PdfEditingPreferences.onDiagnostic =
       (m) => AppLog.instance.info('Prestazioni', m);
 

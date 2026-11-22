@@ -7984,7 +7984,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _runHover(PointerHoverEvent event) {
     _hoverLastWork = DateTime.now();
     final report = PdfEditingPreferences.onDiagnostic;
-    if (report == null) {
+    final sample = PdfEditingPreferences.onHoverTime;
+    if (report == null && sample == null) {
       _onHoverWork(event);
       return;
     }
@@ -7994,6 +7995,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _onHoverWork(event);
     _hoverClock.stop();
     final us = _hoverClock.elapsedMicroseconds;
+    sample?.call(us);
+    if (report == null) return;
     _hoverCount++;
     _hoverTotalUs += us;
     if (us > _hoverMaxUs) _hoverMaxUs = us;

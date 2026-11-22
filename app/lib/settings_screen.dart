@@ -19,6 +19,7 @@ import 'language_names.dart';
 import 'measure_scale_setting.dart';
 import 'ocr.dart';
 import 'ocr_auto.dart';
+import 'performance_screen.dart';
 import 'open_with_rank.dart';
 import 'pdf_cache.dart';
 import 'recents.dart';
@@ -361,6 +362,16 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                           'Cosa e\' andato bene e cosa no, con la spiegazione'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => showAppLog(context),
+                    ),
+                    ListTile(
+                      key: const ValueKey('settings-performance'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.speed_outlined),
+                      title: const Text('Prestazioni'),
+                      subtitle: const Text(
+                          'Tempi di frame, mouse e menu dell\'ultimo minuto'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => showPerformance(context),
                     ),
                   ],
                 ),

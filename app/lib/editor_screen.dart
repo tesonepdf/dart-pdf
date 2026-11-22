@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log.dart';
+import 'app_perf.dart';
 import 'autosave.dart';
 import 'measure_scale_setting.dart';
 import 'combine_incoming.dart';
@@ -8289,6 +8290,7 @@ class _EditorScreenState extends State<EditorScreen>
     // disegno del menu (due fotogrammi dopo l'apertura).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        AppPerf.instance.menu.add(menuTimer.elapsedMilliseconds.toDouble());
         AppLog.instance.info(
             'Prestazioni',
             'Menu: voci ${entries.length} preparate in $prepareMs ms, '

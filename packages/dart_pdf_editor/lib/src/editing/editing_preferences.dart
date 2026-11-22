@@ -745,6 +745,9 @@ class PdfEditingPreferences extends ChangeNotifier
   /// movimento del mouse): chi ospita l'editor la manda nel proprio Log.
   static void Function(String message)? onDiagnostic;
 
+  /// Il tempo in microsecondi di ogni controllo del mouse sulla pagina.
+  static void Function(int micros)? onHoverTime;
+
   void _write(Future<Object?> Function(PdfPreferencesStore store) write) {
     _modified = true;
     final store = _store;
