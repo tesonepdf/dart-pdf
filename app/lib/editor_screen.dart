@@ -6727,6 +6727,36 @@ class _EditorScreenState extends State<EditorScreen>
         section: 'Schede',
       );
     }
+    // Le voci che stanno anche nelle barre veloci del documento (la lente, il
+    // cambio barra) e la Home: il menu le ha tutte.
+    add(
+      plain('menu-home', Icons.home_outlined, 'Home (recenti e preferiti)',
+          () => unawaited(_openHome())),
+      'file',
+      section: 'Aprire',
+    );
+    if (hasDocument) {
+      add(
+        plain('menu-search', Icons.search, 'Cerca nel documento',
+            () => pdfSearchRequest.value++),
+        'view',
+        section: 'Ricerca',
+      );
+      add(
+        AppCommand(
+          id: 'menu-tesone-bar',
+          label: 'Barra del documento stile tesone',
+          icon: Icons.swap_horiz,
+          source: l.paletteSourceMenu,
+          selected: TesoneBarSetting.instance.value,
+          run: () => unawaited(
+              TesoneBarSetting.instance.save(!TesoneBarSetting.instance.value)),
+        ),
+        'view',
+        section: 'Barre',
+        toggle: true,
+      );
+    }
     if (hasDocument && tab != null) {
       add(
         plain('menu-share', Icons.share_outlined,
@@ -7615,7 +7645,16 @@ class _EditorScreenState extends State<EditorScreen>
       'Importa foto con misura',
     ],
     'file': [null, 'Aprire', 'Recenti', 'Salvare'],
-    'view': [null, 'Modalita\'', 'Ascolto', 'Schede', 'Pannelli', 'Opzioni di vista'],
+    'view': [
+      null,
+      'Modalita\'',
+      'Ricerca',
+      'Ascolto',
+      'Schede',
+      'Barre',
+      'Pannelli',
+      'Opzioni di vista',
+    ],
     'pages': [
       null,
       'Aggiungere pagine',

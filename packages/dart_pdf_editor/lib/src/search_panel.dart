@@ -1299,6 +1299,10 @@ class PdfPanelToggleButton extends StatelessWidget {
 /// other controls meanwhile, so the field and the "more" button stay in view.
 final ValueNotifier<bool> pdfSearchOpen = ValueNotifier<bool>(false);
 
+/// Chiede ai campi di ricerca di aprirsi (si aumenta il valore): lo usa la
+/// voce "Cerca nel documento" del menu, che apre lo stesso campo della lente.
+final ValueNotifier<int> pdfSearchRequest = ValueNotifier<int>(0);
+
 /// A search that rests as a magnifier icon and unfolds into the full
 /// [PdfSearchField]; tapping the field's magnifier folds it back.
 class PdfCollapsibleSearch extends StatefulWidget {
@@ -1325,7 +1329,18 @@ class _PdfCollapsibleSearchState extends State<PdfCollapsibleSearch> {
   bool _open = false;
 
   @override
+  void initState() {
+    super.initState();
+    pdfSearchRequest.addListener(_onSearchRequest);
+  }
+
+  void _onSearchRequest() {
+    if (mounted && !_open) _expand();
+  }
+
+  @override
   void dispose() {
+    pdfSearchRequest.removeListener(_onSearchRequest);
     if (_open) Future.microtask(() => pdfSearchOpen.value = false);
     super.dispose();
   }
