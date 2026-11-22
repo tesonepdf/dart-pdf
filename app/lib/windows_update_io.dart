@@ -136,7 +136,7 @@ Future<void> applyWindowsFilesUpdate({
     AppLog.instance.info('Aggiornamenti',
         'Windows: scaricati ${byHash.length} file, riavvio per applicarli');
     onProgress(1, "riavvio l'app");
-    await _startScriptHidden(script.path);
+    await _startScript(script.path);
     await Future<void>.delayed(const Duration(milliseconds: 600));
     exit(0);
   } catch (_) {
@@ -147,31 +147,25 @@ Future<void> applyWindowsFilesUpdate({
   }
 }
 
-/// Avvia lo script di aggiornamento senza finestra: con PowerShell, che apre
-/// il prompt dei comandi nascosto. Se PowerShell non parte, ripiega sul
-/// prompt visibile (meglio una finestra che un aggiornamento che non parte).
-Future<void> _startScriptHidden(String scriptPath) async {
+/// Avvia lo script di aggiornamento: il prompt dei comandi parte direttamente,
+/// staccato dall'app, come nella versione che funzionava. Il lancio nascosto
+/// con PowerShell non faceva partire lo script (nessun log, app chiusa e mai
+/// riaperta), quindi non si usa piu'. Prima di uscire l'app scrive una riga
+/// in `dartpdf-update.log`, accanto allo script: se la riga c'e' e le
+/// successive no, si sa che il lancio non e' andato a buon fine.
+Future<void> _startScript(String scriptPath) async {
+  final logPath = _join(File(scriptPath).parent.path, 'dartpdf-update.log');
   try {
-    final quoted = scriptPath.replaceAll("'", "''");
-    await Process.start(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-WindowStyle',
-        'Hidden',
-        '-Command',
-        "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' "
-            "-ArgumentList '/c','\"$quoted\"'",
-      ],
-      mode: ProcessStartMode.detached,
+    await File(logPath).writeAsString(
+      '${DateTime.now()} app: lancio lo script $scriptPath\r\n',
+      mode: FileMode.append,
+      flush: true,
     );
   } catch (_) {
-    await Process.start('cmd.exe', ['/c', scriptPath],
-        mode: ProcessStartMode.detached);
+    // Il log e' solo un aiuto: non deve fermare l'aggiornamento.
   }
+  await Process.start('cmd.exe', ['/c', scriptPath],
+      mode: ProcessStartMode.detached);
 }
 
 String _join(String dir, String relative) {
