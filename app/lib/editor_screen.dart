@@ -86,6 +86,7 @@ import 'page_choice.dart';
 import 'page_numbers.dart';
 import 'comic_book.dart';
 import 'epub_book.dart';
+import 'markdown_book.dart';
 import 'make_fillable.dart';
 import 'watermark.dart';
 import 'pdf_conversions.dart';
@@ -3106,6 +3107,32 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Un file di testo Markdown (.md) in un PDF nuovo (titoli, elenchi e
+  /// paragrafi su pagine A4), che si apre in una scheda.
+  Future<void> _openMarkdown() async {
+    try {
+      final file = await pickMarkdownFile();
+      if (file == null || !mounted) return;
+      _toast('Apro il testo…', duration: const Duration(seconds: 6));
+      final result = await markdownToPdfAsync(await file.readAsBytes());
+      if (!mounted) return;
+      _readOnly = false;
+      _addTab(
+          DocumentTab.document(
+            title: markdownTitle(file.name),
+            bytes: result.bytes,
+            preferences: _prefs,
+          ),
+          createdKind: 'Testo');
+    } on FormatException catch (e) {
+      if (mounted) _toast('Testo non aperto: ${e.message}.');
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('markdown open failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Testo non aperto: ${openErrorSummary(e)}');
+    }
+  }
+
   /// Parti di pagine di uno o più PDF, messe su fogli A4 in un PDF nuovo che
   /// si apre in una scheda.
   Future<void> _composeSheet() async {
@@ -6092,6 +6119,12 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_openEpub()),
       ),
       _MenuAction(
+        id: 'open-markdown',
+        icon: Icons.article_outlined,
+        title: 'Apri un file di testo (.md)…',
+        run: () => unawaited(_openMarkdown()),
+      ),
+      _MenuAction(
         id: 'compose-sheet',
         icon: Icons.dashboard_customize_outlined,
         title: 'Componi foglio…',
@@ -6467,6 +6500,7 @@ class _EditorScreenState extends State<EditorScreen>
       'photos-to-pdf' ||
       'open-comic' ||
       'open-epub' ||
+      'open-markdown' ||
       'scanner-import' ||
       'compose-sheet' =>
         'create',
@@ -7527,6 +7561,7 @@ class _EditorScreenState extends State<EditorScreen>
     'photos-one-sheet': 'Piu\' foto su un solo foglio',
     'open-comic': 'Leggi un fumetto in formato .cbz',
     'open-epub': 'Leggi un libro in formato .epub',
+    'open-markdown': 'Leggi un file di testo Markdown (.md)',
     'scanner-import': 'Importa da uno scanner',
     'compose-sheet': 'Componi un foglio',
     'open': 'Apri un PDF',

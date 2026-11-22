@@ -654,8 +654,11 @@ String epubChapterTitle(List<EpubBlock> blocks, int first, int number) {
 /// pagina, poi titoli, paragrafi e immagini su pagine A4, con i capitoli come
 /// segnalibri quando sono almeno due. Lancia [FormatException] se non è un
 /// EPUB leggibile o non ha testo.
-EpubPdfResult epubToPdf(Uint8List epub) {
-  final content = readEpub(epub);
+EpubPdfResult epubToPdf(Uint8List epub) => epubContentToPdf(readEpub(epub));
+
+/// Impagina [content] (copertina e blocchi di testo) e lo scrive in un PDF su
+/// fogli A4: lo usano gli .epub e i file .md (`markdown_book.dart`).
+EpubPdfResult epubContentToPdf(EpubContent content) {
   final decoded = HashMap<Uint8List, PdfEmbeddableImage?>.identity();
   PdfEmbeddableImage? decode(Uint8List? bytes) {
     if (bytes == null) return null;
