@@ -103,6 +103,7 @@ class IncomingPdfHandlerTest {
             for (item in batch) {
                 assertArrayEquals(bytes, item["bytes"] as ByteArray)
                 assertFalse(item.containsKey("path"))
+                assertEquals(true, item["shared"])
             }
             assertTrue(handler.takeInitialFiles().isEmpty())
         }
@@ -139,6 +140,17 @@ class IncomingPdfHandlerTest {
         provider.deny = true
         handler.handleMultiple(sendMultiple(), true, context.contentResolver) { fail("denied") }
         assertTrue(handler.takeInitialFiles().isEmpty())
+    }
+
+    @Test fun sharedFlagMarksSharesButNotOpenWith() {
+        val send = Intent(Intent.ACTION_SEND).setType("image/jpeg")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+        val shared = IncomingPdfHandler()
+        shared.handle(send, true, context.contentResolver) { fail("cold open") }
+        assertEquals(true, shared.takeInitialFile()!!["shared"])
+        val opened = IncomingPdfHandler()
+        opened.handle(view(), true, context.contentResolver) { fail("cold open") }
+        assertFalse(opened.takeInitialFile()!!.containsKey("shared"))
     }
 
     @Test fun takeInitialFilesAlsoReturnsASingleColdOpen() {

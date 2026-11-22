@@ -2953,10 +2953,14 @@ class _EditorScreenState extends State<EditorScreen>
   /// all'inizio, senza ingrandire i pixel; i dpi si possono solo abbassare, a
   /// scelta. Affiancate e mai sovrapposte. Le foto sono immagini normali del documento:
   /// si ingrandisce la pagina e si spostano col dito.
-  Future<void> _photosOnOneSheet() async {
+  ///
+  /// Con [shared] le foto arrivano gia' lette (condivise da un'altra app, per
+  /// esempio dalla galleria): non si apre il selettore e si chiede subito la
+  /// misura.
+  Future<void> _photosOnOneSheet({List<Uint8List>? shared}) async {
     try {
-      final picked = await _pickPhotoFiles();
-      if (picked.isEmpty || !mounted) return;
+      final picked = shared == null ? await _pickPhotoFiles() : const <XFile>[];
+      if (shared == null && (picked.isEmpty || !mounted)) return;
       var sizeId = await _askPhotoSize();
       if (sizeId == 'other') {
         if (!mounted) return;
@@ -2965,16 +2969,23 @@ class _EditorScreenState extends State<EditorScreen>
       if (sizeId == null || !mounted) return;
       final real = sizeId.isEmpty ? null : sizeId;
       var photos = <UprightPhoto>[];
-      for (final file in picked) {
-        final raw = await file.readAsBytes();
+      var unreadable = 0;
+      final raws = shared ?? [for (final file in picked) await file.readAsBytes()];
+      for (final raw in raws) {
         if (looksLikePdf(raw)) continue;
-        photos.add(await uprightPhotoAsync(raw));
+        try {
+          photos.add(await uprightPhotoAsync(raw));
+        } catch (_) {
+          // una foto illeggibile non ferma le altre
+          unreadable++;
+        }
       }
       if (!mounted) return;
       if (photos.isEmpty) {
-        _toast('Scegli almeno una foto.');
+        _toast(shared == null ? 'Scegli almeno una foto.' : 'Foto non lette.');
         return;
       }
+      if (unreadable > 0) _toast('$unreadable foto non lette e saltate.');
       if (real != null) {
         final dpis = [
           for (final p in photos) photoDpi(p.width, p.height, real),
@@ -3413,6 +3424,15 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
+  /// Una foto condivisa da un'altra app: arrivata con la condivisione, con i
+  /// byte in mano, e non e' un PDF. Si riconosce dal nome o, se manca, dai
+  /// primi byte.
+  bool _isSharedPhoto(IncomingFile file) {
+    final bytes = file.bytes;
+    if (!file.shared || bytes == null || looksLikePdf(bytes)) return false;
+    return isImageFileName(file.name) || looksLikeImageBytes(bytes);
+  }
+
   /// Opens a batch of files the OS handed over together. A single file opens
   /// as before; several - a multi-file "Open with" from a file manager - ask
   /// whether to open each in its own tab or combine them into one new
@@ -3426,6 +3446,14 @@ class _EditorScreenState extends State<EditorScreen>
     ];
     if (!mounted || files.isEmpty) return;
     _openedFromOutside = true;
+    // Foto condivise da un'altra app (anche una sola): finiscono su un foglio
+    // PDF come immagini che si spostano e si ridimensionano, alla misura scelta.
+    if (files.every(_isSharedPhoto)) {
+      await SchedulerBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await _photosOnOneSheet(shared: [for (final file in files) file.bytes!]);
+      return;
+    }
     if (files.length == 1) {
       await _openIncoming(files.single);
       return;

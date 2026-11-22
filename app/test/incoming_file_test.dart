@@ -47,6 +47,26 @@ void main() {
       expect([for (final f in files) f.path], ['/a.pdf', '/b.pdf']);
     });
 
+    test('the shared flag of a share survives, and is off otherwise', () async {
+      answer((call) => call.method == 'getInitialFiles'
+          ? [
+              {
+                'name': 'foto-1.jpg',
+                'bytes': Uint8List.fromList([1, 2, 3]),
+                'shared': true,
+              },
+              {
+                'name': 'b.pdf',
+                'bytes': Uint8List.fromList([4, 5, 6]),
+              },
+            ]
+          : null);
+      final service = IncomingFileService();
+      addTearDown(service.dispose);
+      final files = await service.initialFiles();
+      expect([for (final f in files) f.shared], [true, false]);
+    });
+
     test('falls back to getInitialFile on a runner without the batch call',
         () async {
       answer((call) {

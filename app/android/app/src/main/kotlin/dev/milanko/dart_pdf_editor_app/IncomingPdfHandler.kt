@@ -35,7 +35,9 @@ internal class IncomingPdfHandler {
             }
             else -> null
         } ?: return
-        val payload = readPayload(uri, intent, resolver) ?: return
+        val payload = readPayload(
+            uri, intent, resolver, shared = intent?.action == Intent.ACTION_SEND,
+        ) ?: return
         // Copy during the temporary read grant; no persistable/storage permission
         // is required. Dart caches the bytes for recents and uses Save As.
         if (initial) pending = payload else deliver(payload)
@@ -54,7 +56,10 @@ internal class IncomingPdfHandler {
     ) {
         if (intent?.action != Intent.ACTION_SEND_MULTIPLE) return
         val payloads = streamUris(intent).mapIndexedNotNull { index, uri ->
-            readPayload(uri, intent, resolver, fallbackName = "foto-${index + 1}.jpg")
+            readPayload(
+                uri, intent, resolver,
+                fallbackName = "foto-${index + 1}.jpg", shared = true,
+            )
         }
         if (payloads.isEmpty()) return
         if (initial) pendingBatch = payloads else deliver(payloads)
@@ -66,6 +71,7 @@ internal class IncomingPdfHandler {
         intent: Intent?,
         resolver: ContentResolver,
         fallbackName: String? = null,
+        shared: Boolean = false,
     ): Map<String, Any>? {
         // Do not turn an externally supplied URI into a network request.
         if (uri.scheme != "content" && uri.scheme != "file") return null
@@ -105,7 +111,10 @@ internal class IncomingPdfHandler {
             ?: extraName
             ?: fallbackName
             ?: "document.pdf"
-        return mapOf("name" to finalName, "bytes" to bytes)
+        // "shared" lets the Dart side tell a share (photos go onto a sheet) from
+        // an "open with" of the same file.
+        return if (shared) mapOf("name" to finalName, "bytes" to bytes, "shared" to true)
+        else mapOf("name" to finalName, "bytes" to bytes)
     }
 
     private fun streamUris(intent: Intent): List<Uri> {

@@ -55,6 +55,42 @@ bool looksLikePdf(Uint8List bytes) {
   return false;
 }
 
+/// Whether [bytes] start like a photo or bitmap the app can turn into a PDF
+/// image (JPEG, PNG, GIF, BMP, WebP, TIFF, HEIC/HEIF), whatever the file is
+/// called: a file shared from another app often arrives without a usable name.
+bool looksLikeImageBytes(Uint8List bytes) {
+  if (bytes.length < 12) return false;
+  bool at(int offset, List<int> signature) {
+    for (var i = 0; i < signature.length; i++) {
+      if (bytes[offset + i] != signature[i]) return false;
+    }
+    return true;
+  }
+
+  if (at(0, const [0xFF, 0xD8, 0xFF])) return true; // JPEG
+  if (at(0, const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) {
+    return true; // PNG
+  }
+  if (at(0, const [0x47, 0x49, 0x46, 0x38])) return true; // GIF
+  // BMP: "BM" and the four reserved bytes at 6..9 are zero.
+  if (at(0, const [0x42, 0x4D]) && at(6, const [0, 0, 0, 0])) return true;
+  if (at(0, const [0x52, 0x49, 0x46, 0x46]) &&
+      at(8, const [0x57, 0x45, 0x42, 0x50])) {
+    return true; // WebP
+  }
+  if (at(0, const [0x49, 0x49, 0x2A, 0x00]) ||
+      at(0, const [0x4D, 0x4D, 0x00, 0x2A])) {
+    return true; // TIFF
+  }
+  if (at(4, const [0x66, 0x74, 0x79, 0x70])) {
+    // HEIC / HEIF: "ftyp" followed by one of the image brands.
+    final brand = String.fromCharCodes(bytes.sublist(8, 12));
+    return const {'heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'}
+        .contains(brand);
+  }
+  return false;
+}
+
 /// The title of an opened image as a PDF name.
 String imageTitleAsPdf(String name) {
   final dot = name.lastIndexOf('.');

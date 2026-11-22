@@ -12,7 +12,8 @@ class IncomingFile {
       this.path,
       this.bytes,
       this.bookmark,
-      this.combine = false})
+      this.combine = false,
+      this.shared = false})
       : assert(path != null || bytes != null,
             'an incoming file needs a path or bytes');
 
@@ -34,6 +35,11 @@ class IncomingFile {
   /// file manager's right-click menu or `--combine`): the batch it arrives in
   /// is to be combined into one document rather than opened side by side.
   final bool combine;
+
+  /// True when the file was handed over by a share from another app (Android
+  /// "Share" / "Send multiple"), as opposed to an "open with". Shared photos go
+  /// onto a PDF sheet as movable images.
+  final bool shared;
 }
 
 /// The single conduit for files the OS opens in the app, across every
@@ -122,6 +128,7 @@ class IncomingFileService {
       bytes: bytes,
       bookmark: args['bookmark'] as String?,
       combine: args['combine'] == true,
+      shared: args['shared'] == true,
     );
   }
 }
