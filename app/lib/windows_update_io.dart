@@ -136,8 +136,7 @@ Future<void> applyWindowsFilesUpdate({
     AppLog.instance.info('Aggiornamenti',
         'Windows: scaricati ${byHash.length} file, riavvio per applicarli');
     onProgress(1, "riavvio l'app");
-    await Process.start('cmd.exe', ['/c', script.path],
-        mode: ProcessStartMode.detached);
+    await _startScriptHidden(script.path);
     await Future<void>.delayed(const Duration(milliseconds: 600));
     exit(0);
   } catch (_) {
@@ -145,6 +144,33 @@ Future<void> applyWindowsFilesUpdate({
     rethrow;
   } finally {
     client.close();
+  }
+}
+
+/// Avvia lo script di aggiornamento senza finestra: con PowerShell, che apre
+/// il prompt dei comandi nascosto. Se PowerShell non parte, ripiega sul
+/// prompt visibile (meglio una finestra che un aggiornamento che non parte).
+Future<void> _startScriptHidden(String scriptPath) async {
+  try {
+    final quoted = scriptPath.replaceAll("'", "''");
+    await Process.start(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-Command',
+        "Start-Process -WindowStyle Hidden -FilePath 'cmd.exe' "
+            "-ArgumentList '/c','\"$quoted\"'",
+      ],
+      mode: ProcessStartMode.detached,
+    );
+  } catch (_) {
+    await Process.start('cmd.exe', ['/c', scriptPath],
+        mode: ProcessStartMode.detached);
   }
 }
 

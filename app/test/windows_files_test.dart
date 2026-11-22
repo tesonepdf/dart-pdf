@@ -121,6 +121,15 @@ void main() {
       expect(script.trimRight().endsWith('del "%~f0"'), isTrue);
     });
 
+    test('does not use pipes that can hang, and always ends', () {
+      expect(script, isNot(contains('tasklist')));
+      expect(script, isNot(contains('find ')));
+      expect(script, contains('taskkill /F /FI \"PID eq %PID%\"'));
+      expect(script, contains('IMAGENAME eq %EXENAME%'));
+      expect(script, contains('if %TENTATIVI% GEQ 30 goto copia'));
+      expect(script, contains('dartpdf-update.log'));
+    });
+
     test('uses CRLF line endings only', () {
       expect(script.contains('\r\n'), isTrue);
       expect(script.replaceAll('\r\n', '').contains('\n'), isFalse);

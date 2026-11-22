@@ -115,6 +115,13 @@ Map<String, List<WindowsFileEntry>> windowsDownloadsByHash(
 /// aspetta che il processo [pid] termini, copia i file nuovi da [stagingDir]
 /// dentro [installDir], toglie la cartella temporanea e riapre [exePath].
 /// Righe separate da CRLF, come vuole il prompt dei comandi.
+///
+/// L'attesa non usa pipe (`tasklist | find` poteva restare appeso per sempre):
+/// l'app e' ancora aperta finche' il suo exe non si lascia aprire in
+/// scrittura. Dopo circa 10 secondi il processo vecchio viene chiuso a forza
+/// (solo se il PID ha ancora il nome dell'exe), e dopo circa 30 si copia
+/// comunque: lo script ha sempre una fine. Scrive un piccolo file di log
+/// (`dartpdf-update.log`) accanto a se', perche' parte con la finestra nascosta.
 String buildWindowsApplyScript({
   required int pid,
   required String stagingDir,
@@ -131,15 +138,22 @@ String buildWindowsApplyScript({
     'set "EXE=${v(exePath)}"',
     'set "TENTATIVI=0"',
     'set "COPIE=0"',
+    'set "LOG=%~dp0dartpdf-update.log"',
+    'for %%I in ("%EXE%") do set "EXENAME=%%~nxI"',
+    '>>"%LOG%" echo %date% %time% aggiornamento: attendo la chiusura di %EXENAME% (PID %PID%)',
+    'if not exist "%EXE%" goto copia',
     ':attesa',
-    'tasklist /FI "PID eq %PID%" /NH 2>nul | find "%PID%" >nul',
-    'if errorlevel 1 goto copia',
+    // senza pipe: se l'exe si apre in scrittura l'app e' chiusa
+    '(>>"%EXE%" (call)) 2>nul && goto copia',
     'set /a TENTATIVI+=1',
-    'if %TENTATIVI% GEQ 60 goto copia',
+    'if %TENTATIVI% EQU 10 taskkill /F /FI "PID eq %PID%" /FI "IMAGENAME eq %EXENAME%" >nul 2>&1',
+    'if %TENTATIVI% GEQ 30 goto copia',
     'ping -n 2 127.0.0.1 >nul',
     'goto attesa',
     ':copia',
+    '>>"%LOG%" echo %date% %time% copio i file nuovi (tentativi di attesa: %TENTATIVI%)',
     'robocopy "%STAGING%" "%INSTALL%" /E /R:3 /W:1 /NFL /NDL /NJH /NJS /NP >nul',
+    '>>"%LOG%" echo %date% %time% robocopy esito %errorlevel%',
     'if errorlevel 8 goto riprova',
     'rd /s /q "%STAGING%"',
     'goto avvia',
@@ -149,6 +163,7 @@ String buildWindowsApplyScript({
     'ping -n 3 127.0.0.1 >nul',
     'goto copia',
     ':avvia',
+    '>>"%LOG%" echo %date% %time% riapro l\'app',
     'cd /d "%INSTALL%"',
     'start "" "%EXE%"',
     'del "%~f0"',
