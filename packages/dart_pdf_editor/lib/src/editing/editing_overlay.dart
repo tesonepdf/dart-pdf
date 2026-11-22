@@ -1662,6 +1662,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   // stale render from an earlier drag is discarded.
   ui.Picture? _resizeCleanPicture;
   Object? _resizeCleanFor;
+  int? _resizeCleanRevision;
 
   // The embedded/bundled face a free-text resize preview re-wraps with,
   // reparsed from the box's appearance program once per selection. Recovering
@@ -3677,7 +3678,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// per tutto il trascinamento le copie erano due.
   void _startMoveLift() {
     if (_controller.selectedAnnotationSlots.length != 1) return;
-    if (_controller.selectedAnnotation == null) return;
+    final selectedNow = _controller.selectedAnnotation;
+    if (selectedNow == null) return;
+    if (_resizeCleanPicture != null &&
+        identical(_resizeCleanFor, selectedNow.dict) &&
+        _resizeCleanRevision == _controller.revisionId) {
+      return; // gia' pronta dalla selezione: lo spostamento e' istantaneo
+    }
+    _resizeCleanRevision = _controller.revisionId;
     unawaited(_renderResizeClean());
   }
 
@@ -3729,11 +3737,31 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     }
   }
 
+  /// Prepara in anticipo la pagina senza l'annotazione selezionata, cosi' al
+  /// primo movimento l'originale sparisce subito senza attendere il disegno.
+  /// Parte quando resta selezionata una sola annotazione di questa pagina.
+  void _prepareMoveLift() {
+    if (_textEditRect != null || _resizeHandle != null) return;
+    if (_moveStart != null) return;
+    if (_controller.selectedAnnotationSlots.length != 1) return;
+    if (_controller.selectedAnnotationSlot?.$1 != widget.pageIndex) return;
+    final annotation = _controller.selectedAnnotation;
+    if (annotation == null) return;
+    // gia' pronta (o in preparazione) per questa annotazione e questa revisione
+    if (identical(_resizeCleanFor, annotation.dict) &&
+        _resizeCleanRevision == _controller.revisionId) {
+      return;
+    }
+    _resizeCleanRevision = _controller.revisionId;
+    unawaited(_renderResizeClean());
+  }
+
   /// Drops the lifted clean-page picture once a resize drag ends.
   void _clearResizeClean() {
     _resizeCleanPicture?.dispose();
     _resizeCleanPicture = null;
     _resizeCleanFor = null;
+    _resizeCleanRevision = null;
   }
 
   @override
@@ -3864,6 +3892,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   void _onControllerChanged() {
     final previousTool = _observedTool;
     _observedTool = _tool;
+    _prepareMoveLift();
     if (previousTool == PdfEditTool.signatureBox &&
         _tool != previousTool &&
         (_dragStart != null || _dragCurrent != null)) {
@@ -7667,7 +7696,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _controller.selectElementAt(widget.pageIndex, x, y);
       return true;
     }
-    if (!_selectMode || _tapEditsSelectedFreeText(local)) return false;
+    if (!_selectMode) return false;
     _host.clearTextSelection?.call();
     if (_controller.selectableAnnotationAt(widget.pageIndex, x, y) == null) {
       // empty page: drop the selection now, but leave the tap to [_onTapUp]
@@ -7680,15 +7709,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _controller.selectAnnotationAt(widget.pageIndex, x, y);
     return true;
   }
-
-  /// Whether a select-mode tap at [local] lands on the one selected free
-  /// text, which edits it in place like clicking into a text box.
-  bool _tapEditsSelectedFreeText(Offset local) =>
-      _controller.selectedAnnotationSlots.length == 1 &&
-      _controller.selectedAnnotationSlot?.$1 == widget.pageIndex &&
-      _controller.selectedAnnotation?.subtype == 'FreeText' &&
-      !_additiveModifier &&
-      (_selectedViewRect?.contains(local) ?? false);
 
   /// A poly-tool tap that went down at [down] has lifted at [up]. A hybrid
   /// tool's vertex lands here (a press could still have been the drag that
@@ -7756,12 +7776,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final placementPosition = _snapPointToGrid(details.localPosition);
     final (placementX, placementY) = _geometry.toPagePoint(placementPosition);
     if (_selectMode) {
-      // tapping the already-selected free text edits it in place,
-      // like clicking into a text box in any editor
-      if (_tapEditsSelectedFreeText(details.localPosition)) {
-        _openTextEditor(_selectedViewRect!, existing: true);
-        return;
-      }
+      // una casella di testo selezionata resta solo selezionata: il testo
+      // dentro si modifica solo dal pulsante Modifica della barra, mai con
+      // un tocco (cosi' non si entra in modifica per sbaglio)
       if (!_additiveModifier) _host.clearTextSelection?.call();
       // a plain click on a link follows it, as in the reader - an
       // annotation that can be selected still wins the click
