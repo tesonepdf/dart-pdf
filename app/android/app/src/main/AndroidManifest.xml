@@ -180,6 +180,13 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="image/*"/>
             </intent-filter>
+            <!-- Piu' foto condivise insieme dalla galleria: finiscono tutte sullo
+                 stesso foglio PDF. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
         </activity>
         <!-- Tiene vivo il lavoro dell'OCR quando l'app non è più davanti. -->
         <service

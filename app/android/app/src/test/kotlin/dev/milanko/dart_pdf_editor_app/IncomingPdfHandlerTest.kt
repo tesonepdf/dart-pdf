@@ -48,6 +48,9 @@ class IncomingPdfHandlerTest {
         assertFalse(matches(view(Uri.parse("https://example.invalid/test.pdf"))))
         assertFalse(matches(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "image/png")))
         assertTrue(matches(Intent(Intent.ACTION_SEND).setType("application/pdf")))
+        // Piu' foto condivise insieme dalla galleria.
+        assertTrue(matches(Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/jpeg")))
+        assertFalse(matches(Intent(Intent.ACTION_SEND_MULTIPLE).setType("application/pdf")))
     }
 
     @Test fun coldOpenIsDrainedOnceAndWarmOpenDeliversBytesWithoutWritablePath() {
@@ -74,6 +77,75 @@ class IncomingPdfHandlerTest {
             handler.handle(intent, true, context.contentResolver) { fail("cold open") }
             assertArrayEquals(bytes, handler.takeInitialFile()!!["bytes"] as ByteArray)
         }
+    }
+
+    private val uri2 = Uri.parse("content://pdf-fixture/opaque/43")
+
+    private fun sendMultiple(useClip: Boolean = false) =
+        Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/*").apply {
+            if (useClip) {
+                clipData = ClipData.newRawUri("foto", uri).apply {
+                    addItem(ClipData.Item(uri2))
+                }
+            } else {
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(uri, uri2))
+            }
+        }
+
+    @Test fun sendMultipleDeliversAllFilesAsOneBatchOnColdStart() {
+        for (useClip in listOf(false, true)) {
+            val handler = IncomingPdfHandler()
+            handler.handleMultiple(sendMultiple(useClip), true, context.contentResolver) {
+                fail("cold open")
+            }
+            val batch = handler.takeInitialFiles()
+            assertEquals(2, batch.size)
+            for (item in batch) {
+                assertArrayEquals(bytes, item["bytes"] as ByteArray)
+                assertFalse(item.containsKey("path"))
+            }
+            assertTrue(handler.takeInitialFiles().isEmpty())
+        }
+    }
+
+    @Test fun sendMultipleDeliversOneBatchWhenWarm() {
+        val handler = IncomingPdfHandler()
+        val batches = mutableListOf<List<Map<String, Any>>>()
+        handler.handleMultiple(sendMultiple(), false, context.contentResolver, batches::add)
+        assertEquals(1, batches.size)
+        assertEquals(2, batches.single().size)
+        assertTrue(handler.takeInitialFiles().isEmpty())
+    }
+
+    @Test fun sendMultipleNamesFilesWhenTheProviderGivesNoName() {
+        provider.metadata = "empty"
+        val handler = IncomingPdfHandler()
+        handler.handleMultiple(sendMultiple(), true, context.contentResolver) {}
+        assertEquals(
+            listOf("foto-1.jpg", "foto-2.jpg"),
+            handler.takeInitialFiles().map { it["name"] },
+        )
+    }
+
+    @Test fun sendMultipleIgnoresOtherActionsAndUnreadableFiles() {
+        val handler = IncomingPdfHandler()
+        handler.handleMultiple(view(), true, context.contentResolver) { fail("not multiple") }
+        handler.handleMultiple(
+            Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/*").putParcelableArrayListExtra(
+                Intent.EXTRA_STREAM, arrayListOf(Uri.parse("https://example.invalid/a.jpg")),
+            ),
+            true, context.contentResolver,
+        ) { fail("network") }
+        provider.deny = true
+        handler.handleMultiple(sendMultiple(), true, context.contentResolver) { fail("denied") }
+        assertTrue(handler.takeInitialFiles().isEmpty())
+    }
+
+    @Test fun takeInitialFilesAlsoReturnsASingleColdOpen() {
+        val handler = IncomingPdfHandler()
+        handler.handle(view(), true, context.contentResolver) { fail("cold open") }
+        assertEquals(1, handler.takeInitialFiles().size)
+        assertTrue(handler.takeInitialFiles().isEmpty())
     }
 
     @Test fun optionalMetadataCannotDiscardReadablePdf() {

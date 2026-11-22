@@ -315,10 +315,10 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
             }
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
         ch.setMethodCallHandler { call, result ->
-            if (call.method == "getInitialFile") {
-                result.success(incoming.takeInitialFile())
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "getInitialFile" -> result.success(incoming.takeInitialFile())
+                "getInitialFiles" -> result.success(incoming.takeInitialFiles())
+                else -> result.notImplemented()
             }
         }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, imageClipboardChannelName)
@@ -730,6 +730,9 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
     private fun handleIntent(intent: Intent?, initial: Boolean) {
         incoming.handle(intent, initial, contentResolver) { payload ->
             channel?.invokeMethod("openFile", payload)
+        }
+        incoming.handleMultiple(intent, initial, contentResolver) { payloads ->
+            channel?.invokeMethod("openFiles", payloads)
         }
     }
 
