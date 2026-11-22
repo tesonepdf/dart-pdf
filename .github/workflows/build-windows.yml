@@ -85,7 +85,7 @@ jobs:
         working-directory: app
         shell: pwsh
         run: |
-          flutter build windows --release --build-name="${{ needs.version.outputs.version }}" --build-number="${{ needs.version.outputs.number }}"
+          flutter build windows --release --build-name="${{ needs.version.outputs.version }}" --build-number="${{ needs.version.outputs.number }}" --dart-define=PDF_BUILD_VERSION="${{ needs.version.outputs.version }}" --dart-define=PDF_BUILD_NUMBER="${{ needs.version.outputs.number }}"
           if ($LASTEXITCODE -ne 0) { throw "flutter build windows non riuscito ($LASTEXITCODE)" }
 
       - name: Crea lo zip portatile e l'elenco dei file

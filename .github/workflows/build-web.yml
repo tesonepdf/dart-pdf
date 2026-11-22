@@ -138,6 +138,26 @@ jobs:
               return sub == "PROMOTED" or (sub is None and bool(d.get("aliasAssigned")))
 
 
+          def scadenza_token():
+              # Avvisa quando il token di Vercel sta per scadere (best effort).
+              try:
+                  req = urllib.request.Request("https://api.vercel.com/v5/user/tokens",
+                      headers={"Authorization": "Bearer " + token})
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      tokens = json.loads(r.read().decode()).get("tokens", [])
+                  for t in tokens:
+                      if t.get("name") == "dart-pdf-actions" and t.get("expiresAt"):
+                          giorni = (t["expiresAt"] / 1000 - time.time()) / 86400
+                          print("Il token Vercel scade tra %.0f giorni" % giorni)
+                          if giorni < 14:
+                              print("::warning title=Token Vercel in scadenza::Il token dart-pdf-actions scade tra %.0f giorni: creane uno nuovo e aggiorna il segreto VERCEL_TOKEN" % giorni)
+                          return
+                  print("Scadenza del token non trovata")
+              except Exception as e:
+                  print("Controllo della scadenza del token non riuscito:", e)
+
+
+          scadenza_token()
           print("Versione", ident, "- commit", sha[:7])
           dep = None
           fine = time.time() + 33 * 60

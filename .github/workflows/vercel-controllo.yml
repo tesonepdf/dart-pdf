@@ -60,6 +60,20 @@ jobs:
               print("  domini di produzione =", [a.get("domain") for a in p.get("alias", [])][:5] if isinstance(p.get("alias"), list) else p.get("alias"))
               open("project_id.txt", "w").write(p.get("id", ""))
           PY
+          echo "== Variabili del progetto"
+          pid="$(cat project_id.txt 2>/dev/null || true)"
+          api "/v10/projects/${pid}/env?decrypt=false&slug=tesonepdf" > env.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("env.json"))
+          if "error" in d:
+              print(d["error"])
+          for e in d.get("envs", []):
+              valore = e.get("value") if e.get("key") == "FLUTTER_VERSION" and e.get("type") == "plain" else "(nascosto)"
+              print(" ", e.get("key"), e.get("type"), e.get("target"), valore)
+          if not d.get("envs"):
+              print("  nessuna variabile")
+          PY
           echo "== Ultimi deploy"
           pid="$(cat project_id.txt 2>/dev/null || true)"
           api "/v6/deployments?projectId=${pid}&limit=8&slug=tesonepdf" > deploy.json

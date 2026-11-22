@@ -34,6 +34,15 @@ class AppInfo {
   static const buildCommit =
       String.fromEnvironment('PDF_BUILD_COMMIT', defaultValue: 'unknown');
 
+  /// Version and build number exactly as CI wrote them
+  /// (`--dart-define=PDF_BUILD_VERSION=6.326.0942`, `PDF_BUILD_NUMBER=494`).
+  /// The Windows version resource keeps numbers only and would drop the
+  /// leading zero of the time, so when these are set they win over what
+  /// [PackageInfo] reports.
+  static const _definedVersion = String.fromEnvironment('PDF_BUILD_VERSION');
+  static const _definedBuildNumber =
+      String.fromEnvironment('PDF_BUILD_NUMBER');
+
   static String version = '1.4.1';
 
   /// Build number from the same artifact (`+18` in `2.0.0+18`). Empty when
@@ -77,5 +86,7 @@ class AppInfo {
     } catch (_) {
       // Keep the fallback; the About box is non-critical.
     }
+    if (_definedVersion.isNotEmpty) version = _definedVersion;
+    if (_definedBuildNumber.isNotEmpty) buildNumber = _definedBuildNumber;
   }
 }
