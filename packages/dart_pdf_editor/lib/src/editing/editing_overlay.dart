@@ -8109,6 +8109,57 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
 
+  /// L'interruttore "Ridimensiona contenuto" sopra l'area di Modifica PDF (sotto
+  /// se l'area tocca il bordo alto della pagina): accende e spegne
+  /// [PdfEditingController.contentAreaScales] senza passare dal menu. Come il
+  /// resto dei controlli ha sempre la stessa grandezza sullo schermo, a
+  /// qualsiasi zoom, e il suo tocco non crea una nuova area.
+  Widget _buildAreaScaleChip(Rect area) {
+    final scale = _chromeScale;
+    final italian = Localizations.localeOf(context).languageCode == 'it';
+    final above = area.top - 56 * scale >= 0;
+    final width = _geometry.viewSize.width;
+    final half = 120 * scale;
+    final anchor = Offset(
+      width <= 2 * half ? width / 2 : area.center.dx.clamp(half, width - half),
+      above ? area.top - 8 * scale : area.bottom + 8 * scale,
+    );
+    return Positioned(
+      left: anchor.dx,
+      top: anchor.dy,
+      child: FractionalTranslation(
+        translation: Offset(-0.5, above ? -1 : 0),
+        child: Transform.scale(
+          scale: scale,
+          alignment: above ? Alignment.bottomCenter : Alignment.topCenter,
+          // raggiunto prima dell'ascoltatore dell'overlay (il piu' interno
+          // per primo), come la barra della selezione
+          child: Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) => _chipPointer = event.pointer,
+            child: Material(
+              key: const ValueKey('pdf-area-scale-chip'),
+              elevation: 3,
+              borderRadius: BorderRadius.circular(22),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14, right: 6),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(italian ? 'Ridimensiona contenuto' : 'Resize content'),
+                  const SizedBox(width: 6),
+                  Switch(
+                    key: const ValueKey('pdf-area-scale-switch'),
+                    value: _controller.contentAreaScales,
+                    onChanged: (v) => _controller.contentAreaScales = v,
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// The floating action row beside a touch/stylus selection - the
   /// affordances mice get from hover and right-click (delete, the
   /// context menu, edit-in-place). Rides above the selection, clear of
@@ -9379,6 +9430,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     size: Size.infinite,
                   ),
                 ),
+              if (_areaModeActive &&
+                  _areaViewRect != null &&
+                  _areaKind == _areaNone)
+                _buildAreaScaleChip(_areaViewRect!),
               if (_controller.guideLinesActive)
                 Positioned.fill(
                   child: IgnorePointer(
