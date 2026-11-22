@@ -7230,6 +7230,10 @@ class _EditorScreenState extends State<EditorScreen>
   @override
   Widget build(BuildContext context) {
     final tab = _active;
+    // Il tasto Salva sopra la casella di testo usa il salvataggio dell'app.
+    if (tab != null) {
+      tab.session?.onSaveRequested = () => unawaited(_save(tab));
+    }
     return Scaffold(
       // La tastiera copre il documento senza spostarlo né ridimensionarlo.
       resizeToAvoidBottomInset: false,

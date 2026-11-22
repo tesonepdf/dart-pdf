@@ -80,6 +80,9 @@ class DocumentTab {
         preferences: preferences, formSecretStore: appFormSecretStore);
     // Angoli = proporzioni bloccate, lati = ridimensionamento libero.
     controller.cornerResizeKeepsAspect = true;
+    // Ridimensionando una casella di testo dall'angolo la scritta la segue;
+    // si spegne dall'interruttore sopra la casella.
+    controller.textResizeScalesText = true;
     if (opensInHandMode) {
       controller.activateHandMode();
     } else {

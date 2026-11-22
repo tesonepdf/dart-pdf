@@ -1379,6 +1379,31 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   ui.Picture? _areaOnly;
   Object? _areaLiftKey;
 
+  /// Di quanto si ingrandisce la scritta durante il ridimensionamento di una
+  /// casella di testo: con l'interruttore acceso e una maniglia d'angolo e'
+  /// il rapporto tra la larghezza nuova e quella di partenza; altrimenti 1
+  /// (maniglie dei lati o interruttore spento: la scritta va a capo).
+  double get _liveTextScale {
+    if (!_controller.textResizeScalesText) return 1;
+    final handle = _resizeHandle;
+    final from = _resizeFrom;
+    final to = _resizeRect;
+    if (handle == null || from == null || to == null) return 1;
+    if (handle.dx == 0 || handle.dy == 0 || from.width <= 0) return 1;
+    final scale = to.width / from.width;
+    return scale.isFinite && scale > 0 ? scale : 1;
+  }
+
+  /// Vero se la selezione e' una sola casella di testo (di quelle che
+  /// rimettono la scritta a capo quando si ridimensionano).
+  bool get _textBoxSelected {
+    if (_controller.selectedIsSingleGroup) return false;
+    final annotation = _controller.selectedAnnotation;
+    return annotation != null &&
+        annotation.behavior.resizeBehavior ==
+            PdfAnnotationResizeBehavior.reflowText;
+  }
+
   bool get _areaModeActive =>
       _tool == PdfEditTool.content && _controller.contentAreaMode;
 
@@ -6701,6 +6726,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final resizeAngle = _resizeAngle;
     final resizeFlipX = _resizeFlipX;
     final resizeFlipY = _resizeFlipY;
+    final textScale = _liveTextScale;
     final vertexPoints = _vertexHandle != null ? _vertexPoints : null;
     final vertexHandle = _vertexHandle;
     final rotating = _rotateStartAngle != null;
@@ -6865,6 +6891,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         // the commit re-wraps the text at constant size - a stretched
         // ghost afterimage would show scaled glyphs, so freeze the same
         // wrapped-text preview the drag showed instead
+        // con l'interruttore acceso la scritta cresce con la casella
+        if (textScale != 1) {
+          _controller.restyleSelectedText(size: wrapStyle.size * textScale);
+        }
         final before = _controller.revisionId;
         commit();
         if (before != _controller.revisionId) {
@@ -6873,7 +6903,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             rect: resizeRect,
             text: wrapStyle.text,
             font: wrapStyle.font,
-            size: wrapStyle.size,
+            size: wrapStyle.size * textScale,
             color: wrapStyle.color,
             fill: wrapStyle.fill,
             opacity: wrapStyle.opacity,
@@ -8150,6 +8180,78 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     key: const ValueKey('pdf-area-scale-switch'),
                     value: _controller.contentAreaScales,
                     onChanged: (v) => _controller.contentAreaScales = v,
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// La barra sopra la casella di testo selezionata: l'interruttore che fa
+  /// crescere la scritta insieme alla casella, poi Chiudi, Salva e Annulla.
+  /// Sta sopra la casella (sotto se tocca il bordo alto della pagina), ha
+  /// sempre la stessa grandezza a qualsiasi zoom e i suoi tocchi non iniziano
+  /// un trascinamento. [stacked]: c'e' gia' la barra della selezione, questa
+  /// sale ancora un po' per non coprirla.
+  Widget _buildTextBoxBar(Rect selected, {required bool stacked}) {
+    final scale = _chromeScale;
+    final italian = Localizations.localeOf(context).languageCode == 'it';
+    final clearance =
+        (_rotateHandleDistance + 16 + (stacked ? 52 : 0)) * scale;
+    final above = selected.top - clearance - 48 * scale >= 0;
+    final width = _geometry.viewSize.width;
+    final half = 200 * scale;
+    final anchor = Offset(
+      width <= 2 * half
+          ? width / 2
+          : selected.center.dx.clamp(half, width - half),
+      above ? selected.top - clearance : selected.bottom + 12 * scale,
+    );
+    final save = _controller.onSaveRequested;
+    return Positioned(
+      left: anchor.dx,
+      top: anchor.dy,
+      child: FractionalTranslation(
+        translation: Offset(-0.5, above ? -1 : 0),
+        child: Transform.scale(
+          scale: scale,
+          alignment: above ? Alignment.bottomCenter : Alignment.topCenter,
+          child: Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) => _chipPointer = event.pointer,
+            child: Material(
+              key: const ValueKey('pdf-text-box-bar'),
+              elevation: 3,
+              borderRadius: BorderRadius.circular(22),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14, right: 4),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(italian ? 'Ridimensiona scritta' : 'Scale text'),
+                  const SizedBox(width: 6),
+                  Switch(
+                    key: const ValueKey('pdf-text-box-bar-switch'),
+                    value: _controller.textResizeScalesText,
+                    onChanged: (v) => _controller.textResizeScalesText = v,
+                  ),
+                  TextButton(
+                    key: const ValueKey('pdf-text-box-bar-close'),
+                    onPressed: _controller.clearAnnotationSelection,
+                    child: Text(italian ? 'Chiudi' : 'Close'),
+                  ),
+                  if (save != null)
+                    TextButton(
+                      key: const ValueKey('pdf-text-box-bar-save'),
+                      onPressed: save,
+                      child: Text(italian ? 'Salva' : 'Save'),
+                    ),
+                  TextButton(
+                    key: const ValueKey('pdf-text-box-bar-undo'),
+                    onPressed: _controller.canUndo ? _controller.undo : null,
+                    child: Text(italian ? 'Annulla' : 'Undo'),
                   ),
                 ]),
               ),
@@ -9565,7 +9667,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   rect: _resizeRect!,
                   text: wrapResize.text,
                   font: wrapResize.font,
-                  size: wrapResize.size,
+                  size: wrapResize.size * _liveTextScale,
                   color: wrapResize.color,
                   background: wrapResize.fill,
                   opacity: wrapResize.opacity,
@@ -9885,6 +9987,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                 _buildInlineTextStyleChip(_textEditRect!),
               if (showChip && widget.showSelectionChip)
                 _buildSelectionChip(chrome?.$1 ?? selected),
+              if (selected != null &&
+                  _selectMode &&
+                  !dragging &&
+                  _moveStart == null &&
+                  _elementMoveStart == null &&
+                  _marqueeStart == null &&
+                  _resizeHandle == null &&
+                  _textEditRect == null &&
+                  _textBoxSelected)
+                _buildTextBoxBar(chrome?.$1 ?? selected,
+                    stacked: showChip && widget.showSelectionChip),
               if (_measureReadout() case (final text, final anchor))
                 _buildReadoutChip(text, anchor),
               if (_styleReadout() case (final text, final anchor))

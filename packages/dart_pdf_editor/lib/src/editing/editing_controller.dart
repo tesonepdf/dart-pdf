@@ -547,6 +547,25 @@ class PdfEditingController extends ChangeNotifier {
   /// tenendo premuto Maiusc.
   bool cornerResizeKeepsAspect = false;
 
+  bool _textResizeScalesText = false;
+
+  /// Con `true`, trascinando una maniglia d'angolo di una casella di testo la
+  /// scritta si ingrandisce o rimpicciolisce insieme alla casella, in tempo
+  /// reale; le maniglie dei lati cambiano solo la casella e la scritta va a
+  /// capo. Con `false` (predefinito) la scritta resta della stessa grandezza e
+  /// va a capo nella casella nuova. Si accende dall'interruttore sopra la
+  /// casella di testo selezionata.
+  bool get textResizeScalesText => _textResizeScalesText;
+  set textResizeScalesText(bool value) {
+    if (_textResizeScalesText == value) return;
+    _textResizeScalesText = value;
+    notifyListeners();
+  }
+
+  /// Chiamata dal tasto Salva sopra la casella di testo. La imposta chi ospita
+  /// l'editor; senza, il tasto non compare.
+  VoidCallback? onSaveRequested;
+
   /// Field names that the stamp editor offers by default for `{{field}}`
   /// placeholders. Apps can add more names with [stampTemplateValues].
   static const stampTemplateBuiltinFields = [
