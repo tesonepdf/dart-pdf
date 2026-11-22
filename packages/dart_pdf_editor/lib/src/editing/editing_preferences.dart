@@ -741,6 +741,10 @@ class PdfEditingPreferences extends ChangeNotifier
   /// la usa per scrivere l'errore nel suo Log.
   static void Function(Object error, StackTrace stack)? onWriteError;
 
+  /// Diagnostica delle prestazioni (per esempio il tempo del controllo a ogni
+  /// movimento del mouse): chi ospita l'editor la manda nel proprio Log.
+  static void Function(String message)? onDiagnostic;
+
   void _write(Future<Object?> Function(PdfPreferencesStore store) write) {
     _modified = true;
     final store = _store;

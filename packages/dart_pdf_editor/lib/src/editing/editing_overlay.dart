@@ -31,6 +31,7 @@ import 'editing_image_crop.dart';
 import 'editing_interaction.dart';
 import 'editing_link.dart';
 import 'editing_measure.dart';
+import 'editing_preferences.dart' show PdfEditingPreferences;
 import 'editing_text_menu.dart';
 import 'editing_tool_behavior.dart';
 import 'form_tab_navigation.dart';
@@ -7943,7 +7944,49 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     }
   }
 
+  // Misura: quanto dura il controllo a ogni movimento del mouse. Una riga nel
+  // Log al secondo al massimo, solo se almeno un movimento ha superato 8 ms.
+  final Stopwatch _hoverClock = Stopwatch();
+  int _hoverCount = 0;
+  int _hoverSlow = 0;
+  int _hoverTotalUs = 0;
+  int _hoverMaxUs = 0;
+  DateTime _hoverReported = DateTime.now();
+
   void _onHover(PointerHoverEvent event) {
+    final report = PdfEditingPreferences.onDiagnostic;
+    if (report == null) {
+      _onHoverWork(event);
+      return;
+    }
+    _hoverClock
+      ..reset()
+      ..start();
+    _onHoverWork(event);
+    _hoverClock.stop();
+    final us = _hoverClock.elapsedMicroseconds;
+    _hoverCount++;
+    _hoverTotalUs += us;
+    if (us > _hoverMaxUs) _hoverMaxUs = us;
+    if (us > 8000) _hoverSlow++;
+    final now = DateTime.now();
+    if (now.difference(_hoverReported).inMilliseconds >= 1000) {
+      if (_hoverSlow > 0) {
+        report('Mouse pagina ${widget.pageIndex + 1}, strumento '
+            '${_tool?.name}: $_hoverCount movimenti, '
+            'media ${(_hoverTotalUs / _hoverCount / 1000).toStringAsFixed(1)} ms, '
+            'massimo ${(_hoverMaxUs / 1000).toStringAsFixed(1)} ms, '
+            '$_hoverSlow sopra 8 ms');
+      }
+      _hoverReported = now;
+      _hoverCount = 0;
+      _hoverSlow = 0;
+      _hoverTotalUs = 0;
+      _hoverMaxUs = 0;
+    }
+  }
+
+  void _onHoverWork(PointerHoverEvent event) {
     // A finger can't hover. The web engine still synthesizes a touch hover
     // at the lift point (MouseRegion delivers it through hit testing, not
     // the mouse tracker), which would park the pen dot, eraser ring, guides

@@ -44,6 +44,9 @@ Future<void> main(List<String> args) async {
   PdfEditingPreferences.onWriteError = (e, s) => AppLog.instance
       .error('Salvataggio scelte degli strumenti (colore, spessore...)', e, s);
 
+  PdfEditingPreferences.onDiagnostic =
+      (m) => AppLog.instance.info('Prestazioni', m);
+
   // Windows only, and after the Dart plugin registrant has run so this wins:
   // the stock file_selector plugin dereferences a Flutter view the runner
   // never creates, so opening or saving a document would crash the process.
