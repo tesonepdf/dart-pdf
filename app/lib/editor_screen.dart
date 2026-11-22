@@ -6598,10 +6598,7 @@ class _EditorScreenState extends State<EditorScreen>
     // firma", scrivendo "ocr" tutte quelle del gruppo OCR.
     void add(AppCommand command, String area,
         {String? section, bool toggle = false}) {
-      String? areaTitle;
-      for (final (id, title, _) in _menuAreas) {
-        if (id == area) areaTitle = title;
-      }
+      final areaTitle = _menuAreaTitles[area];
       final extra = [
         if (areaTitle != null) areaTitle,
         if (section != null && section.isNotEmpty) section,
@@ -7664,6 +7661,12 @@ class _EditorScreenState extends State<EditorScreen>
     ('other', 'Altre voci', Icons.more_horiz),
   ];
 
+  /// Titolo di ogni macroarea per id, preparato una volta sola: le voci del
+  /// menu lo cercano a ogni costruzione dell'elenco.
+  static final _menuAreaTitles = <String, String>{
+    for (final (id, title, _) in _menuAreas) id: title,
+  };
+
   /// L'ordine dei blocchi dentro una macroarea (null e' il blocco senza
   /// titolo, in cima); quelli non elencati seguono nell'ordine in cui
   /// compaiono, per esempio i gruppi di strumenti nell'ordine della barra.
@@ -8161,6 +8164,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   Future<void> _showAppMenu(DocumentTab? tab, {String? openGroup}) async {
     final l = appL10n(context);
+    final menuTimer = Stopwatch()..start();
     // Nel menu non compaiono le voci che non valgono ora (niente documento
     // aperto, sola lettura): restano nella ricerca, spente e con il motivo. Una
     // voce momentaneamente non usabile (senza motivo) resta, spenta.
@@ -8205,6 +8209,17 @@ class _EditorScreenState extends State<EditorScreen>
     // toccandolo si rinomina il documento.
     final titled = tab != null && tab.title.isNotEmpty ? tab : null;
     final canRename = titled != null && titled.session != null;
+    final prepareMs = menuTimer.elapsedMilliseconds;
+    // Misura per il Log: tempo per preparare le voci e tempo fino al primo
+    // disegno del menu (due fotogrammi dopo l'apertura).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AppLog.instance.info(
+            'Prestazioni',
+            'Menu: voci ${entries.length} preparate in $prepareMs ms, '
+                'primo disegno dopo ${menuTimer.elapsedMilliseconds - prepareMs} ms');
+      });
+    });
     final action = await showAppMenu(
       context,
       groups: groups,
