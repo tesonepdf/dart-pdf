@@ -6562,6 +6562,31 @@ class _EditorScreenState extends State<EditorScreen>
     };
   }
 
+  /// Il blocco (sottogruppo di funzioni simili) di una voce, dentro la sua
+  /// macroarea. L'ordine dei blocchi e' in `_menuSectionOrder`.
+  String? _menuSectionOf(String id) => switch (id) {
+        'new-document' || 'new-window' => 'Da zero',
+        'scan-document' || 'scanner-import' => 'Da fotocamera e scanner',
+        'photos-to-pdf' || 'photos-one-sheet' || 'compose-sheet' => 'Da foto',
+        'open-comic' || 'open-epub' || 'open-markdown' => 'Da altri formati',
+        'open' => 'Aprire',
+        'save' || 'save-as' || 'reduce-file-size' => 'Salvare',
+        'read-aloud' => 'Ascolto',
+        'insert-document' || 'insert-scan' => 'Aggiungere pagine',
+        'number-pages' || 'watermark' || 'remove-strip' => 'Ritoccare le pagine',
+        'photo-size' || 'compare' => 'Misura e confronto',
+        'digital-signature' => 'Firmare',
+        'import-form-data' || 'make-fillable' => 'Compilare moduli',
+        'export-image' || 'export-text' => 'Immagini e testo',
+        'export-word' || 'export-excel' || 'export-excel-zone' => 'Word ed Excel',
+        'open-in-word' || 'open-in-excel' => 'In un\'altra app',
+        'print' || 'deferred-print' => 'Stampare',
+        'share' || 'whatsapp' || 'whatsapp-contact' => 'Inviare',
+        'settings' => 'Preferenze',
+        'updates' => 'Novita\'',
+        _ => null,
+      };
+
   List<_MenuEntry> _commandEntries() {
     final l = appL10n(context);
     final tab = _active;
@@ -6635,6 +6660,7 @@ class _EditorScreenState extends State<EditorScreen>
           run: action.run,
         ),
         _menuAreaOf(action),
+        section: _menuSectionOf(action.id),
       );
     }
 
@@ -6650,12 +6676,14 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(showWhatsNew(context)),
       ),
       'app',
+      section: 'Novita\'',
     );
     add(
       plain('menu-open-with-rank', Icons.vertical_align_top,
           'Porta DartPDF in cima ad "Apri con"',
           () => unawaited(_showOpenWithRank())),
       'app',
+      section: 'Preferenze',
     );
 
     if (hasDocument) {
@@ -6696,6 +6724,7 @@ class _EditorScreenState extends State<EditorScreen>
         plain('menu-tabs', Icons.tab_outlined,
             '${l.editorOpenTabs} (${_tabs.length})', _showTabsSheet),
         'view',
+        section: 'Schede',
       );
     }
     if (hasDocument && tab != null) {
@@ -6704,18 +6733,21 @@ class _EditorScreenState extends State<EditorScreen>
             WidgetsLocalizations.of(context).shareButtonLabel,
             () => unawaited(_shareDocument(tab))),
         'share',
+        section: 'Inviare',
       );
       add(
         plain('menu-whatsapp-contact', Icons.person_outline,
             'WhatsApp: contatto salvato',
             () => unawaited(_sendWhatsapp(tab, chooseSaved: true))),
         'share',
+        section: 'Inviare',
       );
       add(
         plain('menu-whatsapp', Icons.send_outlined,
             'WhatsApp: scelgo il contatto',
             () => unawaited(_sendWhatsapp(tab, chooseSaved: false))),
         'share',
+        section: 'Inviare',
       );
     }
 
@@ -7574,9 +7606,26 @@ class _EditorScreenState extends State<EditorScreen>
   /// titolo, in cima); quelli non elencati seguono nell'ordine in cui
   /// compaiono, per esempio i gruppi di strumenti nell'ordine della barra.
   static const _menuSectionOrder = <String, List<String?>>{
-    'create': [null, 'Importa foto con misura'],
-    'file': [null, 'Recenti'],
-    'view': [null, 'Modalita\'', 'Pannelli', 'Opzioni di vista'],
+    'create': [
+      null,
+      'Da zero',
+      'Da fotocamera e scanner',
+      'Da foto',
+      'Da altri formati',
+      'Importa foto con misura',
+    ],
+    'file': [null, 'Aprire', 'Recenti', 'Salvare'],
+    'view': [null, 'Modalita\'', 'Ascolto', 'Schede', 'Pannelli', 'Opzioni di vista'],
+    'pages': [
+      null,
+      'Aggiungere pagine',
+      'Ritoccare le pagine',
+      'Misura e confronto',
+    ],
+    'sign': [null, 'Firmare', 'Compilare moduli'],
+    'export': [null, 'Immagini e testo', 'Word ed Excel', 'In un\'altra app'],
+    'share': [null, 'Stampare', 'Inviare'],
+    'app': [null, 'Preferenze', 'Novita\''],
   };
 
   /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea,
