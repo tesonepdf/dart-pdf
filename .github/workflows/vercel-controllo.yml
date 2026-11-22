@@ -1,0 +1,74 @@
+name: Vercel controllo (sola lettura)
+
+run-name: ${{ github.event.head_commit.message || 'Controllo Vercel a comando' }}
+
+# Legge dal progetto Vercel dart-pdf le impostazioni e gli ultimi deploy, con il
+# segreto VERCEL_TOKEN. Sola lettura: non cambia niente su Vercel. Parte da solo
+# quando si modifica questo file e a comando.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/vercel-controllo.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controllo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Legge account, progetto e deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -u
+          api() { curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1"; }
+          echo "== Account del token"
+          api "/v2/user" > user.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("user.json"))
+          u = d.get("user", d)
+          print({k: u.get(k) for k in ["username", "defaultTeamId", "error"]})
+          PY
+          echo "== Team"
+          api "/v2/teams" > teams.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("teams.json"))
+          print([(t.get("slug"), t.get("id")) for t in d.get("teams", [])] or d)
+          PY
+          echo "== Progetto dart-pdf"
+          api "/v9/projects/dart-pdf?slug=tesonepdf" > progetto.json
+          python3 - <<'PY'
+          import json
+          p = json.load(open("progetto.json"))
+          if "error" in p:
+              print(p["error"])
+          else:
+              chiavi = ["id", "name", "framework", "rootDirectory", "buildCommand", "installCommand",
+                        "outputDirectory", "autoAssignCustomDomains", "productionDeploymentsFastLane",
+                        "gitForkProtection", "commandForIgnoringBuildStep", "ssoProtection"]
+              for k in chiavi:
+                  print(" ", k, "=", p.get(k))
+              print("  link =", p.get("link"))
+              print("  domini di produzione =", [a.get("domain") for a in p.get("alias", [])][:5] if isinstance(p.get("alias"), list) else p.get("alias"))
+              open("project_id.txt", "w").write(p.get("id", ""))
+          PY
+          echo "== Ultimi deploy"
+          pid="$(cat project_id.txt 2>/dev/null || true)"
+          api "/v6/deployments?projectId=${pid}&limit=8&slug=tesonepdf" > deploy.json
+          python3 - <<'PY'
+          import json, datetime
+          d = json.load(open("deploy.json"))
+          if "error" in d:
+              print(d["error"])
+          for x in d.get("deployments", []):
+              meta = x.get("meta", {})
+              quando = datetime.datetime.fromtimestamp(x.get("created", 0) / 1000).strftime("%d/%m %H:%M")
+              print(" ", quando, x.get("state") or x.get("readyState"), x.get("target"), "|", (meta.get("githubCommitMessage") or "")[:55])
+          PY
