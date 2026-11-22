@@ -53,6 +53,18 @@ void main() {
     expect(isMarkdownFileName('md'), isFalse);
   });
 
+  test('riconosce un testo senza estensione dal contenuto', () {
+    Uint8List t(String x) => Uint8List.fromList(utf8.encode(x));
+    expect(looksLikeMarkdownText(t('# Titolo\n\nUn testo con à è ù.\n')), isTrue);
+    expect(looksLikeMarkdownText(t('%PDF-1.7\n1 0 obj')), isFalse);
+    expect(looksLikeMarkdownText(t('<?xml version="1.0"?><xfdf/>')), isFalse);
+    expect(looksLikeMarkdownText(Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0])),
+        isFalse);
+    expect(looksLikeMarkdownText(Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0])),
+        isFalse);
+    expect(looksLikeMarkdownText(Uint8List(0)), isFalse);
+  });
+
   test('titolo della scheda', () {
     expect(markdownTitle('note.md'), 'note.pdf');
     expect(markdownTitle('LEGGIMI.MARKDOWN'), 'LEGGIMI.pdf');

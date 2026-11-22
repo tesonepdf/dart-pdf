@@ -3130,9 +3130,14 @@ class _EditorScreenState extends State<EditorScreen>
     final result = await markdownToPdfAsync(bytes);
     if (!mounted) return;
     _readOnly = false;
+    // Senza .md nel nome (WhatsApp dà "DOC-...-WA0000") si usa il primo titolo.
+    final heading = result.title;
+    final title = !isMarkdownFileName(name) && heading != null && heading.isNotEmpty
+        ? '${heading.length > 60 ? heading.substring(0, 60) : heading}.pdf'
+        : markdownTitle(name);
     _addTab(
         DocumentTab.document(
-          title: markdownTitle(name),
+          title: title,
           bytes: result.bytes,
           preferences: _prefs,
         ),
@@ -3340,8 +3345,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// end: the user opened this file, so it belongs exactly where it would
   /// have landed had the OS beaten restore to it.
   Future<void> _openIncoming(IncomingFile file) async {
-    if (isMarkdownFileName(file.name) &&
-        (file.bytes != null || file.path != null)) {
+    final incomingBytes = file.bytes;
+    if (incomingBytes != null
+        ? (isMarkdownFileName(file.name) || looksLikeMarkdownText(incomingBytes))
+        : (file.path != null && isMarkdownFileName(file.name))) {
       await _openIncomingMarkdown(file);
       return;
     }

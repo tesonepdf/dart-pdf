@@ -36,6 +36,50 @@ bool isMarkdownFileName(String fileName) {
   return lower.endsWith('.md') || lower.endsWith('.markdown');
 }
 
+/// Vero se [bytes] sembrano un testo (Markdown o testo semplice) e non un PDF,
+/// un'immagine o un file XML: serve quando il nome del file non ha
+/// l'estensione (WhatsApp, per esempio, dà "DOC-20261122-WA0000").
+bool looksLikeMarkdownText(Uint8List bytes) {
+  if (bytes.isEmpty) return false;
+  final head = bytes.length > 4096 ? bytes.sublist(0, 4096) : bytes;
+  final ascii = String.fromCharCodes(head.map((b) => b < 0x80 ? b : 0x3F));
+  if (ascii.contains('%PDF-') || ascii.startsWith('%FDF')) return false;
+  bool starts(List<int> magic, [int at = 0]) {
+    if (head.length < at + magic.length) return false;
+    for (var i = 0; i < magic.length; i++) {
+      if (head[at + i] != magic[i]) return false;
+    }
+    return true;
+  }
+
+  if (starts([0x89, 0x50, 0x4E, 0x47]) || // PNG
+      starts([0xFF, 0xD8]) || // JPEG
+      starts([0x47, 0x49, 0x46, 0x38]) || // GIF
+      starts([0x42, 0x4D]) || // BMP
+      starts([0x52, 0x49, 0x46, 0x46]) || // WEBP (RIFF)
+      starts([0x49, 0x49, 0x2A, 0x00]) || // TIFF
+      starts([0x4D, 0x4D, 0x00, 0x2A]) || // TIFF
+      starts([0x66, 0x74, 0x79, 0x70], 4) || // HEIC
+      starts([0x50, 0x4B, 0x03, 0x04])) {
+    // zip (epub, docx...)
+    return false;
+  }
+  if (head.contains(0)) return false;
+  if (ascii.trimLeft().startsWith('<')) return false;
+  try {
+    utf8.decode(head, allowMalformed: false);
+  } on FormatException {
+    // Un carattere UTF-8 tagliato in fondo ai primi 4096 byte non conta.
+    if (bytes.length <= 4096) return false;
+    try {
+      utf8.decode(head.sublist(0, head.length - 3), allowMalformed: false);
+    } on FormatException {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Chiede un file .md, o null se si annulla.
 Future<XFile?> pickMarkdownFile() =>
     openFile(acceptedTypeGroups: [markdownTypeGroup()]);
