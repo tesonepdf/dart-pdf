@@ -53,7 +53,10 @@ internal class IncomingPdfHandler {
             .mapNotNull { intent?.getStringExtra(it)?.trim() }
             .firstOrNull { it.isNotEmpty() }
         val pathName = uri.lastPathSegment?.substringAfterLast('/')
-            ?.takeIf { it.lowercase().endsWith(".pdf") }
+            ?.takeIf {
+                val n = it.lowercase()
+                n.endsWith(".pdf") || n.endsWith(".md") || n.endsWith(".markdown")
+            }
         val finalName = name?.takeIf { it.isNotBlank() }
             ?: pathName
             ?: extraName

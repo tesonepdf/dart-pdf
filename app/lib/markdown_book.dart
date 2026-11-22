@@ -30,6 +30,12 @@ XTypeGroup markdownTypeGroup() => const XTypeGroup(
       ],
     );
 
+/// Vero se [fileName] finisce con .md o .markdown (qualunque maiuscola).
+bool isMarkdownFileName(String fileName) {
+  final lower = fileName.trim().toLowerCase();
+  return lower.endsWith('.md') || lower.endsWith('.markdown');
+}
+
 /// Chiede un file .md, o null se si annulla.
 Future<XFile?> pickMarkdownFile() =>
     openFile(acceptedTypeGroups: [markdownTypeGroup()]);

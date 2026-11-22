@@ -3113,22 +3113,42 @@ class _EditorScreenState extends State<EditorScreen>
     try {
       final file = await pickMarkdownFile();
       if (file == null || !mounted) return;
-      _toast('Apro il testo…', duration: const Duration(seconds: 6));
-      final result = await markdownToPdfAsync(await file.readAsBytes());
-      if (!mounted) return;
-      _readOnly = false;
-      _addTab(
-          DocumentTab.document(
-            title: markdownTitle(file.name),
-            bytes: result.bytes,
-            preferences: _prefs,
-          ),
-          createdKind: 'Testo');
+      await _openMarkdownBytes(await file.readAsBytes(), file.name);
     } on FormatException catch (e) {
       if (mounted) _toast('Testo non aperto: ${e.message}.');
     } catch (e) {
       AppDevTools.instance
           .addLog('markdown open failed: $e', level: DevLogLevel.error);
+      if (mounted) _toast('Testo non aperto: ${openErrorSummary(e)}');
+    }
+  }
+
+  /// Il testo Markdown [bytes] di un file chiamato [name] in un PDF nuovo, in
+  /// una scheda. Lancia [FormatException] se il file non ha testo.
+  Future<void> _openMarkdownBytes(Uint8List bytes, String name) async {
+    _toast('Apro il testo…', duration: const Duration(seconds: 6));
+    final result = await markdownToPdfAsync(bytes);
+    if (!mounted) return;
+    _readOnly = false;
+    _addTab(
+        DocumentTab.document(
+          title: markdownTitle(name),
+          bytes: result.bytes,
+          preferences: _prefs,
+        ),
+        createdKind: 'Testo');
+  }
+
+  /// Un file .md che il sistema ha passato all'app ("Apri con", condividi).
+  Future<void> _openIncomingMarkdown(IncomingFile file) async {
+    try {
+      final bytes = file.bytes ?? await XFile(file.path!).readAsBytes();
+      await _openMarkdownBytes(bytes, file.name);
+    } on FormatException catch (e) {
+      if (mounted) _toast('Testo non aperto: ${e.message}.');
+    } catch (e) {
+      AppDevTools.instance
+          .addLog('markdown incoming failed: $e', level: DevLogLevel.error);
       if (mounted) _toast('Testo non aperto: ${openErrorSummary(e)}');
     }
   }
@@ -3320,6 +3340,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// end: the user opened this file, so it belongs exactly where it would
   /// have landed had the OS beaten restore to it.
   Future<void> _openIncoming(IncomingFile file) async {
+    if (isMarkdownFileName(file.name) &&
+        (file.bytes != null || file.path != null)) {
+      await _openIncomingMarkdown(file);
+      return;
+    }
     final path = file.path;
     if (path != null && path.isNotEmpty) {
       final existing = _tabs.indexWhere((t) => t.originPath == path);

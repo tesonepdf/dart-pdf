@@ -46,6 +46,13 @@ void main() {
     expect(doc.pageCount, result.pages);
   });
 
+  test('riconosce i nomi .md', () {
+    expect(isMarkdownFileName('note.md'), isTrue);
+    expect(isMarkdownFileName('LEGGIMI.Markdown'), isTrue);
+    expect(isMarkdownFileName('note.pdf'), isFalse);
+    expect(isMarkdownFileName('md'), isFalse);
+  });
+
   test('titolo della scheda', () {
     expect(markdownTitle('note.md'), 'note.pdf');
     expect(markdownTitle('LEGGIMI.MARKDOWN'), 'LEGGIMI.pdf');

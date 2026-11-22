@@ -134,6 +134,38 @@
                 <data android:mimeType="application/x-pdf"/>
                 <data android:mimeType="application/octet-stream"/>
             </intent-filter>
+            <!-- File di testo Markdown (.md): si aprono come PDF in una scheda.
+                 Tipo dichiarato (text/markdown e il vecchio text/x-markdown). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="text/markdown"/>
+                <data android:mimeType="text/x-markdown"/>
+            </intent-filter>
+            <!-- Tipo generico, ma il nome del file finisce con .md o .markdown. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:host="*"/>
+                <data android:mimeType="*/*"/>
+                <data android:pathPattern=".*\\.md"/>
+                <data android:pathPattern=".*\\..*\\.md"/>
+                <data android:pathPattern=".*\\..*\\..*\\.md"/>
+                <data android:pathPattern=".*\\.markdown"/>
+            </intent-filter>
+            <!-- Un file Markdown condiviso da un'altra app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/markdown"/>
+                <data android:mimeType="text/x-markdown"/>
+            </intent-filter>
             <!-- Open or receive a photo / bitmap: it opens as a one-page PDF. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
