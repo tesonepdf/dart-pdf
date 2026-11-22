@@ -5,7 +5,9 @@ run-name: ${{ github.event.head_commit.message || 'Build Web a comando' }}
 # Build della web app separata dall'APK e da Windows: ha il suo nome, la sua
 # coda e il suo esito verde/rosso. Compila la web app con lo stesso numero
 # build degli altri (commit + 25) e tiene il risultato come file della build
-# per 7 giorni. La web app online la pubblica Vercel.
+# per 7 giorni. La web app online la pubblica Vercel; il job "Online" la mette
+# in linea (promuove il deploy di Vercel con lo stesso commit) solo quando questa
+# compilazione e' verde e Vercel ha finito senza errori.
 
 on:
   push:
@@ -93,3 +95,103 @@ jobs:
           name: DartPDF-Web
           path: app/build/web
           retention-days: 7
+
+  online:
+    name: "Online ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}"
+    needs: [web, version]
+    if: ${{ !cancelled() && needs.web.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Mette online la versione quando Vercel e' pronto
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM: tesonepdf
+          VERCEL_PROJECT: prj_SrGeiz0vCcg4dVo8Q6ghtTuQiIqz
+          IDENT: ${{ needs.version.outputs.version }}#${{ needs.version.outputs.number }}
+        run: |
+          exec > >(tee rapporto.txt) 2>&1
+          python3 - <<'PY'
+          import json, os, sys, time, urllib.error, urllib.request
+
+          token = os.environ["VERCEL_TOKEN"]
+          team = os.environ["VERCEL_TEAM"]
+          project = os.environ["VERCEL_PROJECT"]
+          sha = os.environ["GITHUB_SHA"]
+          ident = os.environ["IDENT"]
+
+
+          def call(method, path, body=None):
+              url = "https://api.vercel.com" + path + ("&" if "?" in path else "?") + "slug=" + team
+              data = json.dumps(body).encode() if body is not None else None
+              req = urllib.request.Request(url, method=method, data=data, headers={
+                  "Authorization": "Bearer " + token, "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      return r.status, json.loads(r.read().decode() or "{}")
+              except urllib.error.HTTPError as e:
+                  return e.code, json.loads(e.read().decode() or "{}")
+
+
+          def promosso(d):
+              sub = d.get("readySubstate")
+              return sub == "PROMOTED" or (sub is None and bool(d.get("aliasAssigned")))
+
+
+          print("Versione", ident, "- commit", sha[:7])
+          dep = None
+          fine = time.time() + 33 * 60
+          while time.time() < fine:
+              st, lista = call("GET", f"/v6/deployments?projectId={project}&sha={sha}&limit=5")
+              scelti = [x for x in lista.get("deployments", []) if x.get("target") == "production"]
+              if st == 200 and scelti:
+                  uid = scelti[0]["uid"]
+                  st, dep = call("GET", f"/v13/deployments/{uid}")
+                  stato = dep.get("readyState")
+                  print("Deploy Vercel", uid, "stato", stato, "sottostato", dep.get("readySubstate"), "alias", dep.get("aliasAssigned"))
+                  if stato == "READY":
+                      break
+                  if stato in ("ERROR", "CANCELED"):
+                      print("Vercel NON e' riuscito: la versione non va online.")
+                      sys.exit(1)
+              else:
+                  print("Deploy Vercel non ancora comparso", st)
+              time.sleep(20)
+          else:
+              print("Tempo scaduto: Vercel non ha finito.")
+              sys.exit(1)
+
+          if promosso(dep):
+              print("Gia' online: niente da promuovere.")
+              sys.exit(0)
+
+          # Non si torna indietro: se quello online e' piu' recente, non si tocca.
+          st, ready = call("GET", f"/v6/deployments?projectId={project}&target=production&state=READY&limit=30")
+          online = [x for x in ready.get("deployments", []) if x.get("readySubstate") == "PROMOTED"]
+          if online and online[0].get("created", 0) > dep.get("createdAt", dep.get("created", 0)):
+              print("Online c'e' gia' una versione piu' recente: non la sostituisco.")
+              sys.exit(0)
+
+          st, ris = call("POST", f"/v10/projects/{project}/promote/{dep['id']}", {})
+          print("Promozione richiesta, risposta", st, ris if st >= 300 else "")
+          if st >= 300:
+              sys.exit(1)
+          for _ in range(18):
+              time.sleep(10)
+              st, dep = call("GET", f"/v13/deployments/{dep['id']}")
+              if promosso(dep):
+                  print("Online:", ident)
+                  sys.exit(0)
+              print("In attesa della promozione...", dep.get("readySubstate"))
+          print("La promozione non risulta completata.")
+          sys.exit(1)
+          PY
+
+      - name: Pubblica il rapporto come annotazione
+        if: always()
+        run: |
+          sleep 2
+          if [[ -f rapporto.txt ]]; then
+            body="$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' rapporto.txt)"
+            echo "::notice title=Rapporto Online::${body}"
+          fi
