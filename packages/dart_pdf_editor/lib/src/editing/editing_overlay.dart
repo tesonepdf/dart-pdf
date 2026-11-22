@@ -1360,6 +1360,264 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   ui.Picture? _elementOnly;
   Object? _elementLiftKey;
 
+  // Area di Modifica PDF: un rettangolo su una porzione di pagina. Si crea
+  // trascinando sul foglio, si sposta trascinando dentro e si ridimensiona dai
+  // quadratini (gli angoli mantengono le proporzioni, i lati sono liberi).
+  // Con l'interruttore del controller acceso il contenuto dentro segue in
+  // tempo reale: [_areaClean] e' la pagina senza quel contenuto e [_areaOnly]
+  // il contenuto da solo, disegnato spostato e scalato mentre si trascina.
+  static const int _areaNone = 0;
+  static const int _areaCreate = 1;
+  static const int _areaMove = 2;
+  static const int _areaResize = 3;
+  int _areaKind = _areaNone;
+  int _areaHandle = 0;
+  Offset _areaPress = Offset.zero;
+  Rect? _areaFrom;
+  Rect? _areaRect;
+  ui.Picture? _areaClean;
+  ui.Picture? _areaOnly;
+  Object? _areaLiftKey;
+
+  bool get _areaModeActive =>
+      _tool == PdfEditTool.content && _controller.contentAreaMode;
+
+  bool get _areaDragging => _areaKind == _areaMove || _areaKind == _areaResize;
+
+  /// Il rettangolo dell'area su questa pagina (in coordinate della vista):
+  /// quello che si sta trascinando oppure quello scelto.
+  Rect? get _areaViewRect {
+    final live = _areaRect;
+    if (live != null) return live;
+    final area = _controller.contentAreaRect;
+    if (area == null || _controller.contentAreaPage != widget.pageIndex) {
+      return null;
+    }
+    return _geometry.toViewRect(area);
+  }
+
+  /// Il quadratino sotto [p]: 0 alto-sinistra, 1 alto, 2 alto-destra, 3
+  /// destra, 4 basso-destra, 5 basso, 6 basso-sinistra, 7 sinistra.
+  int? _areaHandleAt(Rect r, Offset p) {
+    final points = [
+      r.topLeft,
+      r.topCenter,
+      r.topRight,
+      r.centerRight,
+      r.bottomRight,
+      r.bottomCenter,
+      r.bottomLeft,
+      r.centerLeft,
+    ];
+    int? best;
+    var bestDistance = 26.0;
+    for (var i = 0; i < points.length; i++) {
+      final d = (points[i] - p).distance;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /// [from] ridimensionato col quadratino [handle] portato in [p]. Dagli
+  /// angoli il lato opposto resta fermo e le proporzioni del rettangolo non
+  /// cambiano (si muovono insieme larghezza e altezza); dai lati si cambia una
+  /// misura sola.
+  Rect _areaResized(Rect from, int handle, Offset p) {
+    const minSize = 8.0;
+    final corner = handle.isEven;
+    if (corner) {
+      final anchor = switch (handle) {
+        0 => from.bottomRight,
+        2 => from.bottomLeft,
+        4 => from.topLeft,
+        _ => from.topRight,
+      };
+      final scale = math
+          .max((p.dx - anchor.dx).abs() / from.width,
+              (p.dy - anchor.dy).abs() / from.height)
+          .clamp(minSize / math.min(from.width, from.height), 1000.0);
+      final w = from.width * scale;
+      final h = from.height * scale;
+      final left = handle == 0 || handle == 6 ? anchor.dx - w : anchor.dx;
+      final top = handle == 0 || handle == 2 ? anchor.dy - h : anchor.dy;
+      return Rect.fromLTWH(left, top, w, h);
+    }
+    var l = from.left, t = from.top, r = from.right, b = from.bottom;
+    switch (handle) {
+      case 1:
+        t = math.min(p.dy, b - minSize);
+      case 5:
+        b = math.max(p.dy, t + minSize);
+      case 3:
+        r = math.max(p.dx, l + minSize);
+      case 7:
+        l = math.min(p.dx, r - minSize);
+    }
+    return Rect.fromLTRB(l, t, r, b);
+  }
+
+  bool _areaInsidePage(Rect r) {
+    final page = (Offset.zero & _geometry.viewSize).inflate(1);
+    return page.contains(r.topLeft) && page.contains(r.bottomRight);
+  }
+
+  void _areaPanStart(DragStartDetails details) {
+    final p = details.localPosition;
+    _beginInteraction(PdfEditingInteractionIntent.create, details.kind);
+    final current = _areaViewRect;
+    if (current != null) {
+      final handle = _areaHandleAt(current, p);
+      if (handle != null) {
+        setState(() {
+          _areaKind = _areaResize;
+          _areaHandle = handle;
+          _areaPress = p;
+          _areaFrom = current;
+          _areaRect = current;
+        });
+        unawaited(_areaStartLift());
+        return;
+      }
+      if (current.contains(p)) {
+        setState(() {
+          _areaKind = _areaMove;
+          _areaPress = p;
+          _areaFrom = current;
+          _areaRect = current;
+        });
+        unawaited(_areaStartLift());
+        return;
+      }
+    }
+    setState(() {
+      _areaKind = _areaCreate;
+      _areaPress = p;
+      _areaFrom = null;
+      _areaRect = Rect.fromPoints(p, p);
+    });
+  }
+
+  void _areaPanUpdate(Offset p) {
+    final from = _areaFrom;
+    Rect? next;
+    switch (_areaKind) {
+      case _areaCreate:
+        next = Rect.fromPoints(_areaPress, p);
+      case _areaMove:
+        if (from != null) next = from.shift(p - _areaPress);
+      case _areaResize:
+        if (from != null) next = _areaResized(from, _areaHandle, p);
+    }
+    if (next == null || !_areaInsidePage(next)) return;
+    setState(() => _areaRect = next);
+  }
+
+  void _areaPanEnd() {
+    final kind = _areaKind;
+    final from = _areaFrom;
+    final rect = _areaRect;
+    final clean = _areaClean;
+    final only = _areaOnly;
+    _areaClean = null;
+    _areaOnly = null;
+    _areaLiftKey = null;
+    setState(() {
+      _areaKind = _areaNone;
+      _areaFrom = null;
+      _areaRect = null;
+    });
+    if (kind == _areaCreate) {
+      if (rect != null && rect.width >= 12 && rect.height >= 12) {
+        _controller.setContentArea(widget.pageIndex, _geometry.toPageRect(rect));
+      }
+      return;
+    }
+    if (from == null || rect == null || rect == from) {
+      clean?.dispose();
+      only?.dispose();
+      return;
+    }
+    final before = _controller.revisionId;
+    _controller.commitContentArea(_geometry.toPageRect(rect));
+    if (before != _controller.revisionId && clean != null && only != null) {
+      // il contenuto gia' trasformato resta disegnato dov'e' arrivato fino a
+      // quando la pagina e' ridisegnata: al rilascio non salta indietro
+      _clearAfterimage();
+      _afterElementClean = clean;
+      _afterElementOnly = only;
+      _afterElementFrom = from;
+      _afterElementOffset = rect.topLeft - from.topLeft;
+      _afterElementScale = Offset(rect.width / from.width,
+          rect.height / from.height);
+      _afterElementAnchor = from.topLeft;
+      _afterRevisionId = _controller.revisionId;
+    } else {
+      clean?.dispose();
+      only?.dispose();
+    }
+  }
+
+  /// Interrompe un trascinamento dell'area senza cambiare niente.
+  void _areaReset() {
+    _areaClean?.dispose();
+    _areaOnly?.dispose();
+    _areaClean = null;
+    _areaOnly = null;
+    _areaLiftKey = null;
+    _areaKind = _areaNone;
+    _areaFrom = null;
+    _areaRect = null;
+  }
+
+  /// Prepara la pagina senza il contenuto dell'area e il contenuto da solo,
+  /// per mostrarlo muoversi e ingrandirsi mentre si trascina.
+  Future<void> _areaStartLift() async {
+    if (!_controller.contentAreaScales) return;
+    final area = _controller.contentAreaRect;
+    if (area == null || _controller.contentAreaPage != widget.pageIndex) return;
+    final ids = _controller.contentAreaElementIds(widget.pageIndex, area).toSet();
+    if (ids.isEmpty) return;
+    final key = Object();
+    _areaLiftKey = key;
+    await SchedulerBinding.instance.endOfFrame;
+    if (!mounted || _areaLiftKey != key) return;
+    try {
+      final elements = _controller.elementsOn(widget.pageIndex);
+      final page = _controller.pageAt(widget.pageIndex);
+      final clean = await PdfPageRenderer.renderPictureWithPlan(
+        page,
+        PdfPageRenderPlan(
+          pageColor: widget.pageColor,
+          annotations: widget.showAnnotations,
+          hiddenAnnotationSubtypes: widget.hiddenAnnotationSubtypes,
+        ),
+        operations: elements.operationsRetaining((e) => !ids.contains(e.id)),
+      );
+      final only = await PdfPageRenderer.renderPictureWithPlan(
+        page,
+        const PdfPageRenderPlan(annotations: false, paper: false),
+        operations: elements.operationsRetaining((e) => ids.contains(e.id)),
+      );
+      if (!mounted || _areaLiftKey != key) {
+        clean.dispose();
+        only.dispose();
+        return;
+      }
+      setState(() {
+        _areaClean?.dispose();
+        _areaOnly?.dispose();
+        _areaClean = clean;
+        _areaOnly = only;
+      });
+    } catch (_) {
+      _areaLiftKey = null;
+    }
+  }
+
+
   /// The same pair, held past the commit and painted over the whole page
   /// until the new raster lands: a content edit drops the page's cached
   /// raster, so without this the page blanks while it re-renders. Cleared
@@ -1368,6 +1626,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   ui.Picture? _afterElementOnly;
   Rect? _afterElementFrom;
   Offset _afterElementOffset = Offset.zero;
+  Offset _afterElementScale = const Offset(1, 1);
+  Offset _afterElementAnchor = Offset.zero;
 
   // Edge auto-scroll: while a region/selection drag is in flight the ticker
   // runs every frame, scrolling the viewer when the pointer rests against a
@@ -2332,6 +2592,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     });
     _stopAutoScroll();
     _clearResizeClean();
+    _areaReset();
     _host.moveDragPreview?.call(null);
     _bumpActiveStroke();
     // earlier strokes waiting in the buffer get their auto-commit back
@@ -2775,6 +3036,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _afterElementOnly = null;
     _afterElementFrom = null;
     _afterElementOffset = Offset.zero;
+    _afterElementScale = const Offset(1, 1);
+    _afterElementAnchor = Offset.zero;
     _afterCalloutLeaders = null;
     _afterRevisionId = null;
   }
@@ -3512,6 +3775,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _clearSavedAnnotationPicture();
     _clearAfterimage();
     _resizeCleanPicture?.dispose();
+    _areaClean?.dispose();
+    _areaOnly?.dispose();
     _elementClean?.dispose();
     _elementOnly?.dispose();
     _flashController.dispose();
@@ -5828,6 +6093,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _stampPreview = null;
       _bumpCursor();
     }
+    if (_areaModeActive) {
+      _areaPanStart(details);
+      return;
+    }
     if (_selectMode) {
       _selectPanStart(details);
       return;
@@ -6186,6 +6455,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     }
     final position = details.localPosition;
     _interaction.sample();
+    if (_areaKind != _areaNone) {
+      _areaPanUpdate(position);
+      return;
+    }
     if (_panErasing) {
       _eraseAt(position);
       return;
@@ -6364,6 +6637,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_textSelecting) {
       _textSelecting = false;
       _host.endTextSelection?.call();
+      return;
+    }
+    if (_areaKind != _areaNone) {
+      final before = _controller.revisionId;
+      final transition = _interaction.state.transition;
+      _areaPanEnd();
+      _finishInteraction(before, transition);
       return;
     }
     final before = _controller.revisionId;
@@ -9030,18 +9310,37 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     calloutLeaderHandles: _selectedCalloutNodesOnly,
                     elementRect: _selectedElementViewRect,
                     elementWordRect: _selectedElementWordViewRect,
-                    elementClean: _elementMoveOffset != null
-                        ? _elementClean
-                        : _afterElementClean,
-                    elementOnly: _elementMoveOffset != null
-                        ? _elementOnly
-                        : _afterElementOnly,
-                    elementLiftFrom: _elementMoveOffset != null
-                        ? _selectedElementRestRect
-                        : _afterElementFrom,
-                    elementLiftOffset:
-                        _elementMoveOffset ?? _afterElementOffset,
-                    elementLiftSettled: _elementMoveOffset == null,
+                    elementClean: _areaDragging
+                        ? _areaClean
+                        : _elementMoveOffset != null
+                            ? _elementClean
+                            : _afterElementClean,
+                    elementOnly: _areaDragging
+                        ? _areaOnly
+                        : _elementMoveOffset != null
+                            ? _elementOnly
+                            : _afterElementOnly,
+                    elementLiftFrom: _areaDragging
+                        ? _areaFrom
+                        : _elementMoveOffset != null
+                            ? _selectedElementRestRect
+                            : _afterElementFrom,
+                    elementLiftOffset: _areaDragging &&
+                            _areaFrom != null &&
+                            _areaRect != null
+                        ? _areaRect!.topLeft - _areaFrom!.topLeft
+                        : _elementMoveOffset ?? _afterElementOffset,
+                    elementLiftSettled:
+                        !_areaDragging && _elementMoveOffset == null,
+                    elementLiftScale: _areaDragging &&
+                            _areaFrom != null &&
+                            _areaRect != null
+                        ? Offset(_areaRect!.width / _areaFrom!.width,
+                            _areaRect!.height / _areaFrom!.height)
+                        : _afterElementScale,
+                    elementLiftAnchor: _areaDragging && _areaFrom != null
+                        ? _areaFrom!.topLeft
+                        : _afterElementAnchor,
                     flashRect:
                         _flashController.isAnimating && _flashRect != null
                             ? _geometry.toViewRect(_flashRect!)
@@ -9052,6 +9351,17 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   size: Size.infinite,
                 ),
               ),
+              if (_areaModeActive && _areaViewRect != null)
+                IgnorePointer(
+                  child: CustomPaint(
+                    painter: _AreaFramePainter(
+                      rect: _areaViewRect!,
+                      color: Theme.of(context).colorScheme.primary,
+                      scaling: _controller.contentAreaScales,
+                    ),
+                    size: Size.infinite,
+                  ),
+                ),
               if (_controller.guideLinesActive)
                 Positioned.fill(
                   child: IgnorePointer(
@@ -10824,6 +11134,8 @@ class _EditingPreviewPainter extends CustomPainter {
     this.elementLiftFrom,
     this.elementLiftOffset = Offset.zero,
     this.elementLiftSettled = false,
+    this.elementLiftScale = const Offset(1, 1),
+    this.elementLiftAnchor = Offset.zero,
     this.flashRect,
     this.flashProgress = 0,
     this.redactionRects = const [],
@@ -11026,6 +11338,12 @@ class _EditingPreviewPainter extends CustomPainter {
   final Rect? elementLiftFrom;
   final Offset elementLiftOffset;
   final bool elementLiftSettled;
+
+  /// Quanto il contenuto sollevato e' ingrandito (1 = uguale) attorno al punto
+  /// [elementLiftAnchor] (coordinate della vista): serve all'area di Modifica
+  /// PDF, che sposta e ingrandisce insieme.
+  final Offset elementLiftScale;
+  final Offset elementLiftAnchor;
 
   /// An attention pulse around [flashRect] (the annotation a sidebar
   /// tile zoomed to), animated by [flashProgress] 0→1: an amber ring
@@ -11485,6 +11803,11 @@ class _EditingPreviewPainter extends CustomPainter {
       if (liftOnly != null) {
         canvas.save();
         canvas.translate(elementLiftOffset.dx, elementLiftOffset.dy);
+        if (elementLiftScale != const Offset(1, 1)) {
+          canvas.translate(elementLiftAnchor.dx, elementLiftAnchor.dy);
+          canvas.scale(elementLiftScale.dx, elementLiftScale.dy);
+          canvas.translate(-elementLiftAnchor.dx, -elementLiftAnchor.dy);
+        }
         canvas.scale(geometry.scale);
         canvas.drawPicture(liftOnly);
         canvas.restore();
@@ -11838,6 +12161,8 @@ class _EditingPreviewPainter extends CustomPainter {
       oldDelegate.elementLiftFrom != elementLiftFrom ||
       oldDelegate.elementLiftOffset != elementLiftOffset ||
       oldDelegate.elementLiftSettled != elementLiftSettled ||
+      oldDelegate.elementLiftScale != elementLiftScale ||
+      oldDelegate.elementLiftAnchor != elementLiftAnchor ||
       oldDelegate.flashRect != flashRect ||
       oldDelegate.flashProgress != flashProgress ||
       oldDelegate.strokes.length != strokes.length ||
@@ -12041,4 +12366,66 @@ class _LensCrossPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LensCrossPainter oldDelegate) => false;
+}
+
+
+/// La cornice dell'area di Modifica PDF: il rettangolo e gli otto quadratini
+/// (quattro agli angoli, che mantengono le proporzioni, e quattro sui lati,
+/// che cambiano una misura sola). Piena se il contenuto segue la finestra,
+/// tratteggiata se cambia solo la finestra.
+class _AreaFramePainter extends CustomPainter {
+  _AreaFramePainter({
+    required this.rect,
+    required this.color,
+    required this.scaling,
+  });
+
+  final Rect rect;
+  final Color color;
+  final bool scaling;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(rect, Paint()..color = color.withValues(alpha: 0.07));
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    if (scaling) {
+      canvas.drawRect(rect, line);
+    } else {
+      const dash = 8.0, gap = 5.0;
+      final path = Path()..addRect(rect);
+      for (final metric in path.computeMetrics()) {
+        for (var d = 0.0; d < metric.length; d += dash + gap) {
+          canvas.drawPath(metric.extractPath(d, d + dash), line);
+        }
+      }
+    }
+    final handles = [
+      rect.topLeft,
+      rect.topCenter,
+      rect.topRight,
+      rect.centerRight,
+      rect.bottomRight,
+      rect.bottomCenter,
+      rect.bottomLeft,
+      rect.centerLeft,
+    ];
+    for (var i = 0; i < handles.length; i++) {
+      final corner = i.isEven;
+      canvas.drawCircle(handles[i], corner ? 9 : 7, Paint()..color = Colors.white);
+      canvas.drawCircle(
+          handles[i],
+          corner ? 9 : 7,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AreaFramePainter old) =>
+      old.rect != rect || old.color != color || old.scaling != scaling;
 }

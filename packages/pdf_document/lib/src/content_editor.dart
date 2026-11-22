@@ -461,6 +461,74 @@ extension PdfContentEditing on PdfEditor {
     return moved;
   }
 
+  /// Come [moveElements], ma con una trasformazione qualsiasi in coordinate
+  /// della pagina: un ingrandimento, una riduzione o uno spostamento. Il testo
+  /// resta testo (si riscrive la sua matrice `Tm`, quindi la grandezza dei
+  /// caratteri cambia con la scala) e le immagini e i tracciati restano
+  /// quello che sono (si avvolgono in `q <matrice> cm` ... `Q`).
+  ///
+  /// [transform] porta un punto della pagina dov'era a dov'e' dopo; per
+  /// ridimensionare un'area e' una scala attorno a un suo angolo piu' lo
+  /// spostamento. Come in [moveElements], si saltano (e non si contano) gli
+  /// oggetti che non si possono trasformare con sicurezza: matrice senza
+  /// inversa, tracciati che fanno anche da ritaglio, testo con corpo 0.
+  /// Gli id restano gli stessi: si aggiungono solo `q`/`cm`/`Q`/`Tm` e `TJ`
+  /// di solo scostamento.
+  int transformElements(
+    PdfPageElements elements,
+    Iterable<int> ids,
+    PdfMatrix transform,
+  ) {
+    final page = document.page(elements.pageIndex);
+    final before = <int, String>{};
+    final after = <int, String>{};
+    var moved = 0;
+    for (final id in ids) {
+      if (id < 0 || id >= elements.elements.length) {
+        throw RangeError.range(id, 0, elements.elements.length - 1, 'ids');
+      }
+      final element = elements.elements[id];
+      if (before.containsKey(element.start)) continue; // un id ripetuto
+      final inverse = element.ctm.inverted();
+      if (inverse == null) continue;
+      final delta = element.ctm.concat(transform).concat(inverse);
+      if (element.kind == PdfElementKind.text) {
+        final placement = element.textPlacement;
+        if (placement == null ||
+            placement.fontSize <= 0 ||
+            placement.horizontalScale == 0) {
+          continue;
+        }
+        final operator = elements.operations[element.start].operator;
+        final seed = operator == "'" || operator == '"'
+            ? placement.entryLineMatrix
+            : placement.matrix;
+        before[element.start] = '${_matrixOperands(seed.concat(delta))} Tm';
+        final restore =
+            StringBuffer('${_matrixOperands(placement.lineMatrix)} Tm');
+        final advance = placement.advance + _lineAdvance(placement);
+        if (advance.abs() > 1e-9) {
+          final kern =
+              -1000 * advance / placement.fontSize / placement.horizontalScale;
+          restore.write(' [ ${ContentWriter.fmt(kern)} ] TJ');
+        }
+        after[element.start] = restore.toString();
+      } else {
+        if (_establishesClip(elements, element)) continue;
+        before[element.start] = 'q ${_matrixOperands(delta)} cm';
+        after[element.end - 1] = 'Q';
+      }
+      moved++;
+    }
+    if (moved == 0) return 0;
+    _setContent(
+      elements.pageIndex,
+      page,
+      elements.serialize(before: before, after: after),
+    );
+    return moved;
+  }
+
   /// Moves the [ids] from [elements]' source page into [targetPage], mapping
   /// their source-page coordinates through [transform]. Returns how many
   /// elements moved.

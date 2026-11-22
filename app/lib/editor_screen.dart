@@ -6757,6 +6757,38 @@ class _EditorScreenState extends State<EditorScreen>
         toggle: true,
       );
     }
+    // Area di Modifica PDF: si sceglie un rettangolo sulla pagina e lo si
+    // sposta o ingrandisce; con il secondo interruttore il contenuto segue.
+    final areaSession = tab?.session;
+    if (hasDocument && areaSession != null) {
+      add(
+        AppCommand(
+          id: 'menu-content-area',
+          label: 'Selezione area (Modifica PDF)',
+          icon: Icons.crop_free,
+          source: l.paletteSourceMenu,
+          selected: areaSession.contentAreaMode,
+          run: () => areaSession.contentAreaMode = !areaSession.contentAreaMode,
+        ),
+        'tools',
+        section: 'Area di Modifica PDF',
+        toggle: true,
+      );
+      add(
+        AppCommand(
+          id: 'menu-content-area-scales',
+          label: 'Ridimensiona anche il contenuto',
+          icon: Icons.zoom_out_map,
+          source: l.paletteSourceMenu,
+          selected: areaSession.contentAreaScales,
+          run: () =>
+              areaSession.contentAreaScales = !areaSession.contentAreaScales,
+        ),
+        'tools',
+        section: 'Area di Modifica PDF',
+        toggle: true,
+      );
+    }
     if (hasDocument && tab != null) {
       add(
         plain('menu-share', Icons.share_outlined,

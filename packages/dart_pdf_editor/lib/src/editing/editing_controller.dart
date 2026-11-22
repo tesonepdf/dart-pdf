@@ -2573,6 +2573,11 @@ class PdfEditingController extends ChangeNotifier {
     _activeSavedAnnotationId = null;
     if (value != PdfEditTool.select) _selected.clear();
     if (value != PdfEditTool.content) _selectedElement = null;
+    if (value != PdfEditTool.content) {
+      _contentAreaMode = false;
+      _contentAreaPage = null;
+      _contentAreaRect = null;
+    }
     _cropModeArmed = false;
     _cropDraft = null;
     // each annotation tool remembers its own colour, stroke, opacity, … -
@@ -11223,6 +11228,103 @@ class PdfEditingController extends ChangeNotifier {
   }
 
   /// The content elements of [pageIndex] at the current revision.
+  // ---- Area di Modifica PDF -------------------------------------------
+  //
+  // Una porzione di pagina scelta con un rettangolo. Con l'interruttore
+  // [contentAreaScales] acceso, spostare o ridimensionare il rettangolo porta
+  // con se' tutto quello che c'e' dentro (testo, immagini, tracciati), che
+  // si sposta e si ingrandisce davvero, non e' una copia. Spento, cambia solo
+  // la finestra, cioe' la scelta di cosa sta dentro.
+
+  bool _contentAreaMode = false;
+  bool _contentAreaScales = true;
+  int? _contentAreaPage;
+  PdfRect? _contentAreaRect;
+
+  /// Vero quando "Modifica PDF" lavora su un'area invece che su un oggetto.
+  bool get contentAreaMode => _contentAreaMode;
+  set contentAreaMode(bool value) {
+    if (_contentAreaMode == value) return;
+    if (value) {
+      tool = PdfEditTool.content;
+      _selectedElement = null;
+    } else {
+      _contentAreaPage = null;
+      _contentAreaRect = null;
+    }
+    _contentAreaMode = value;
+    notifyListeners();
+  }
+
+  /// Vero: il contenuto dell'area segue la finestra (si ingrandisce con lei).
+  bool get contentAreaScales => _contentAreaScales;
+  set contentAreaScales(bool value) {
+    if (_contentAreaScales == value) return;
+    _contentAreaScales = value;
+    notifyListeners();
+  }
+
+  /// La pagina e il rettangolo (in punti della pagina) dell'area scelta.
+  int? get contentAreaPage => _contentAreaPage;
+  PdfRect? get contentAreaRect => _contentAreaRect;
+
+  /// Sceglie l'area [rect] sulla pagina [page]; null la toglie.
+  void setContentArea(int page, PdfRect? rect) {
+    _contentAreaPage = rect == null ? null : page;
+    _contentAreaRect = rect;
+    notifyListeners();
+  }
+
+  /// Gli oggetti della pagina [page] che stanno interamente dentro [area].
+  List<int> contentAreaElementIds(int page, PdfRect area) {
+    const slack = 1.0;
+    return [
+      for (final element in elementsOn(page).elements)
+        if (element.bounds case final b?)
+          if (b.left >= area.left - slack &&
+              b.right <= area.right + slack &&
+              b.bottom >= area.bottom - slack &&
+              b.top <= area.top + slack)
+            element.id,
+    ];
+  }
+
+  /// Porta l'area scelta su [to]. Con [contentAreaScales] il contenuto
+  /// dentro segue (scala e spostamento); altrimenti cambia solo il
+  /// rettangolo. Dice se il contenuto della pagina e' cambiato.
+  bool commitContentArea(PdfRect to) {
+    final page = _contentAreaPage;
+    final from = _contentAreaRect;
+    if (page == null || from == null) return false;
+    if (to.width < 4 || to.height < 4 || from.width <= 0 || from.height <= 0) {
+      return false;
+    }
+    var changed = false;
+    if (_contentAreaScales) {
+      final ids = contentAreaElementIds(page, from);
+      if (ids.isNotEmpty) {
+        final sx = to.width / from.width;
+        final sy = to.height / from.height;
+        final matrix = PdfMatrix(
+          sx,
+          0,
+          0,
+          sy,
+          to.left - from.left * sx,
+          to.bottom - from.bottom * sy,
+        );
+        var moved = 0;
+        changed = apply(
+              (e) => moved = e.transformElements(elementsOn(page), ids, matrix),
+            ) &&
+            moved > 0;
+      }
+    }
+    _contentAreaRect = to;
+    notifyListeners();
+    return changed;
+  }
+
   PdfPageElements elementsOn(int pageIndex) => _elements.putIfAbsent(
         pageIndex,
         () => PdfPageElements.of(_document, pageIndex),
