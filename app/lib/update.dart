@@ -10,7 +10,7 @@ import 'devtools.dart';
 import 'update_distribution_stub.dart'
     if (dart.library.io) 'update_distribution_io.dart';
 import 'windows_files.dart'
-    show kWindowsFilesManifestName, kWindowsZipName;
+    show WindowsFilesManifest, kWindowsFilesManifestName, kWindowsZipName;
 
 /// The rolling GitHub prerelease populated by the nightly desktop workflow
 /// (Windows + macOS).
@@ -176,8 +176,10 @@ class ReleaseInfo {
   /// each rolling release reuses its tag, so include its source commit.
   String get identity =>
       (isNightly || isAndroidUpdate || isWindowsUpdate) && commitSha != null
-      ? '$tagName@$commitSha'
-      : tagName;
+          ? '$tagName@$commitSha'
+          : (isWindowsUpdate && buildNumber != null)
+              ? '$tagName#$buildNumber'
+              : tagName;
 
   static final _commitMarker =
       RegExp(r'<!-- main-sha: ([0-9a-fA-F]{7,40}) -->');
@@ -764,6 +766,47 @@ class UpdateService extends ChangeNotifier {
     ];
   }
 
+  /// La release Windows letta da `windows-files.json` (download semplice da
+  /// github.com, senza API): numero di build, versione e un indirizzo per ogni
+  /// file. Null se non si riesce a leggerla.
+  Future<ReleaseInfo?> _fetchWindowsManifestRelease(http.Client client) async {
+    try {
+      final base = 'https://github.com/$repoOwner/$repoName'
+          '/releases/download/$dartPdfWindowsTag';
+      final response = await client.get(
+        Uri.parse('$base/$kWindowsFilesManifestName'),
+        headers: const {'User-Agent': 'DartPDF-update-checker'},
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return null;
+      final manifest =
+          WindowsFilesManifest.tryParse(utf8.decode(response.bodyBytes));
+      if (manifest == null || manifest.files.isEmpty || manifest.build <= 0) {
+        return null;
+      }
+      final version = AppVersion.tryParse(manifest.version);
+      if (version == null) return null;
+      final assets = <String, String>{
+        kWindowsFilesManifestName: '$base/$kWindowsFilesManifestName',
+        kWindowsZipName: '$base/$kWindowsZipName',
+        for (final f in manifest.files) f.assetName: '$base/${f.assetName}',
+      };
+      return ReleaseInfo(
+        version: version,
+        tagName: dartPdfWindowsTag,
+        name: 'DartPDF Windows ${manifest.version}#${manifest.build}',
+        notes: 'Build #${manifest.build}',
+        htmlUrl: 'https://github.com/$repoOwner/$repoName'
+            '/releases/tag/$dartPdfWindowsTag',
+        assets: assets,
+        isWindowsUpdate: true,
+        buildNumber: '${manifest.build}',
+        versionText: manifest.version,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<ReleaseInfo>> _fetchFromGitHub() async {
     final client = _clientFactory();
     const headers = {
@@ -775,6 +818,15 @@ class UpdateService extends ChangeNotifier {
     try {
       final releases = <ReleaseInfo>[];
       Object? listError;
+      // Windows: l'elenco dei file della release e' un download semplice, che
+      // non conta nel limite di richieste dell'API di GitHub (60 l'ora per
+      // indirizzo): e' la strada principale, l'API resta solo per il canale
+      // nightly e come ripiego.
+      ReleaseInfo? windowsRelease;
+      if (_targetPlatform == TargetPlatform.windows) {
+        windowsRelease = await _fetchWindowsManifestRelease(client);
+        if (windowsRelease != null && !nightlyUpdates) return [windowsRelease];
+      }
       try {
         final response = await client
             .get(releasesUri, headers: headers)
@@ -819,6 +871,12 @@ class UpdateService extends ChangeNotifier {
         }
       } catch (e) {
         listError = e;
+      }
+      final fromManifest = windowsRelease;
+      if (fromManifest != null) {
+        releases.removeWhere((r) => r.tagName == fromManifest.tagName);
+        releases.add(fromManifest);
+        listError = null;
       }
       if (_targetPlatform == TargetPlatform.android) {
         // The release's own info file is a plain download, so it does not

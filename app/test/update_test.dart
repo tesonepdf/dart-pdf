@@ -967,4 +967,81 @@ Nightly build.
       expect(service.latest, isNull);
     });
   });
+
+  group('Windows senza API di GitHub', () {
+    final hash = List.filled(64, 'a').join();
+
+    UpdateService windowsService({required http.Client Function() client}) =>
+        UpdateService(
+          currentVersion: '6.326.2118',
+          currentBuildNumber: '502',
+          platform: TargetPlatform.windows,
+          architecture: 'x64',
+          storeManagedBuild: false,
+          clientFactory: client,
+        );
+
+    test('trova la build nuova da windows-files.json anche con l\'API bloccata',
+        () async {
+      var apiCalls = 0;
+      final service = windowsService(
+        client: () => MockClient((request) async {
+          if (request.url.host == 'api.github.com') {
+            apiCalls++;
+            return http.Response('rate limit', 403);
+          }
+          if (request.url.path.endsWith('/windows-files.json')) {
+            return http.Response(
+              jsonEncode({
+                'build': 503,
+                'version': '6.326.2150',
+                'files': [
+                  {'path': 'dartpdf.exe', 'size': 10, 'sha256': hash},
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('no', 404);
+        }),
+      );
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.status, UpdateStatus.updateAvailable);
+      expect(service.latest!.buildNumber, '503');
+      expect(service.latest!.assets, contains('$hash.gz'));
+      expect(service.downloadAssetName, 'windows-files.json');
+      expect(apiCalls, 0);
+    });
+
+    test('con la stessa build non propone niente', () async {
+      final service = UpdateService(
+        currentVersion: '6.326.2150',
+        currentBuildNumber: '503',
+        platform: TargetPlatform.windows,
+        architecture: 'x64',
+        storeManagedBuild: false,
+        clientFactory: () => MockClient((request) async {
+          if (request.url.path.endsWith('/windows-files.json')) {
+            return http.Response(
+              jsonEncode({
+                'build': 503,
+                'version': '6.326.2150',
+                'files': [
+                  {'path': 'dartpdf.exe', 'size': 10, 'sha256': hash},
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('no', 404);
+        }),
+      );
+
+      await service.checkForUpdates(force: true);
+
+      expect(service.status, UpdateStatus.upToDate);
+    });
+  });
 }
