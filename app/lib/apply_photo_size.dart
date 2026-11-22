@@ -168,6 +168,7 @@ class _ApplyPhotoSizeDialogState extends State<_ApplyPhotoSizeDialog> {
   @override
   Widget build(BuildContext context) {
     final quick = [
+      ...kCustomSizes,
       for (final id in _kQuickSizes)
         if (standardSizeById(id) case final size?) size,
     ];

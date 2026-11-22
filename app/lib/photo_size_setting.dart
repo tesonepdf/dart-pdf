@@ -89,6 +89,22 @@ class _PhotoSizeSettingsSectionState extends State<PhotoSizeSettingsSection> {
                 'reale scelta qui.'),
             option(null, 'Automatica',
                 'La foto riempie la larghezza di un foglio A4'),
+            if (kCustomSizes.isNotEmpty)
+              ExpansionTile(
+                key: const ValueKey('settings-photo-size-group-custom'),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(left: 8),
+                initiallyExpanded: kCustomSizes.any((s) => s.id == selected),
+                title: const Text('Le mie misure'),
+                children: [
+                  for (final s in List.of(kCustomSizes))
+                    option(
+                      s.id,
+                      s.name,
+                      '${_mm(s.widthMm)} x ${_mm(s.heightMm)} mm',
+                    ),
+                ],
+              ),
             for (final group in StandardSizeGroup.values)
               if (standardSizesIn(group).isNotEmpty)
                 ExpansionTile(

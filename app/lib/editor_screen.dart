@@ -28,6 +28,7 @@ import 'deferred_print.dart';
 import 'deferred_print_screen.dart';
 import 'deferred_print_store.dart';
 import 'apply_photo_size.dart';
+import 'custom_sizes.dart';
 import 'devtools.dart';
 import 'edit_history_keeper.dart';
 import 'edit_history_store.dart';
@@ -665,6 +666,7 @@ class _EditorScreenState extends State<EditorScreen>
     _recents.load().then((_) {
       if (mounted) _pruneRecentCache();
     });
+    unawaited(CustomSizesStore.instance.load());
     if (widget.ownsApplicationSession) {
       // One process-wide owner receives OS file-open events. Method channels
       // have one Dart handler, so letting every window register would make the
@@ -2818,6 +2820,11 @@ class _EditorScreenState extends State<EditorScreen>
               onPressed: () => Navigator.pop(context, 'a4'),
               child: const Text('Foglio A4 (210 x 297 mm)'),
             ),
+            for (final size in List.of(kCustomSizes))
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, size.id),
+                child: Text(customSizeLabel(size)),
+              ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, ''),
               child: const Text('Ingrandisci a tutta la larghezza del foglio'),
@@ -2836,6 +2843,20 @@ class _EditorScreenState extends State<EditorScreen>
         builder: (context) => SimpleDialog(
           title: const Text('Scegli la misura'),
           children: [
+            if (kCustomSizes.isNotEmpty)
+              ExpansionTile(
+                title: const Text('Le mie misure'),
+                initiallyExpanded: true,
+                children: [
+                  for (final size in List.of(kCustomSizes))
+                    ListTile(
+                      dense: true,
+                      title: Text(size.name),
+                      subtitle: Text(customSizeLabel(size)),
+                      onTap: () => Navigator.pop(context, size.id),
+                    ),
+                ],
+              ),
             for (final group in StandardSizeGroup.values)
               if (standardSizesIn(group).isNotEmpty)
                 ExpansionTile(
@@ -6139,6 +6160,13 @@ class _EditorScreenState extends State<EditorScreen>
         run: () => unawaited(_photosToPdf()),
       ),
       _MenuAction(
+        id: 'custom-sizes',
+        icon: Icons.straighten,
+        title: 'Misure personalizzate…',
+        searchTerms: const ['misura', 'misure', 'dimensione', 'foto', 'nome'],
+        run: () => unawaited(showCustomSizesDialog(context)),
+      ),
+      _MenuAction(
         id: 'open-comic',
         icon: Icons.auto_stories_outlined,
         title: 'Apri un fumetto (.cbz)…',
@@ -6530,6 +6558,7 @@ class _EditorScreenState extends State<EditorScreen>
       'scan-document' ||
       'photos-one-sheet' ||
       'photos-to-pdf' ||
+      'custom-sizes' ||
       'open-comic' ||
       'open-epub' ||
       'open-markdown' ||
@@ -6567,7 +6596,11 @@ class _EditorScreenState extends State<EditorScreen>
   String? _menuSectionOf(String id) => switch (id) {
         'new-document' || 'new-window' => 'Da zero',
         'scan-document' || 'scanner-import' => 'Da fotocamera e scanner',
-        'photos-to-pdf' || 'photos-one-sheet' || 'compose-sheet' => 'Da foto',
+        'photos-to-pdf' ||
+        'photos-one-sheet' ||
+        'compose-sheet' ||
+        'custom-sizes' =>
+          'Da foto',
         'open-comic' || 'open-epub' || 'open-markdown' => 'Da altri formati',
         'open' => 'Aprire',
         'save' || 'save-as' || 'reduce-file-size' => 'Salvare',
@@ -7718,6 +7751,7 @@ class _EditorScreenState extends State<EditorScreen>
     'scan-document': 'Scansiona un documento con la fotocamera',
     'photos-to-pdf': 'Una foto per ogni pagina',
     'photos-one-sheet': 'Piu\' foto su un solo foglio',
+    'custom-sizes': 'Crea, usa ed elimina le tue misure con nome',
     'open-comic': 'Leggi un fumetto in formato .cbz',
     'open-epub': 'Leggi un libro in formato .epub',
     'open-markdown': 'Leggi un file di testo Markdown (.md)',
@@ -8049,6 +8083,7 @@ class _EditorScreenState extends State<EditorScreen>
       'menu-compose-sheet',
       'menu-scanner-import',
       'menu-photo-size',
+      'menu-custom-sizes',
       'tool-image',
     ]);
     final sized = tiles([

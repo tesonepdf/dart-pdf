@@ -221,9 +221,18 @@ const List<StandardSize> kStandardSizes = [
   StandardSize('bookmark', 'Segnalibro comune', _other, 50, 150),
 ];
 
-/// La misura con questo [id], o null.
+/// Le misure personalizzate dell'utente, ciascuna con il suo nome (si creano e
+/// si eliminano dal menu; vedi `custom_sizes.dart`). Stanno a parte rispetto
+/// a [kStandardSizes], ma [standardSizeById] le trova allo stesso modo, cosi'
+/// tutti i calcoli (dpi, foglio, rapporti) funzionano anche con loro.
+final List<StandardSize> kCustomSizes = [];
+
+/// La misura con questo [id] (predefinita o personalizzata), o null.
 StandardSize? standardSizeById(String id) {
   for (final size in kStandardSizes) {
+    if (size.id == id) return size;
+  }
+  for (final size in kCustomSizes) {
     if (size.id == id) return size;
   }
   return null;
