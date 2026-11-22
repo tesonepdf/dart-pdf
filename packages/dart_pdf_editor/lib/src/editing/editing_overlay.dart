@@ -3406,6 +3406,18 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     ));
   }
 
+  /// Un'annotazione che si sposta (casella di testo, forma, timbro...): al
+  /// primo movimento l'originale sparisce e resta solo quella che segue il
+  /// dito. Si disegna la pagina senza l'annotazione (la stessa che serve al
+  /// ridimensionamento di una casella di testo) e la si mette sopra il punto
+  /// di partenza; senza questo l'originale restava fermo fino al rilascio, e
+  /// per tutto il trascinamento le copie erano due.
+  void _startMoveLift() {
+    if (_controller.selectedAnnotationSlots.length != 1) return;
+    if (_controller.selectedAnnotation == null) return;
+    unawaited(_renderResizeClean());
+  }
+
   /// Renders the page WITHOUT the annotation being resized, so a free-text
   /// resize can show the page content behind it (the "lift" model) rather
   /// than wash an opaque rectangle over the original. Kicked off once per
@@ -6050,6 +6062,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _moveWholeCallout = _grabsSelectedCloud(position);
         _cursor = SystemMouseCursors.move; // 4-arrow while dragging
       });
+      _startMoveLift();
       return;
     }
     final (x, y) = _geometry.toPagePoint(position);
@@ -6063,6 +6076,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         _moveWholeCallout = _grabsSelectedCloud(position);
         _cursor = SystemMouseCursors.move;
       });
+      _startMoveLift();
       return;
     }
     final mouseLike = details.kind == null ||
@@ -6403,6 +6417,25 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _resizeCleanPicture = null; // ownership transferred; don't dispose it
       _resizeCleanFor = null;
     }
+    // lo stesso per uno spostamento: la pagina senza l'annotazione resta su
+    // fino a quando il nuovo disegno della pagina e' pronto, cosi' al
+    // rilascio la vecchia copia non ricompare nel punto di partenza
+    final movedAnnotation = moveStart != null &&
+        moveCurrent != null &&
+        resizeRect == null &&
+        elementMoveStart == null &&
+        (moveCurrent - moveStart).distance >= 2 &&
+        _controller.selectedAnnotationSlots.length == 1;
+    final moveLiftClean = movedAnnotation ? _resizeCleanPicture : null;
+    final moveChrome = _selectionChrome;
+    final moveLiftAngle = moveChrome?.$2 ?? 0;
+    final moveLiftRect = moveLiftAngle == 0 || moveChrome == null
+        ? _selectedViewRect
+        : moveChrome.$1;
+    if (moveLiftClean != null) {
+      _resizeCleanPicture = null; // passa all'immagine residua
+      _resizeCleanFor = null;
+    }
     setState(() {
       _activeStroke = null;
       _activeStrokePressures = null;
@@ -6626,6 +6659,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
               _controller.selectedIsSingleGroup)) {
         final drop = resolve(moveCurrentGlobal);
         if (drop != null && drop.$1 != widget.pageIndex) {
+          moveLiftClean?.dispose();
           _controller.moveSelectedToPage(drop.$1, drop.$2 - x0, drop.$3 - y0);
           return;
         }
@@ -6642,6 +6676,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           to: _selectedViewRect?.shift(moveCurrent - moveStart));
       if (leaders != null && _afterRevisionId == _controller.revisionId) {
         _afterCalloutLeaders = leaders;
+      }
+      if (moveLiftClean != null) {
+        if (_afterRevisionId == _controller.revisionId &&
+            moveLiftRect != null) {
+          _afterTextClean = moveLiftClean;
+          _afterTextHideRect = moveLiftRect;
+          _afterTextHideAngle = moveLiftAngle;
+        } else {
+          moveLiftClean.dispose();
+        }
       }
     } else if (stroke != null && stroke.isNotEmpty) {
       _bufferInkStroke(stroke, strokePressures, shiftAnchor);
@@ -8624,6 +8668,15 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             opacity: _controller.selectedAnnotation!.appearanceOpacity
           );
     final reflowResize = wrapResize != null || resizeTable != null;
+    // un'annotazione trascinata: l'originale e' coperto dalla pagina senza di
+    // lei, quindi resta una sola copia, quella che segue il dito
+    final moveLift = _resizeHandle == null &&
+        moveDelta != Offset.zero &&
+        _resizeCleanFor != null &&
+        selected != null &&
+        _controller.selectedAnnotationSlots.length == 1;
+    final moveLiftRect =
+        restingRotation == 0 || chrome == null ? selected : chrome.$1;
     // a Square/Circle resize regenerates at a constant stroke width:
     // preview that (live during the drag, then the frozen afterimage)
     // instead of the ghost, whose line would stretch and snap back
@@ -8922,12 +8975,19 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     // the same lift carries on (kept alive as
                     // [_afterTextClean]) so a transparent box's afterimage
                     // shows page content behind it, not an opaque flash.
-                    resizeClean:
-                        reflowResize ? _resizeCleanPicture : _afterTextClean,
-                    resizeHideRect:
-                        reflowResize ? _resizeFrom : _afterTextHideRect,
-                    resizeHideAngle:
-                        reflowResize ? _resizeAngle : _afterTextHideAngle,
+                    resizeClean: reflowResize || moveLift
+                        ? _resizeCleanPicture
+                        : _afterTextClean,
+                    resizeHideRect: reflowResize
+                        ? _resizeFrom
+                        : moveLift
+                            ? moveLiftRect
+                            : _afterTextHideRect,
+                    resizeHideAngle: reflowResize
+                        ? _resizeAngle
+                        : moveLift
+                            ? restingRotation
+                            : _afterTextHideAngle,
                     resizeHideWash: Color.alphaBlend(
                         widget.pageColor, const Color(0xFFFFFFFF)),
                     extraInk: extraInk,
