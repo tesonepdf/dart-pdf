@@ -26,6 +26,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -u
+          exec > >(tee rapporto.txt) 2>&1
           api() { curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1"; }
           echo "== Account del token"
           api "/v2/user" > user.json
@@ -72,3 +73,12 @@ jobs:
               quando = datetime.datetime.fromtimestamp(x.get("created", 0) / 1000).strftime("%d/%m %H:%M")
               print(" ", quando, x.get("state") or x.get("readyState"), x.get("target"), "|", (meta.get("githubCommitMessage") or "")[:55])
           PY
+
+      - name: Pubblica il rapporto come annotazione
+        if: always()
+        run: |
+          sleep 2
+          if [[ -f rapporto.txt ]]; then
+            body="$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' rapporto.txt)"
+            echo "::notice title=Rapporto Vercel::${body}"
+          fi
