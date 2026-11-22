@@ -1,0 +1,59 @@
+name: Vercel impostazioni (temporaneo)
+
+run-name: ${{ github.event.head_commit.message || 'Impostazioni Vercel a comando' }}
+
+# Temporaneo: spegne su Vercel la messa in produzione automatica (autoAssignCustomDomains)
+# del progetto dart-pdf, cosi' i deploy vanno online solo quando li promuove il job
+# "Online" di build-web.yml. Cambia solo quell'opzione. Il file si cancella dopo l'uso.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/vercel-impostazioni.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  impostazioni:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Spegne la messa in produzione automatica
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          exec > >(tee rapporto.txt) 2>&1
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          token = os.environ["VERCEL_TOKEN"]
+          url = "https://api.vercel.com/v9/projects/prj_SrGeiz0vCcg4dVo8Q6ghtTuQiIqz?slug=tesonepdf"
+          def call(method, body=None):
+              req = urllib.request.Request(url, method=method,
+                  data=json.dumps(body).encode() if body is not None else None,
+                  headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      return r.status, json.loads(r.read().decode() or "{}")
+              except urllib.error.HTTPError as e:
+                  return e.code, json.loads(e.read().decode() or "{}")
+          st, p = call("GET")
+          print("Prima: autoAssignCustomDomains =", p.get("autoAssignCustomDomains"))
+          st, p = call("PATCH", {"autoAssignCustomDomains": False})
+          print("PATCH risposta", st, p.get("error", ""))
+          st, p = call("GET")
+          print("Dopo: autoAssignCustomDomains =", p.get("autoAssignCustomDomains"))
+          if p.get("autoAssignCustomDomains") is not False:
+              raise SystemExit(1)
+          PY
+
+      - name: Pubblica il rapporto come annotazione
+        if: always()
+        run: |
+          sleep 2
+          if [[ -f rapporto.txt ]]; then
+            body="$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' rapporto.txt)"
+            echo "::notice title=Rapporto impostazioni Vercel::${body}"
+          fi
