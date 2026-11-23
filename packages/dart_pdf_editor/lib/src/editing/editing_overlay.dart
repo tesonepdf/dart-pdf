@@ -8269,12 +8269,8 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   ),
                   TextButton(
                     key: const ValueKey('pdf-area-scale-close'),
-                    onPressed: () {
-                      final save = _controller.onSaveRequested;
-                      _controller.contentAreaMode = false;
-                      save?.call();
-                    },
-                    child: Text(italian ? 'Chiudi e salva' : 'Close and save'),
+                    onPressed: () => _controller.contentAreaMode = false,
+                    child: Text(italian ? 'Chiudi' : 'Close'),
                   ),
                     ],
                   ),

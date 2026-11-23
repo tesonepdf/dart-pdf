@@ -11294,20 +11294,27 @@ class PdfEditingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Gli oggetti della pagina [page] che stanno interamente dentro [area].
+  /// Gli oggetti della pagina [page] che stanno dentro [area]: quelli che ci
+  /// cadono per almeno meta' della loro superficie. Un oggetto grande come la
+  /// pagina (sfondo, modulo) ha una frazione minima dentro e resta fuori.
   List<int> contentAreaElementIds(int page, PdfRect area) {
     const slack = 1.0;
-    return [
-      for (final element in elementsOn(page).elements)
-        if (element.bounds case final b?)
-          // dentro l'area se il centro dell'oggetto cade nel rettangolo
-          // (anche quando l'oggetto sporge un po' dal bordo)
-          if ((b.left + b.right) / 2 >= area.left - slack &&
-              (b.left + b.right) / 2 <= area.right + slack &&
-              (b.bottom + b.top) / 2 >= area.bottom - slack &&
-              (b.bottom + b.top) / 2 <= area.top + slack)
-            element.id,
-    ];
+    final ids = <int>[];
+    for (final element in elementsOn(page).elements) {
+      final b = element.bounds;
+      if (b == null) continue;
+      final left = b.left > area.left - slack ? b.left : area.left - slack;
+      final right = b.right < area.right + slack ? b.right : area.right + slack;
+      final bottom =
+          b.bottom > area.bottom - slack ? b.bottom : area.bottom - slack;
+      final top = b.top < area.top + slack ? b.top : area.top + slack;
+      final w = right - left;
+      final h = top - bottom;
+      if (w <= 0 || h <= 0) continue;
+      final own = b.width * b.height;
+      if (own <= 0 || (w * h) / own >= 0.5) ids.add(element.id);
+    }
+    return ids;
   }
 
   /// Porta l'area scelta su [to]. Con [contentAreaScales] il contenuto
