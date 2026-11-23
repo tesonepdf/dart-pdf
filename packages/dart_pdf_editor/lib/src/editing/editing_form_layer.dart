@@ -173,6 +173,9 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
   PdfRect? _editPageRect;
   PdfStandardFont _editFont = PdfStandardFont.helvetica;
   double _editSize = 12;
+  // il /DA e' a dimensione automatica (0 Tf) e il campo e' a una riga: mentre
+  // si scrive il carattere segue la stessa regola del campo disegnato
+  bool _editAuto = false;
   bool _editMultiline = false;
   // The edited field's /AA scripts: the keystroke helper filters typing,
   // and a refused commit shows [_editError] under the field.
@@ -257,6 +260,38 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
 
   PdfEditingController get _controller => widget.controller;
 
+  /// La dimensione del carattere nell'editor. Con /DA automatico e una riga e'
+  /// quella del campo disegnato: l'altezza decide, poi si stringe se il testo
+  /// e' piu' largo del campo. Cosi' scrivendo il testo non si ingrandisce e
+  /// non scorre fuori.
+  double get _editShownSize {
+    final rect = _editRect;
+    if (!_editAuto || rect == null) return _editSize;
+    final scale = widget.geometry.scale;
+    if (scale <= 0) return _editSize;
+    const pad = 2.0;
+    var size = (rect.height / scale - 2 * pad) / 1.15;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: _text.text.replaceAll('\n', ' '),
+        style: TextStyle(
+          fontSize: size,
+          fontFamily: _uiFamily(_editFont),
+          fontWeight: _editFont.isBold ? FontWeight.bold : FontWeight.normal,
+          fontStyle: _editFont.isItalic ? FontStyle.italic : FontStyle.normal,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final available = rect.width / scale - 2 * pad;
+    if (painter.width > available && painter.width > 0) {
+      size *= available / painter.width;
+    }
+    painter.dispose();
+    return size.clamp(4.0, 144.0);
+  }
+
   double get _chromeScale =>
       widget.zoom.isFinite && widget.zoom > 0 ? 1 / widget.zoom : 1.0;
 
@@ -297,6 +332,7 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
       // an auto-size /DA (0 Tf) edits at a readable default; the committed
       // appearance derives its own size as usual
       _editSize = size > 0 ? size : 12;
+      _editAuto = size <= 0 && !_editMultiline;
       // reopening the field supersedes its afterimage; another field's
       // (the one a Tab just committed) stays until its raster lands
       if (_afterRevisionId != null && _afterFieldName == field.name) {
@@ -810,6 +846,7 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
     final scale = widget.geometry.scale;
     final chromeScale = _chromeScale;
     final chromeColor = PdfViewerTheme.of(context).chrome;
+    final editSize = _editShownSize;
     return Positioned.fromRect(
       // keyed so a Tab from one field of this page to another keeps the
       // same TextField (and its focus) rather than rebuilding it
@@ -891,12 +928,12 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
               cursorWidth: 2 * chromeScale,
               cursorHeight: pdfZoomAwareCursorHeight(
                 context,
-                lineHeight: _editSize * scale * 1.2,
+                lineHeight: editSize * scale * 1.2,
                 chromeScale: chromeScale,
               ),
               style: TextStyle(
                 color: const Color(0xFF000000),
-                fontSize: _editSize * scale,
+                fontSize: editSize * scale,
                 height: 1.2,
                 fontFamily: _uiFamily(_editFont),
                 fontWeight:
