@@ -8224,7 +8224,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final italian = Localizations.localeOf(context).languageCode == 'it';
     final above = area.top - 56 * scale >= 0;
     final width = _geometry.viewSize.width;
-    final half = 230 * scale;
+    final half = 235 * scale;
     final anchor = Offset(
       width <= 2 * half ? width / 2 : area.center.dx.clamp(half, width - half),
       above ? area.top - 8 * scale : area.bottom + 8 * scale,
@@ -8248,7 +8248,13 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
               borderRadius: BorderRadius.circular(22),
               child: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 4),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxWidth: (width / scale).clamp(200.0, 470.0)),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
                   Text(italian ? 'Ridimensiona contenuto' : 'Resize content'),
                   const SizedBox(width: 6),
                   Switch(
@@ -8270,7 +8276,9 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     },
                     child: Text(italian ? 'Chiudi e salva' : 'Close and save'),
                   ),
-                ]),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -9624,10 +9632,6 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     size: Size.infinite,
                   ),
                 ),
-              if (_areaModeActive &&
-                  _areaViewRect != null &&
-                  _areaKind == _areaNone)
-                _buildAreaScaleChip(_areaViewRect!),
               if (_controller.guideLinesActive)
                 Positioned.fill(
                   child: IgnorePointer(
@@ -10090,6 +10094,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   _textBoxSelected)
                 _buildTextBoxBar(chrome?.$1 ?? selected,
                     stacked: showChip && widget.showSelectionChip),
+              if (_areaModeActive &&
+                  _areaViewRect != null &&
+                  _areaKind == _areaNone)
+                _buildAreaScaleChip(_areaViewRect!),
               if (_measureReadout() case (final text, final anchor))
                 _buildReadoutChip(text, anchor),
               if (_styleReadout() case (final text, final anchor))
