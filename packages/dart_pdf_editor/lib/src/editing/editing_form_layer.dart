@@ -166,6 +166,11 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
     ..addListener(_onTextChanged);
   late final FocusNode _focus = FocusNode()..addListener(_onFocusChange);
 
+  /// Il campo aveva gia' un valore quando e' iniziata la modifica: solo
+  /// allora serve coprire il vecchio testo; se era vuoto resta trasparente e
+  /// si vede la pagina sotto, cioe' dove si scrive.
+  bool _editHadValue = false;
+
   // The text field being edited, if any. Fields die with every revision,
   // so the name is the stable handle; the rest is layout captured at open.
   String? _editingField;
@@ -285,6 +290,7 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
         .firstMatch(field.defaultAppearance ?? '');
     final size = double.tryParse(tf?.group(2) ?? '') ?? 0;
     _text.text = _controller.formFieldTextValue(field) ?? '';
+    _editHadValue = _text.text.isNotEmpty;
     setState(() {
       _editingField = field.name;
       _editingWidget = widgetIndex;
@@ -820,8 +826,10 @@ class _FormInteractionLayerState extends State<FormInteractionLayer> {
       key: const ValueKey('pdf-form-inline-editor'),
       rect: rect,
       child: Container(
-        // cover the old rendered value so it doesn't ghost under the field
-        color: widget.pageColor.withValues(alpha: 0.92),
+        // cover the old rendered value so it doesn't ghost under the field;
+        // an empty field has nothing to cover, so the page shows through
+        color:
+            _editHadValue ? widget.pageColor.withValues(alpha: 0.92) : null,
         foregroundDecoration: BoxDecoration(
           border: Border.all(color: chromeColor, width: 1.5 * chromeScale),
         ),
