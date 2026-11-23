@@ -242,7 +242,10 @@ extension PdfContentEditing on PdfEditor {
     return changed;
   }
 
-  static String _regionTextReplacement(
+  /// Le stringhe mostrate da [op] (Tj, TJ, ' o ") con i glifi segnati in
+  /// [removed] sostituiti dal loro avanzamento negativo, cosi' gli altri
+  /// restano dove stanno.
+  static List<CosObject> _blankedShow(
       ContentOperation op, List<PdfContentGlyph> glyphs, List<bool> removed) {
     final output = <CosObject>[];
     var glyphIndex = 0;
@@ -282,6 +285,12 @@ extension PdfContentEditing on PdfEditor {
     } else {
       show(op.operands[op.operator == '"' ? 2 : 0] as CosString);
     }
+    return output;
+  }
+
+  static String _regionTextReplacement(
+      ContentOperation op, List<PdfContentGlyph> glyphs, List<bool> removed) {
+    final output = _blankedShow(op, glyphs, removed);
     final sideEffects = op.operator == '"'
         ? '${ContentWriter.fmt(_num(op.operands[0]))} Tw '
             '${ContentWriter.fmt(_num(op.operands[1]))} Tc T*\n'
@@ -289,6 +298,53 @@ extension PdfContentEditing on PdfEditor {
             ? 'T*\n'
             : '';
     return '$sideEffects${latin1.decode(CosSerializer.serialize(CosArray(output)))} TJ';
+  }
+
+  static bool _glyphInRect(PdfRect r, PdfContentGlyph g) {
+    const slack = 1.0;
+    return g.center.$1 >= r.left - slack &&
+        g.center.$1 <= r.right + slack &&
+        g.center.$2 >= r.bottom - slack &&
+        g.center.$2 <= r.top + slack;
+  }
+
+  /// Per l'anteprima dell'area: le operazioni della pagina senza quello che sta
+  /// dentro [within] ([clean]) e quelle del solo contenuto dentro ([only]).
+  /// Un testo che entra solo in parte si divide per caratteri: fuori restano
+  /// quelli fuori, dentro vanno quelli dentro.
+  static ({List<ContentOperation> clean, List<ContentOperation> only})
+      splitForArea(PdfPageElements elements, Set<int> ids, PdfRect within) {
+    final partial = <int, List<bool>>{};
+    for (final id in ids) {
+      final e = elements.elements[id];
+      if (e.kind != PdfElementKind.text || e.textGlyphs.isEmpty) continue;
+      final op = elements.operations[e.start];
+      if (op.operator != 'Tj' && op.operator != 'TJ') continue;
+      final inside = [for (final g in e.textGlyphs) _glyphInRect(within, g)];
+      if (inside.contains(true) && inside.contains(false)) {
+        partial[id] = inside;
+      }
+    }
+    List<ContentOperation> swap(List<ContentOperation> ops, bool keepInside) {
+      final replacements = Map<ContentOperation, ContentOperation>.identity();
+      for (final entry in partial.entries) {
+        final e = elements.elements[entry.key];
+        final op = elements.operations[e.start];
+        final removed =
+            keepInside ? [for (final v in entry.value) !v] : entry.value;
+        replacements[op] = ContentOperation(
+            'TJ', [CosArray(_blankedShow(op, e.textGlyphs, removed))]);
+      }
+      return [for (final op in ops) replacements[op] ?? op];
+    }
+
+    final clean = swap(
+        elements.operationsRetaining(
+            (e) => !ids.contains(e.id) || partial.containsKey(e.id)),
+        false);
+    final only = swap(
+        elements.operationsRetaining((e) => ids.contains(e.id)), true);
+    return (clean: clean, only: only);
   }
 
   /// Even-odd ray cast: is (x, y) inside the closed [polygon]?
@@ -477,18 +533,23 @@ extension PdfContentEditing on PdfEditor {
   int transformElements(
     PdfPageElements elements,
     Iterable<int> ids,
-    PdfMatrix transform,
-  ) {
+    PdfMatrix transform, {
+    PdfRect? within,
+  }) {
     final page = document.page(elements.pageIndex);
     final before = <int, String>{};
     final after = <int, String>{};
+    final replacements = <int, String>{};
     var moved = 0;
     for (final id in ids) {
       if (id < 0 || id >= elements.elements.length) {
         throw RangeError.range(id, 0, elements.elements.length - 1, 'ids');
       }
       final element = elements.elements[id];
-      if (before.containsKey(element.start)) continue; // un id ripetuto
+      if (before.containsKey(element.start) ||
+          replacements.containsKey(element.start)) {
+        continue; // un id ripetuto
+      }
       final inverse = element.ctm.inverted();
       if (inverse == null) continue;
       final delta = element.ctm.concat(transform).concat(inverse);
@@ -499,11 +560,11 @@ extension PdfContentEditing on PdfEditor {
             placement.horizontalScale == 0) {
           continue;
         }
-        final operator = elements.operations[element.start].operator;
+        final op = elements.operations[element.start];
+        final operator = op.operator;
         final seed = operator == "'" || operator == '"'
             ? placement.entryLineMatrix
             : placement.matrix;
-        before[element.start] = '${_matrixOperands(seed.concat(delta))} Tm';
         final restore =
             StringBuffer('${_matrixOperands(placement.lineMatrix)} Tm');
         final advance = placement.advance + _lineAdvance(placement);
@@ -512,6 +573,25 @@ extension PdfContentEditing on PdfEditor {
               -1000 * advance / placement.fontSize / placement.horizontalScale;
           restore.write(' [ ${ContentWriter.fmt(kern)} ] TJ');
         }
+        final glyphs = element.textGlyphs;
+        if (within != null &&
+            (operator == 'Tj' || operator == 'TJ') &&
+            glyphs.isNotEmpty) {
+          // solo i caratteri dentro l'area: gli altri restano dove sono
+          final inside = [for (final g in glyphs) _glyphInRect(within, g)];
+          if (!inside.contains(true)) continue;
+          if (inside.contains(false)) {
+            replacements[element.start] =
+                '${_regionTextReplacement(op, glyphs, inside)}\n'
+                '${_matrixOperands(seed.concat(delta))} Tm\n'
+                '${_regionTextReplacement(op, glyphs, [
+                  for (final v in inside) !v
+                ])}\n$restore';
+            moved++;
+            continue;
+          }
+        }
+        before[element.start] = '${_matrixOperands(seed.concat(delta))} Tm';
         after[element.start] = restore.toString();
       } else {
         if (_establishesClip(elements, element)) continue;
@@ -524,7 +604,12 @@ extension PdfContentEditing on PdfEditor {
     _setContent(
       elements.pageIndex,
       page,
-      elements.serialize(before: before, after: after),
+      elements.serialize(
+        drop: replacements.keys.toSet(),
+        replacements: replacements,
+        before: before,
+        after: after,
+      ),
     );
     return moved;
   }

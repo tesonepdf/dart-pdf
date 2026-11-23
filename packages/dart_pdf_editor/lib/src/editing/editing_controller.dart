@@ -11259,6 +11259,7 @@ class PdfEditingController extends ChangeNotifier {
   bool _contentAreaScales = true;
   int? _contentAreaPage;
   PdfRect? _contentAreaRect;
+  PdfRect? _contentAreaBase;
 
   /// Vero quando "Modifica PDF" lavora su un'area invece che su un oggetto.
   bool get contentAreaMode => _contentAreaMode;
@@ -11270,6 +11271,7 @@ class PdfEditingController extends ChangeNotifier {
     } else {
       _contentAreaPage = null;
       _contentAreaRect = null;
+      _contentAreaBase = null;
     }
     _contentAreaMode = value;
     notifyListeners();
@@ -11287,39 +11289,73 @@ class PdfEditingController extends ChangeNotifier {
   int? get contentAreaPage => _contentAreaPage;
   PdfRect? get contentAreaRect => _contentAreaRect;
 
+  /// La misura che l'area aveva quando e' stata scelta: la scala mostrata e'
+  /// quella di adesso rispetto a questa.
+  PdfRect? get contentAreaBase => _contentAreaBase;
+
   /// Sceglie l'area [rect] sulla pagina [page]; null la toglie.
   void setContentArea(int page, PdfRect? rect) {
     _contentAreaPage = rect == null ? null : page;
     _contentAreaRect = rect;
+    _contentAreaBase = rect;
     notifyListeners();
   }
 
-  /// Gli oggetti della pagina [page] che stanno dentro [area]: quelli che ci
-  /// cadono per almeno meta' della loro superficie. Un oggetto grande come la
-  /// pagina (sfondo, modulo) ha una frazione minima dentro e resta fuori.
+  /// Gli oggetti della pagina [page] che stanno dentro [area]: un testo se
+  /// almeno un suo carattere cade nel rettangolo (si scalano solo quelli);
+  /// il resto se almeno meta' della sua superficie e' dentro. Un oggetto
+  /// grande come la pagina (sfondo, modulo) ha una frazione minima dentro e
+  /// resta fuori.
   List<int> contentAreaElementIds(int page, PdfRect area) {
     const slack = 1.0;
     final ids = <int>[];
     for (final element in elementsOn(page).elements) {
+      if (element.kind == PdfElementKind.text &&
+          element.textGlyphs.isNotEmpty) {
+        final any = element.textGlyphs.any((g) =>
+            g.center.$1 >= area.left - slack &&
+            g.center.$1 <= area.right + slack &&
+            g.center.$2 >= area.bottom - slack &&
+            g.center.$2 <= area.top + slack);
+        if (any) ids.add(element.id);
+        continue;
+      }
       final b = element.bounds;
       if (b == null) continue;
-      final left = b.left > area.left - slack ? b.left : area.left - slack;
-      final right = b.right < area.right + slack ? b.right : area.right + slack;
-      final bottom =
-          b.bottom > area.bottom - slack ? b.bottom : area.bottom - slack;
-      final top = b.top < area.top + slack ? b.top : area.top + slack;
-      final w = right - left;
-      final h = top - bottom;
-      if (w <= 0 || h <= 0) continue;
-      final own = b.width * b.height;
-      if (own <= 0 || (w * h) / own >= 0.5) ids.add(element.id);
+      if (_mostlyInside(b, area)) ids.add(element.id);
     }
     return ids;
   }
 
+  static bool _mostlyInside(PdfRect b, PdfRect area) {
+    const slack = 1.0;
+    final left = b.left > area.left - slack ? b.left : area.left - slack;
+    final right = b.right < area.right + slack ? b.right : area.right + slack;
+    final bottom =
+        b.bottom > area.bottom - slack ? b.bottom : area.bottom - slack;
+    final top = b.top < area.top + slack ? b.top : area.top + slack;
+    final w = right - left;
+    final h = top - bottom;
+    if (w <= 0 || h <= 0) return false;
+    final own = b.width * b.height;
+    return own <= 0 || (w * h) / own >= 0.5;
+  }
+
+  /// Le annotazioni (foto, timbri, caselle di testo...) della pagina [page]
+  /// che stanno dentro [area] per almeno meta'. Non i collegamenti, i
+  /// fumetti di nota e i campi dei moduli.
+  List<PdfAnnotation> contentAreaAnnotations(int page, PdfRect area) => [
+        for (final a in _page(page).annotations)
+          if (a.subtype != 'Link' &&
+              a.subtype != 'Popup' &&
+              a.subtype != 'Widget' &&
+              _mostlyInside(a.rect, area))
+            a,
+      ];
+
   /// Porta l'area scelta su [to]. Con [contentAreaScales] il contenuto
-  /// dentro segue (scala e spostamento); altrimenti cambia solo il
-  /// rettangolo. Dice se il contenuto della pagina e' cambiato.
+  /// dentro segue (scala e spostamento), foto e timbri compresi; altrimenti
+  /// cambia solo il rettangolo. Dice se il documento e' cambiato.
   bool commitContentArea(PdfRect to) {
     final page = _contentAreaPage;
     final from = _contentAreaRect;
@@ -11328,27 +11364,16 @@ class PdfEditingController extends ChangeNotifier {
       return false;
     }
     var changed = false;
-    final report = PdfEditingPreferences.onDiagnostic;
     if (_contentAreaScales) {
       final ids = contentAreaElementIds(page, from);
-      if (report != null) {
-        final all = elementsOn(page).elements;
-        String r(PdfRect b) => '${b.left.toStringAsFixed(0)},'
-            '${b.bottom.toStringAsFixed(0)},${b.right.toStringAsFixed(0)},'
-            '${b.top.toStringAsFixed(0)}';
-        final kinds = <String, int>{};
-        for (final id in ids) {
-          kinds.update(all[id].kind.name, (n) => n + 1, ifAbsent: () => 1);
-        }
-        final sample = [
-          for (final e in all.take(4))
-            '${e.kind.name}${e.bounds == null ? '' : ' ${r(e.bounds!)}'}',
-        ].join(' | ');
-        report('Area: da ${r(from)} a ${r(to)}, pagina ${page + 1}, '
-            '${all.length} oggetti, ${ids.length} dentro l\'area '
-            '($kinds); primi: $sample');
-      }
-      if (ids.isNotEmpty) {
+      final annotations = contentAreaAnnotations(page, from);
+      PdfEditingPreferences.onDiagnostic?.call(
+          'Area: da ${from.left.round()},${from.bottom.round()},'
+          '${from.right.round()},${from.top.round()} a '
+          '${to.left.round()},${to.bottom.round()},${to.right.round()},'
+          '${to.top.round()}: ${ids.length} oggetti, '
+          '${annotations.length} annotazioni');
+      if (ids.isNotEmpty || annotations.isNotEmpty) {
         final sx = to.width / from.width;
         final sy = to.height / from.height;
         final matrix = PdfMatrix(
@@ -11360,12 +11385,21 @@ class PdfEditingController extends ChangeNotifier {
           to.bottom - from.bottom * sy,
         );
         var moved = 0;
-        changed = apply(
-              (e) => moved = e.transformElements(elementsOn(page), ids, matrix),
-            ) &&
-            moved > 0;
-        report?.call('Area: trasformati $moved oggetti, '
-            'documento cambiato: ${changed ? 'si' : 'no'}');
+        var movedAnnotations = false;
+        changed = apply((e) {
+              if (ids.isNotEmpty) {
+                moved = e.transformElements(elementsOn(page), ids, matrix,
+                    within: from);
+              }
+              if (annotations.isNotEmpty) {
+                movedAnnotations =
+                    e.transformAnnotations(page, annotations, matrix);
+              }
+            }) &&
+            (moved > 0 || movedAnnotations);
+        PdfEditingPreferences.onDiagnostic?.call(
+            'Area: trasformati $moved oggetti, annotazioni: '
+            '${movedAnnotations ? 'si' : 'no'}');
       }
     }
     _contentAreaRect = to;

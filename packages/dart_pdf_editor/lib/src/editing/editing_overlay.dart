@@ -1613,6 +1613,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     try {
       final elements = _controller.elementsOn(widget.pageIndex);
       final page = _controller.pageAt(widget.pageIndex);
+      final split = PdfContentEditing.splitForArea(elements, ids, area);
       final clean = await PdfPageRenderer.renderPictureWithPlan(
         page,
         PdfPageRenderPlan(
@@ -1620,12 +1621,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
           annotations: widget.showAnnotations,
           hiddenAnnotationSubtypes: widget.hiddenAnnotationSubtypes,
         ),
-        operations: elements.operationsRetaining((e) => !ids.contains(e.id)),
+        operations: split.clean,
       );
       final only = await PdfPageRenderer.renderPictureWithPlan(
         page,
         const PdfPageRenderPlan(annotations: false, paper: false),
-        operations: elements.operationsRetaining((e) => ids.contains(e.id)),
+        operations: split.only,
       );
       if (!mounted || _areaLiftKey != key) {
         clean.dispose();
@@ -8214,6 +8215,71 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
 
+  /// La misura dell'area in punti della pagina (o nell'unita' della scala,
+  /// se c'e') e quanto e' scalata rispetto a quando e' stata scelta.
+  String _areaMeasureText(PdfRect r) {
+    String len(double v) =>
+        _controller.measuredDistance((0, 0), (v, 0)) ?? '${v.round()} pt';
+    final size = '${len(r.width)} × ${len(r.height)}';
+    final base = _controller.contentAreaBase;
+    if (base == null || base.width <= 0 || base.height <= 0) return size;
+    final sx = (r.width / base.width * 100).round();
+    final sy = (r.height / base.height * 100).round();
+    return '$size · $sx% × $sy%';
+  }
+
+  /// Scrivere la misura esatta dell'area (larghezza e altezza in punti): resta
+  /// fermo l'angolo in alto a sinistra e il contenuto segue.
+  Future<void> _editAreaSize() async {
+    final rect = _controller.contentAreaRect;
+    if (rect == null) return;
+    final italian = Localizations.localeOf(context).languageCode == 'it';
+    final w = TextEditingController(text: rect.width.toStringAsFixed(1));
+    final h = TextEditingController(text: rect.height.toStringAsFixed(1));
+    const keyboard = TextInputType.numberWithOptions(decimal: true);
+    final ok = await pdfPresentDialog<bool>(
+      context,
+      builder: (context) => AlertDialog(
+        title: Text(italian ? 'Misura dell\'area (pt)' : 'Area size (pt)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const ValueKey('pdf-area-width'),
+              controller: w,
+              keyboardType: keyboard,
+              decoration:
+                  InputDecoration(labelText: italian ? 'Larghezza' : 'Width'),
+            ),
+            TextField(
+              key: const ValueKey('pdf-area-height'),
+              controller: h,
+              keyboardType: keyboard,
+              decoration:
+                  InputDecoration(labelText: italian ? 'Altezza' : 'Height'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(italian ? 'Annulla' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final nw = double.tryParse(w.text.trim().replaceAll(',', '.'));
+    final nh = double.tryParse(h.text.trim().replaceAll(',', '.'));
+    if (nw == null || nh == null || nw < 4 || nh < 4) return;
+    _controller.commitContentArea(
+        PdfRect(rect.left, rect.top - nh, rect.left + nw, rect.top));
+  }
+
   /// L'interruttore "Ridimensiona contenuto" sopra l'area di Modifica PDF (sotto
   /// se l'area tocca il bordo alto della pagina): accende e spegne
   /// [PdfEditingController.contentAreaScales] senza passare dal menu. Come il
@@ -8255,6 +8321,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                     alignment: WrapAlignment.center,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                  if (_controller.contentAreaRect case final r?)
+                    TextButton(
+                      key: const ValueKey('pdf-area-size'),
+                      onPressed: () => unawaited(_editAreaSize()),
+                      child: Text(_areaMeasureText(r)),
+                    ),
                   Text(italian ? 'Ridimensiona contenuto' : 'Resize content'),
                   const SizedBox(width: 6),
                   Switch(
@@ -10094,6 +10166,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   _areaViewRect != null &&
                   _areaKind == _areaNone)
                 _buildAreaScaleChip(_areaViewRect!),
+              if (_areaModeActive && _areaKind != _areaNone && _areaRect != null)
+                _buildReadoutChip(
+                  _areaMeasureText(_geometry.toPageRect(_areaRect!)),
+                  _areaRect!.bottomRight,
+                  keyValue: 'pdf-area-readout',
+                ),
               if (_measureReadout() case (final text, final anchor))
                 _buildReadoutChip(text, anchor),
               if (_styleReadout() case (final text, final anchor))
