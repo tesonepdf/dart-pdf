@@ -8217,12 +8217,29 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
 
+  /// Una lunghezza in punti scritta nell'unita' della scala di misura, o in
+  /// centimetri se non c'e' una scala: mai in punti.
+  String _lenText(double pt) =>
+      _controller.measuredDistance((0, 0), (pt, 0)) ??
+      '${(pt * 2.54 / 72).toStringAsFixed(2)} cm';
+
+  /// L'unita' con cui [_lenText] scrive [pt] e quante unita' valgono un punto,
+  /// ricavate dal testo stesso cosi' il dialogo parla come il chip.
+  ({String unit, double perPoint}) _unitFor(double pt) {
+    final m = RegExp(r'^\s*(-?[\d.,]+)\s*(.*?)\s*$').firstMatch(_lenText(pt));
+    final value =
+        m == null ? null : double.tryParse(m.group(1)!.replaceAll(',', '.'));
+    if (m == null || value == null || pt <= 0 || value <= 0) {
+      return (unit: 'cm', perPoint: 2.54 / 72);
+    }
+    final unit = m.group(2)!;
+    return (unit: unit.isEmpty ? 'cm' : unit, perPoint: value / pt);
+  }
+
   /// La misura in punti della pagina (o nell'unita' della scala, se c'e') e,
   /// se si conosce la misura di partenza [base], quanto e' scalata.
   String _sizeText(PdfRect r, PdfRect? base) {
-    String len(double v) =>
-        _controller.measuredDistance((0, 0), (v, 0)) ?? '${v.round()} pt';
-    final size = '${len(r.width)} × ${len(r.height)}';
+    final size = '${_lenText(r.width)} × ${_lenText(r.height)}';
     if (base == null || base.width <= 0 || base.height <= 0) return size;
     final sx = (r.width / base.width * 100).round();
     final sy = (r.height / base.height * 100).round();
@@ -8236,13 +8253,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   /// annulla o i numeri non vanno bene.
   Future<(double, double)?> _askSize(PdfRect rect) async {
     final italian = Localizations.localeOf(context).languageCode == 'it';
-    final w = TextEditingController(text: rect.width.toStringAsFixed(1));
-    final h = TextEditingController(text: rect.height.toStringAsFixed(1));
+    final unit = _unitFor(rect.width);
+    final w = TextEditingController(
+        text: (rect.width * unit.perPoint).toStringAsFixed(2));
+    final h = TextEditingController(
+        text: (rect.height * unit.perPoint).toStringAsFixed(2));
     const keyboard = TextInputType.numberWithOptions(decimal: true);
     final ok = await pdfPresentDialog<bool>(
       context,
       builder: (context) => AlertDialog(
-        title: Text(italian ? 'Misura (pt)' : 'Size (pt)'),
+        title: Text(italian ? 'Misura (${unit.unit})' : 'Size (${unit.unit})'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -8282,8 +8302,11 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (ok != true || !mounted) return null;
     final nw = double.tryParse(w.text.trim().replaceAll(',', '.'));
     final nh = double.tryParse(h.text.trim().replaceAll(',', '.'));
-    if (nw == null || nh == null || nw < 4 || nh < 4) return null;
-    return (nw, nh);
+    if (nw == null || nh == null) return null;
+    final wPt = nw / unit.perPoint;
+    final hPt = nh / unit.perPoint;
+    if (wPt < 4 || hPt < 4) return null;
+    return (wPt, hPt);
   }
 
   /// Scrivere la misura esatta dell'area: resta fermo l'angolo in alto a
