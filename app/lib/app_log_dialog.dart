@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'app_log.dart';
 import 'build_check.dart' show refreshBuildStatus;
+import 'log_upload.dart';
 import 'workflow_log.dart';
 
 /// Apre il Log a schermo intero (Impostazioni > Log e problemi).
@@ -96,6 +97,48 @@ class _AppLogScreenState extends State<AppLogScreen> {
     );
   }
 
+  Future<void> _sendToRepo() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    var token = await savedLogToken();
+    if (token == null) {
+      if (!mounted) return;
+      final controller = TextEditingController();
+      token = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Token GitHub'),
+          content: TextField(
+            key: const ValueKey('app-log-token'),
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Incolla il token (si chiede una sola volta)',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annulla'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('Invia'),
+            ),
+          ],
+        ),
+      );
+      if (token == null || token.trim().isEmpty) return;
+      token = token.trim();
+      await saveLogToken(token);
+    }
+    try {
+      final name = await uploadLog(token);
+      messenger?.showSnackBar(SnackBar(content: Text('Log inviato: $name')));
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text('Invio non riuscito: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final log = AppLog.instance;
@@ -147,6 +190,7 @@ class _AppLogScreenState extends State<AppLogScreen> {
                     unawaited(syncWorkflowLog());
                   }
                   if (v == 'copy') _copyAll();
+                  if (v == 'send') unawaited(_sendToRepo());
                   if (v == 'clear') log.clear();
                 },
                 itemBuilder: (context) => [
@@ -158,6 +202,11 @@ class _AppLogScreenState extends State<AppLogScreen> {
                     value: 'copy',
                     enabled: all.isNotEmpty,
                     child: const Text('Copia tutto'),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'send',
+                    enabled: all.isNotEmpty,
+                    child: const Text('Invia al repo'),
                   ),
                   PopupMenuItem<String>(
                     value: 'clear',
