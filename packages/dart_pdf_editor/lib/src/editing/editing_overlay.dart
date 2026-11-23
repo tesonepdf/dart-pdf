@@ -5040,12 +5040,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     // Misure in pixel dello schermo, riportate nello spazio della pagina:
     // restano piccole e costanti a qualsiasi zoom.
     final cs = _chromeScale;
-    final hit = 24.0 * cs;
-    final face = 16.0 * cs;
-    final iconSize = 12.0 * cs;
-    final step = 24.0 * cs;
+    // su Android piu' grandi, per toccarli col dito
+    final android = defaultTargetPlatform == TargetPlatform.android;
+    final hit = (android ? 46.0 : 24.0) * cs;
+    final face = (android ? 38.0 : 16.0) * cs;
+    final iconSize = (android ? 28.0 : 12.0) * cs;
+    final step = (android ? 46.0 : 24.0) * cs;
     // oltre i quadrati di ridimensionamento
-    final gap = 12.0 * cs;
+    final gap = (android ? 20.0 : 12.0) * cs;
 
     Widget face0(IconData icon, Color color) => Container(
           width: face,

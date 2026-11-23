@@ -59,33 +59,44 @@ class FormFieldLabelLayer extends StatelessWidget {
   }
 
   Widget _label(Rect rect, String name, Color chrome, double chromeScale) {
-    return Positioned.fromRect(
-      rect: rect,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.withValues(alpha: 0.05),
-          border: Border.all(
-              color: chrome.withValues(alpha: 0.5), width: chromeScale),
-        ),
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Transform.scale(
-            scale: chromeScale,
-            alignment: Alignment.topLeft,
-            child: Container(
-              constraints: BoxConstraints(maxWidth: rect.width),
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-              color: chrome.withValues(alpha: 0.85),
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Color(0xFFFFFFFF), fontSize: 10, height: 1.1),
+    // Il nome sta sopra il campo, fuori dal rettangolo: non copre dove si
+    // scrive. Il rettangolo resta solo un contorno leggero.
+    return Positioned.fill(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fromRect(
+            rect: rect,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: chrome.withValues(alpha: 0.05),
+                border: Border.all(
+                    color: chrome.withValues(alpha: 0.5), width: chromeScale),
               ),
             ),
           ),
-        ),
+          Positioned(
+            left: rect.left,
+            top: rect.top - 14 * chromeScale,
+            child: Transform.scale(
+              scale: chromeScale,
+              alignment: Alignment.topLeft,
+              child: Container(
+                constraints:
+                    BoxConstraints(maxWidth: math.max(rect.width, 90)),
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                color: chrome.withValues(alpha: 0.85),
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Color(0xFFFFFFFF), fontSize: 10, height: 1.1),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

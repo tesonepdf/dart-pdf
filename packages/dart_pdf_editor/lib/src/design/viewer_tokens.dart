@@ -2,6 +2,8 @@
 // Package-private (not exported): painters and overlays read the resolved
 // getters instead of repeating `?? const Color(...)` literals.
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/widgets.dart';
 
 import '../theme.dart';
@@ -92,7 +94,12 @@ extension PdfViewerTokens on PdfViewerThemeData {
   Color get chip => chipColor ?? PdfViewerDefaults.chip;
   Color get chipForeground =>
       chipForegroundColor ?? PdfViewerDefaults.chipForeground;
-  double get handleDiameter => handleSize ?? PdfViewerDefaults.handleSize;
+  double get handleDiameter =>
+      handleSize ??
+      // su Android i quadratini di ridimensionamento sono piu' grandi
+      (defaultTargetPlatform == TargetPlatform.android
+          ? 18.0
+          : PdfViewerDefaults.handleSize);
   Color get diffInserted => diffInsertedColor ?? PdfViewerDefaults.diffInserted;
   Color get diffDeleted => diffDeletedColor ?? PdfViewerDefaults.diffDeleted;
   Color get diffReplaced => diffReplacedColor ?? PdfViewerDefaults.diffReplaced;
