@@ -8217,24 +8217,24 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (cursor != _cursor) setState(() => _cursor = cursor);
   }
 
-  /// La misura dell'area in punti della pagina (o nell'unita' della scala,
-  /// se c'e') e quanto e' scalata rispetto a quando e' stata scelta.
-  String _areaMeasureText(PdfRect r) {
+  /// La misura in punti della pagina (o nell'unita' della scala, se c'e') e,
+  /// se si conosce la misura di partenza [base], quanto e' scalata.
+  String _sizeText(PdfRect r, PdfRect? base) {
     String len(double v) =>
         _controller.measuredDistance((0, 0), (v, 0)) ?? '${v.round()} pt';
     final size = '${len(r.width)} × ${len(r.height)}';
-    final base = _controller.contentAreaBase;
     if (base == null || base.width <= 0 || base.height <= 0) return size;
     final sx = (r.width / base.width * 100).round();
     final sy = (r.height / base.height * 100).round();
     return '$size · $sx% × $sy%';
   }
 
-  /// Scrivere la misura esatta dell'area (larghezza e altezza in punti): resta
-  /// fermo l'angolo in alto a sinistra e il contenuto segue.
-  Future<void> _editAreaSize() async {
-    final rect = _controller.contentAreaRect;
-    if (rect == null) return;
+  String _areaMeasureText(PdfRect r) =>
+      _sizeText(r, _controller.contentAreaBase);
+
+  /// Chiede larghezza e altezza esatte (in punti) con la tastiera. Null se si
+  /// annulla o i numeri non vanno bene.
+  Future<(double, double)?> _askSize(PdfRect rect) async {
     final italian = Localizations.localeOf(context).languageCode == 'it';
     final w = TextEditingController(text: rect.width.toStringAsFixed(1));
     final h = TextEditingController(text: rect.height.toStringAsFixed(1));
@@ -8242,21 +8242,26 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     final ok = await pdfPresentDialog<bool>(
       context,
       builder: (context) => AlertDialog(
-        title: Text(italian ? 'Misura dell\'area (pt)' : 'Area size (pt)'),
+        title: Text(italian ? 'Misura (pt)' : 'Size (pt)'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              key: const ValueKey('pdf-area-width'),
+              key: const ValueKey('pdf-size-width'),
               controller: w,
               keyboardType: keyboard,
+              autofocus: true,
+              onTap: () => w.selection =
+                  TextSelection(baseOffset: 0, extentOffset: w.text.length),
               decoration:
                   InputDecoration(labelText: italian ? 'Larghezza' : 'Width'),
             ),
             TextField(
-              key: const ValueKey('pdf-area-height'),
+              key: const ValueKey('pdf-size-height'),
               controller: h,
               keyboardType: keyboard,
+              onTap: () => h.selection =
+                  TextSelection(baseOffset: 0, extentOffset: h.text.length),
               decoration:
                   InputDecoration(labelText: italian ? 'Altezza' : 'Height'),
             ),
@@ -8274,12 +8279,76 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (ok != true || !mounted) return null;
     final nw = double.tryParse(w.text.trim().replaceAll(',', '.'));
     final nh = double.tryParse(h.text.trim().replaceAll(',', '.'));
-    if (nw == null || nh == null || nw < 4 || nh < 4) return;
+    if (nw == null || nh == null || nw < 4 || nh < 4) return null;
+    return (nw, nh);
+  }
+
+  /// Scrivere la misura esatta dell'area: resta fermo l'angolo in alto a
+  /// sinistra e il contenuto segue.
+  Future<void> _editAreaSize() async {
+    final rect = _controller.contentAreaRect;
+    if (rect == null) return;
+    final size = await _askSize(rect);
+    if (size == null) return;
     _controller.commitContentArea(
-        PdfRect(rect.left, rect.top - nh, rect.left + nw, rect.top));
+        PdfRect(rect.left, rect.top - size.$2, rect.left + size.$1, rect.top));
+  }
+
+  /// Scrivere la misura esatta della selezione: resta fermo l'angolo in alto
+  /// a sinistra.
+  Future<void> _editSelectionSize() async {
+    final view = _selectedViewRect;
+    if (view == null) return;
+    final rect = _geometry.toPageRect(view);
+    final size = await _askSize(rect);
+    if (size == null) return;
+    _controller.resizeSelected(
+        PdfRect(rect.left, rect.top - size.$2, rect.left + size.$1, rect.top));
+  }
+
+  /// La misura della selezione accanto al suo angolo in basso a destra: a
+  /// riposo si tocca per scrivere i numeri, mentre si ridimensiona mostra
+  /// anche di quanto si e' scalata.
+  Widget _buildSelectionSizeChip(Rect selected) {
+    final scale = _chromeScale;
+    final resizing = _resizeHandle != null && _resizeRect != null;
+    final view = resizing ? _resizeRect! : selected;
+    final base = resizing && _resizeFrom != null
+        ? _geometry.toPageRect(_resizeFrom!)
+        : null;
+    final text = _sizeText(_geometry.toPageRect(view), base);
+    return Positioned(
+      left: view.right,
+      top: view.bottom + 16 * scale,
+      child: FractionalTranslation(
+        translation: const Offset(-1, 0),
+        child: Transform.scale(
+          scale: scale,
+          alignment: Alignment.topRight,
+          child: Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) => _chipPointer = event.pointer,
+            child: Material(
+              key: const ValueKey('pdf-selection-size-chip'),
+              elevation: 3,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: resizing ? null : () => unawaited(_editSelectionSize()),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(text),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// L'interruttore "Ridimensiona contenuto" sopra l'area di Modifica PDF (sotto
@@ -10168,6 +10237,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                   _areaViewRect != null &&
                   _areaKind == _areaNone)
                 _buildAreaScaleChip(_areaViewRect!),
+              if (selected != null &&
+                  !_areaModeActive &&
+                  _textEditRect == null &&
+                  _moveStart == null &&
+                  !_selectedLineFamily &&
+                  _controller.selectedAnnotation != null &&
+                  _controller.selectedAnnotation!.behavior.markupQuads == null)
+                _buildSelectionSizeChip(selected),
               if (_areaModeActive && _areaKind != _areaNone && _areaRect != null)
                 _buildReadoutChip(
                   _areaMeasureText(_geometry.toPageRect(_areaRect!)),
