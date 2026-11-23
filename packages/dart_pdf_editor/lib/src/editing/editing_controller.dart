@@ -11328,8 +11328,26 @@ class PdfEditingController extends ChangeNotifier {
       return false;
     }
     var changed = false;
+    final report = PdfEditingPreferences.onDiagnostic;
     if (_contentAreaScales) {
       final ids = contentAreaElementIds(page, from);
+      if (report != null) {
+        final all = elementsOn(page).elements;
+        String r(PdfRect b) => '${b.left.toStringAsFixed(0)},'
+            '${b.bottom.toStringAsFixed(0)},${b.right.toStringAsFixed(0)},'
+            '${b.top.toStringAsFixed(0)}';
+        final kinds = <String, int>{};
+        for (final id in ids) {
+          kinds.update(all[id].kind.name, (n) => n + 1, ifAbsent: () => 1);
+        }
+        final sample = [
+          for (final e in all.take(4))
+            '${e.kind.name}${e.bounds == null ? '' : ' ${r(e.bounds!)}'}',
+        ].join(' | ');
+        report('Area: da ${r(from)} a ${r(to)}, pagina ${page + 1}, '
+            '${all.length} oggetti, ${ids.length} dentro l\'area '
+            '($kinds); primi: $sample');
+      }
       if (ids.isNotEmpty) {
         final sx = to.width / from.width;
         final sy = to.height / from.height;
@@ -11346,6 +11364,8 @@ class PdfEditingController extends ChangeNotifier {
               (e) => moved = e.transformElements(elementsOn(page), ids, matrix),
             ) &&
             moved > 0;
+        report?.call('Area: trasformati $moved oggetti, '
+            'documento cambiato: ${changed ? 'si' : 'no'}');
       }
     }
     _contentAreaRect = to;
