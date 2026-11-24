@@ -2142,30 +2142,44 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                         listenable: Listenable.merge([pdfSearchOpen, _viewer]),
                         builder: (context, _) {
                           final v = _viewer;
-                          if (!pdfSearchOpen.value ||
-                              MediaQuery.sizeOf(context).width >= 600 ||
-                              v.query.isEmpty ||
-                              v.isSearching) {
-                            return const SizedBox.shrink();
-                          }
-                          final text = v.matchCount == 0
+                          final showSearch = pdfSearchOpen.value &&
+                              MediaQuery.sizeOf(context).width < 600 &&
+                              v.query.isNotEmpty &&
+                              !v.isSearching;
+                          final searchText = v.matchCount == 0
                               ? '0/0'
                               : '${v.currentMatch + 1}/${v.matchCount}';
+                          final theme = Theme.of(context);
+                          Widget chip(String text) => Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(text,
+                                    style: theme.textTheme.bodyMedium),
+                              );
+                          // il numero di pagina sta sempre li' e segue lo
+                          // scorrimento, a meta' trasparenza
                           return Align(
                             alignment: Alignment.topCenter,
-                            child: Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(text,
-                                  style:
-                                      Theme.of(context).textTheme.bodyMedium),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (showSearch) ...[
+                                  chip(searchText),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (v.pageCount > 0)
+                                  Opacity(
+                                    key: const ValueKey('pdf-page-counter'),
+                                    opacity: 0.5,
+                                    child: chip(
+                                        '${v.currentPage + 1} / ${v.pageCount}'),
+                                  ),
+                              ],
                             ),
                           );
                         },
