@@ -113,6 +113,7 @@ Future<void> showAppSettings(
   required RecentsStore recents,
   VoidCallback? onOpenDevTools,
   AutoOcrSetting? autoOcr,
+  String? initialSection,
 }) {
   return showPdfDialog<void>(
     context: context,
@@ -121,6 +122,7 @@ Future<void> showAppSettings(
       recents: recents,
       onOpenDevTools: onOpenDevTools,
       autoOcr: autoOcr ?? AutoOcrSetting.instance,
+      initialSection: initialSection,
     ),
   );
 }
@@ -183,7 +185,12 @@ class _SettingsDialog extends StatefulWidget {
     required this.recents,
     this.onOpenDevTools,
     required this.autoOcr,
+    this.initialSection,
   });
+
+  /// Il titolo della sezione da aprire subito, se si arriva da una voce del
+  /// menu.
+  final String? initialSection;
 
   final PdfEditingPreferences prefs;
   final RecentsStore recents;
@@ -207,8 +214,9 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _SettingsSection(
+                _SettingsSection(
                   title: 'Home e barra in basso',
+                  initiallyExpanded: widget.initialSection == 'Home e barra in basso',
                   children: [
                     _StartHomeTile(),
                     _TesoneBarTile(),
@@ -218,6 +226,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 ),
                 _SettingsSection(
                   title: 'Aspetto e lingua',
+                  initiallyExpanded: widget.initialSection == 'Aspetto e lingua',
                   children: [
                     Text(appL10n(context).settingsAppearance,
                         style: theme.textTheme.titleSmall),
@@ -250,6 +259,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 ),
                 _SettingsSection(
                   title: 'File recenti',
+                  initiallyExpanded: widget.initialSection == 'File recenti',
                   children: [
                     Row(
                       children: [
@@ -277,12 +287,14 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ],
                 ),
                 if (SaveFolder.supported)
-                  const _SettingsSection(
+                  _SettingsSection(
                     title: 'Salvataggio',
+                  initiallyExpanded: widget.initialSection == 'Salvataggio',
                     children: [_SaveFolderTile()],
                   ),
                 _SettingsSection(
                   title: 'Strumenti',
+                  initiallyExpanded: widget.initialSection == 'Strumenti',
                   children: [
                     _MenuHoldSection(prefs: widget.prefs),
                     const Divider(height: 32),
@@ -297,6 +309,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                     OnDeviceOcr.isSupported)
                   _SettingsSection(
                     title: 'Testo e firme',
+                  initiallyExpanded: widget.initialSection == 'Testo e firme',
                     children: [
                       if (SignatureTrust.platformDefault case final trust?
                           when trust.aatl != null)
@@ -311,6 +324,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ),
                 _SettingsSection(
                   title: 'Sistema',
+                  initiallyExpanded: widget.initialSection == 'Sistema',
                   children: [
                     ListTile(
                       key: const ValueKey('settings-default-app'),
@@ -352,6 +366,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                 ),
                 _SettingsSection(
                   title: 'Log e problemi',
+                  initiallyExpanded: widget.initialSection == 'Log e problemi',
                   children: [
                     ListTile(
                       key: const ValueKey('settings-app-log'),
@@ -1356,10 +1371,17 @@ class _SaveFolderTile extends StatelessWidget {
 /// Una sezione delle Impostazioni: scheda chiusa con il titolo, che si apre
 /// toccandola (come un menu a tendina).
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.title, required this.children});
+  const _SettingsSection({
+    required this.title,
+    required this.children,
+    this.initiallyExpanded = false,
+  });
 
   final String title;
   final List<Widget> children;
+
+  /// Aperta da subito: si arriva qui dal menu o dalla ricerca.
+  final bool initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -1378,6 +1400,7 @@ class _SettingsSection extends StatelessWidget {
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             key: ValueKey('settings-section-$title'),
+            initiallyExpanded: initiallyExpanded,
             title: Text(
               title.toUpperCase(),
               style: theme.textTheme.titleSmall?.copyWith(

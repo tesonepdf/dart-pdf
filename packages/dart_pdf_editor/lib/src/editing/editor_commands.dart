@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart' show Icons;
 
 import '../design/editor_presenter.dart';
 import '../l10n/pdf_l10n.dart';
@@ -282,6 +283,12 @@ class PdfEditorCommands extends ChangeNotifier {
   Map<PdfEditTool, PdfToolShortcut> toolShortcuts;
 
   /// Saves the document; [catalog] lists a Save command when set.
+  /// Apre la finestra dell'autore predefinito: la mette chi mostra l'editor.
+  VoidCallback? onAuthorPressed;
+
+  /// Apre la finestra delle scorciatoie da tastiera.
+  VoidCallback? onShortcutsPressed;
+
   VoidCallback? onSave;
 
   /// Saves the document elsewhere; [catalog] lists Save as when set.
@@ -882,6 +889,58 @@ class PdfEditorCommands extends ChangeNotifier {
           view,
           () => prefs.twoPageCoverPage,
           (v) => prefs.twoPageCoverPage = v));
+      // Le stesse voci del pulsante delle opzioni di vista: stanno anche nel
+      // menu e nella ricerca.
+      if (features.pageColorEditable) {
+        commands.add(PdfCommand(
+          id: 'view-page-color',
+          icon: Icons.palette_outlined,
+          label: (c) => pdfL10n(c).shellPageColor,
+          category: view,
+          invoke: (context) async {
+            final color = await pdfPresentColor(
+              context,
+              PdfColorRequest(
+                initial: prefs.pageColor,
+                format: prefs.colorPickerFormat,
+                onFormatChanged: (format) => prefs.colorPickerFormat = format,
+                recentColors: prefs.recentColors,
+              ),
+            );
+            if (color != null) {
+              prefs.noteRecentColor(color);
+              prefs.pageColor = color;
+            }
+          },
+        ));
+        commands.add(toggle(
+            'view-bake-page-color',
+            Icons.save_outlined,
+            (c) => pdfL10n(c).shellBakePageColor,
+            view,
+            () => prefs.bakePageColor,
+            (v) => prefs.bakePageColor = v));
+      }
+      final author = onAuthorPressed;
+      if (features.author && author != null) {
+        commands.add(PdfCommand(
+          id: 'view-author',
+          icon: Icons.person_outline,
+          label: (c) => pdfL10n(c).shellDefaultAuthor,
+          category: view,
+          invoke: (context) async => author(),
+        ));
+      }
+      final shortcuts = onShortcutsPressed;
+      if (shortcuts != null) {
+        commands.add(PdfCommand(
+          id: 'view-shortcuts',
+          icon: Icons.keyboard_outlined,
+          label: (c) => pdfL10n(c).shellKeyboardShortcutsMenu,
+          category: view,
+          invoke: (context) async => shortcuts(),
+        ));
+      }
     }
 
     final save = onSave;

@@ -912,6 +912,8 @@ class _PdfEditorViewState extends State<PdfEditorView> {
     required Set<PdfEditTool>? tools,
     required Map<PdfEditTool, PdfToolShortcut> shortcuts,
   }) {
+    _boundShortcuts = shortcuts;
+    _boundTools = tools;
     _commands
       ..controller = _session
       ..viewerController = _viewer
@@ -928,6 +930,8 @@ class _PdfEditorViewState extends State<PdfEditorView> {
                 if (tool != PdfEditTool.image) tool,
             }
       ..toolShortcuts = shortcuts
+      ..onAuthorPressed = _promptAuthor
+      ..onShortcutsPressed = _editShortcuts
       ..onSave = widget.onSave == null ? null : _save
       ..saveEnabled = widget.onSave == null ? null : _saveEnabled
       ..onSaveAs = widget.onSaveAs == null ? null : _saveAs;
@@ -1163,6 +1167,21 @@ class _PdfEditorViewState extends State<PdfEditorView> {
   void _saveUnchanged() => widget.onSave?.call(_session.bytes);
 
   void _saveAs() => widget.onSaveAs?.call(_session.bytes);
+
+  Map<PdfEditTool, PdfToolShortcut>? _boundShortcuts;
+  Set<PdfEditTool>? _boundTools;
+
+  /// La finestra delle scorciatoie da tastiera, anche dal menu e dalla ricerca.
+  Future<void> _editShortcuts() async {
+    final shortcuts = _boundShortcuts;
+    if (shortcuts == null) return;
+    final next = await showPdfShellShortcutsSheet(
+      context,
+      shortcuts: shortcuts,
+      tools: _boundTools,
+    );
+    if (next != null && mounted) setState(() => _toolShortcuts = next);
+  }
 
   Future<void> _promptAuthor() async {
     final session = _session;

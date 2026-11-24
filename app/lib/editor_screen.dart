@@ -6681,7 +6681,7 @@ class _EditorScreenState extends State<EditorScreen>
         disabledReason: command.disabledReason,
         selected: command.selected,
         searchTerms: [...command.searchTerms, ...extra],
-        path: area == 'hidden' ? const [] : [...extra, command.label],
+        path: [...extra, command.label],
       );
       entries.add((command: found, area: area, section: section, toggle: toggle));
     }
@@ -6726,6 +6726,31 @@ class _EditorScreenState extends State<EditorScreen>
       );
     }
 
+    // Ogni sezione delle Impostazioni e' una voce: si apre la schermata con
+    // quella sezione gia' aperta.
+    for (final (index, title) in const [
+      'Home e barra in basso',
+      'Aspetto e lingua',
+      'File recenti',
+      'Salvataggio',
+      'Strumenti',
+      'Testo e firme',
+      'Sistema',
+    ].indexed) {
+      add(
+        plain('menu-settings-section-$index', Icons.tune_outlined, title,
+            () => showAppSettings(
+                  context,
+                  prefs: _prefs,
+                  recents: _recents,
+                  onOpenDevTools: kDevToolsEnabled ? _toggleDevTools : null,
+                  autoOcr: _autoOcr,
+                  initialSection: title,
+                )),
+        'app',
+        section: 'Impostazioni',
+      );
+    }
     add(
       plain('menu-performance', Icons.speed_outlined, 'Prestazioni',
           () => unawaited(showPerformance(context))),
@@ -7025,13 +7050,25 @@ class _EditorScreenState extends State<EditorScreen>
             // macroarea Pagine: nel menu si mostrano una volta sola.
             add(
               appCommand,
-              command.id.startsWith('pages-') ? 'hidden' : 'tools',
+              command.id.startsWith('pages-') ? 'pages' : 'tools',
               section: command.toolGroup?.label(context),
             );
           case PdfCommandCategory.panel:
             add(appCommand, 'view', section: 'Pannelli', toggle: true);
           case PdfCommandCategory.view:
-            add(appCommand, 'view', section: 'Opzioni di vista', toggle: true);
+            // colore pagina, autore e scorciatoie aprono una finestra: non
+            // sono interruttori
+            final dialog = const {
+              'view-page-color',
+              'view-author',
+              'view-shortcuts',
+            }.contains(command.id);
+            add(
+              appCommand,
+              'view',
+              section: dialog ? 'Aspetto e personalizzazione' : 'Opzioni di vista',
+              toggle: !dialog,
+            );
           default:
             add(appCommand, 'tools', section: 'Altro');
         }
@@ -7829,6 +7866,7 @@ class _EditorScreenState extends State<EditorScreen>
       'Barre',
       'Pannelli',
       'Opzioni di vista',
+      'Aspetto e personalizzazione',
       'Guide e righelli',
       'Foglio diviso',
     ],
@@ -7841,7 +7879,7 @@ class _EditorScreenState extends State<EditorScreen>
     'sign': [null, 'Firmare', 'Compilare moduli'],
     'export': [null, 'Immagini e testo', 'Word ed Excel', 'In un\'altra app'],
     'share': [null, 'Stampare', 'Inviare'],
-    'app': [null, 'Preferenze', 'Novita\'', 'Diagnostica'],
+    'app': [null, 'Preferenze', 'Impostazioni', 'Novita\'', 'Diagnostica'],
   };
 
   /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea,
