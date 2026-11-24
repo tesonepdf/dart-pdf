@@ -143,6 +143,44 @@ Future<void> showPdfEditingGuidesDialog(
                     ),
                   ]),
                 ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        Localizations.localeOf(context).languageCode == 'it'
+                            ? 'Foglio diviso (stampa a metà pagina)'
+                            : 'Page split (half-page printing)',
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final (value, it, en) in const [
+                            (0, 'Nessuna', 'None'),
+                            (1, 'Metà orizzontale', 'Horizontal half'),
+                            (2, 'Metà verticale', 'Vertical half'),
+                            (3, 'In 4 parti', 'Quarters'),
+                          ])
+                            ChoiceChip(
+                              key: ValueKey('pdf-page-division-$value'),
+                              label: Text(
+                                  Localizations.localeOf(context)
+                                              .languageCode ==
+                                          'it'
+                                      ? it
+                                      : en),
+                              selected: preferences.pageDivision == value,
+                              onSelected: (_) =>
+                                  preferences.pageDivision = value,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

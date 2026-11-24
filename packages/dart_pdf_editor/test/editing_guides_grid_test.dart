@@ -266,7 +266,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('pdf-page-rulers')), findsOneWidget);
     var painter = rulerPainter(tester);
-    expect(painter.bandWidth, 24);
+    expect(painter.bandWidth, 32);
     expect(painter.majorStepFor(const Size(800, 1035)),
         closeTo(20 * 72 / 25.4, 0.01));
     expect(painter.cursor, isNull);

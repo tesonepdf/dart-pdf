@@ -2525,6 +2525,7 @@ class PdfEditingController extends ChangeNotifier {
       preferences.showVerticalCursorGuide ||
       preferences.showHorizontalCursorGuide ||
       preferences.showPageRulers ||
+      preferences.pageDivision != 0 ||
       preferences.showSnapGrid;
 
   /// Pending visual results of committed revisions and when each retires.

@@ -177,6 +177,7 @@ class PdfEditingPreferences extends ChangeNotifier
   bool _smartAlignmentGuides = true;
   bool _showPageRulers = false;
   bool _showSnapGrid = false;
+  int _pageDivision = 0;
   int _menuHoldMs = 750;
   bool _snapToGrid = false;
   double _gridSpacing = 10;
@@ -329,6 +330,8 @@ class PdfEditingPreferences extends ChangeNotifier
       _showPageRulers =
           store.getBool('${_prefix}showPageRulers') ?? _showPageRulers;
       _showSnapGrid = store.getBool('${_prefix}showSnapGrid') ?? _showSnapGrid;
+      _pageDivision =
+          (store.getInt('${_prefix}pageDivision') ?? _pageDivision).clamp(0, 3);
       _menuHoldMs =
           (store.getInt('${_prefix}menuHoldMs') ?? _menuHoldMs).clamp(300, 1000);
       _snapToGrid = store.getBool('${_prefix}snapToGrid') ?? _snapToGrid;
@@ -1188,6 +1191,19 @@ class PdfEditingPreferences extends ChangeNotifier
     if (v == _menuHoldMs) return;
     _menuHoldMs = v;
     _write((s) => s.setInt('${_prefix}menuHoldMs', v));
+    notifyListeners();
+  }
+
+  /// Le linee che dividono il foglio per le stampe a meta' pagina: 0 nessuna,
+  /// 1 una linea orizzontale (alto e basso), 2 una linea verticale (sinistra
+  /// e destra), 3 entrambe (il foglio in quattro).
+  int get pageDivision => _pageDivision;
+
+  set pageDivision(int value) {
+    final v = value.clamp(0, 3);
+    if (v == _pageDivision) return;
+    _pageDivision = v;
+    _write((s) => s.setInt('${_prefix}pageDivision', v));
     notifyListeners();
   }
 

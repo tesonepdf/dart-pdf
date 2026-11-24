@@ -9590,6 +9590,21 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
               ),
             },
             child: Stack(children: [
+              if (_controller.preferences.pageDivision != 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      key: const ValueKey('pdf-page-division'),
+                      painter: _PageDivisionPainter(
+                        geometry: _geometry,
+                        mode: _controller.preferences.pageDivision,
+                        chromeScale: _chromeScale,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      size: Size.infinite,
+                    ),
+                  ),
+                ),
               if (_controller.preferences.showSnapGrid)
                 Positioned.fill(
                   child: RepaintBoundary(
@@ -10635,7 +10650,7 @@ class _PageRulerPainter extends CustomPainter {
   final Color accentColor;
 
   @visibleForTesting
-  double get bandWidth => 24 * _state._chromeScale;
+  double get bandWidth => 32 * _state._chromeScale;
 
   @visibleForTesting
   Offset? get cursor => _state._guideCursor;
@@ -10663,7 +10678,7 @@ class _PageRulerPainter extends CustomPainter {
   /// (1, 2, 5 per una potenza di dieci).
   @visibleForTesting
   double majorStepFor(Size size) {
-    final pointsForLabel = 64 * _state._chromeScale / _state._geometry.scale;
+    final pointsForLabel = 72 * _state._chromeScale / _state._geometry.scale;
     if (!pointsForLabel.isFinite || pointsForLabel <= 0) return 100;
     final mmForLabel = pointsForLabel / _ptPerMm;
     final power =
@@ -10731,7 +10746,7 @@ class _PageRulerPainter extends CustomPainter {
       ..drawLine(Offset(left + band, top), Offset(left + band, visible.bottom),
           hairline);
 
-    _paintLabel(canvas, 'mm', Offset(left + 2 * s, top + 3 * s), 8.5 * s);
+    _paintLabel(canvas, 'mm', Offset(left + 3 * s, top + 4 * s), 12 * s);
 
     // only the ticks the visible slice shows, so the count stays bounded
     // however deep the zoom
@@ -10746,7 +10761,7 @@ class _PageRulerPainter extends CustomPainter {
           Offset(x, top + band), Offset(x, top + band - length), ticks);
       if (isMajor && x >= left + band + 2 * s) {
         _paintLabel(canvas, _mmLabel(value, major),
-            Offset(x + 2 * s, top + 3 * s), 8.5 * s);
+            Offset(x + 3 * s, top + 4 * s), 12 * s);
       }
     }
     final firstY = (top / scale / minor).floor();
@@ -10760,7 +10775,7 @@ class _PageRulerPainter extends CustomPainter {
           Offset(left + band, y), Offset(left + band - length, y), ticks);
       if (isMajor && y >= top + band + 2 * s) {
         _paintLabel(canvas, _mmLabel(value, major),
-            Offset(left + 2 * s, y + 2 * s), 8.5 * s);
+            Offset(left + 3 * s, y + 3 * s), 12 * s);
       }
     }
 
@@ -11239,6 +11254,47 @@ class _LineCursorPadState extends State<_LineCursorPad> {
       ),
     );
   }
+}
+
+/// Le due linee che dividono il foglio a meta' (orizzontale, verticale o
+/// entrambe, cioe' in quattro) per le stampe a meta' pagina.
+class _PageDivisionPainter extends CustomPainter {
+  const _PageDivisionPainter({
+    required this.geometry,
+    required this.mode,
+    required this.chromeScale,
+    required this.color,
+  });
+
+  final PdfPageGeometry geometry;
+
+  /// 1 orizzontale, 2 verticale, 3 entrambe.
+  final int mode;
+  final double chromeScale;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final page = geometry.toViewRect(geometry.cropBox);
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.85)
+      ..strokeWidth = 1.6 * chromeScale;
+    if (mode == 1 || mode == 3) {
+      canvas.drawLine(Offset(page.left, page.center.dy),
+          Offset(page.right, page.center.dy), paint);
+    }
+    if (mode == 2 || mode == 3) {
+      canvas.drawLine(Offset(page.center.dx, page.top),
+          Offset(page.center.dx, page.bottom), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PageDivisionPainter old) =>
+      old.geometry != geometry ||
+      old.mode != mode ||
+      old.chromeScale != chromeScale ||
+      old.color != color;
 }
 
 class _SnapGridPainter extends CustomPainter {
