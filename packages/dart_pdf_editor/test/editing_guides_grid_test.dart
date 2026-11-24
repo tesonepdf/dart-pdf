@@ -258,7 +258,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
   });
 
-  testWidgets('optional page rulers use adaptive point ticks and hover marks',
+  testWidgets('optional page rulers use adaptive millimetre ticks and hover marks',
       (tester) async {
     final editing = await pumpEditor(tester);
     editing.preferences.showPageRulers = true;
@@ -267,7 +267,8 @@ void main() {
     expect(find.byKey(const ValueKey('pdf-page-rulers')), findsOneWidget);
     var painter = rulerPainter(tester);
     expect(painter.bandWidth, 24);
-    expect(painter.majorStepFor(const Size(800, 1035)), 50);
+    expect(painter.majorStepFor(const Size(800, 1035)),
+        closeTo(20 * 72 / 25.4, 0.01));
     expect(painter.cursor, isNull);
 
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -323,7 +324,8 @@ void main() {
     expect(visible.left, closeTo(region.left * zoomedSize.width, 0.5));
     expect(visible.top, closeTo(region.top * zoomedSize.height, 0.5));
     // the step still adapts to the on-screen zoom
-    expect(rulerPainter(tester).majorStepFor(zoomedSize), lessThan(50));
+    expect(rulerPainter(tester).majorStepFor(zoomedSize),
+        lessThan(20 * 72 / 25.4 - 0.1));
   });
 
   testWidgets('editor settings exposes persistent guide and grid controls',

@@ -10613,8 +10613,9 @@ class _AlignmentGuidePainter extends CustomPainter {
 /// Adaptive rulers inset along the top and left edges of the page's visible
 /// slice - zoomed in, the page's own edges scroll off screen, so the rulers
 /// follow the viewport rather than leaving with them. Values are distances
-/// in PDF points from the page's top-left corner; the major step follows a
-/// 1/2/5 progression so labels never crowd as the page zooms.
+/// in millimetres from the page's top-left corner (an A4 page reads 210 x 297);
+/// the major step follows a 1/2/5 progression so labels never crowd as the
+/// page zooms.
 class _PageRulerPainter extends CustomPainter {
   _PageRulerPainter(
     this._state, {
@@ -10655,17 +10656,31 @@ class _PageRulerPainter extends CustomPainter {
     );
   }
 
+  /// Punti PDF in un millimetro.
+  static const double _ptPerMm = 72 / 25.4;
+
+  /// Il passo dei numeri, in punti PDF: sempre un numero tondo di millimetri
+  /// (1, 2, 5 per una potenza di dieci).
   @visibleForTesting
   double majorStepFor(Size size) {
     final pointsForLabel = 64 * _state._chromeScale / _state._geometry.scale;
     if (!pointsForLabel.isFinite || pointsForLabel <= 0) return 100;
+    final mmForLabel = pointsForLabel / _ptPerMm;
     final power =
-        math.pow(10, (math.log(pointsForLabel) / math.ln10).floor()).toDouble();
+        math.pow(10, (math.log(mmForLabel) / math.ln10).floor()).toDouble();
     for (final multiplier in const [1.0, 2.0, 5.0, 10.0]) {
       final step = multiplier * power;
-      if (step >= pointsForLabel) return step;
+      if (step >= mmForLabel) return step * _ptPerMm;
     }
-    return 10 * power;
+    return 10 * power * _ptPerMm;
+  }
+
+  /// Il numero scritto sul righello per [pt] punti, in millimetri.
+  String _mmLabel(double pt, double major) {
+    final mm = pt / _ptPerMm;
+    final stepMm = major / _ptPerMm;
+    if (stepMm >= 1) return mm.round().toString();
+    return mm.toStringAsFixed(stepMm >= 0.1 ? 1 : 2);
   }
 
   void _paintLabel(Canvas canvas, String label, Offset at, double fontSize) {
@@ -10716,6 +10731,8 @@ class _PageRulerPainter extends CustomPainter {
       ..drawLine(Offset(left + band, top), Offset(left + band, visible.bottom),
           hairline);
 
+    _paintLabel(canvas, 'mm', Offset(left + 2 * s, top + 3 * s), 8.5 * s);
+
     // only the ticks the visible slice shows, so the count stays bounded
     // however deep the zoom
     final firstX = (left / scale / minor).floor();
@@ -10728,7 +10745,7 @@ class _PageRulerPainter extends CustomPainter {
       canvas.drawLine(
           Offset(x, top + band), Offset(x, top + band - length), ticks);
       if (isMajor && x >= left + band + 2 * s) {
-        _paintLabel(canvas, value.round().toString(),
+        _paintLabel(canvas, _mmLabel(value, major),
             Offset(x + 2 * s, top + 3 * s), 8.5 * s);
       }
     }
@@ -10742,7 +10759,7 @@ class _PageRulerPainter extends CustomPainter {
       canvas.drawLine(
           Offset(left + band, y), Offset(left + band - length, y), ticks);
       if (isMajor && y >= top + band + 2 * s) {
-        _paintLabel(canvas, value.round().toString(),
+        _paintLabel(canvas, _mmLabel(value, major),
             Offset(left + 2 * s, y + 2 * s), 8.5 * s);
       }
     }
