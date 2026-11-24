@@ -177,6 +177,7 @@ class PdfEditingPreferences extends ChangeNotifier
   bool _smartAlignmentGuides = true;
   bool _showPageRulers = false;
   bool _showSnapGrid = false;
+  List<String> _savedSearches = const [];
   int _pageDivision = 0;
   int _menuHoldMs = 750;
   bool _snapToGrid = false;
@@ -330,6 +331,15 @@ class PdfEditingPreferences extends ChangeNotifier
       _showPageRulers =
           store.getBool('${_prefix}showPageRulers') ?? _showPageRulers;
       _showSnapGrid = store.getBool('${_prefix}showSnapGrid') ?? _showSnapGrid;
+      final savedSearches = store.getString('${_prefix}savedSearches');
+      if (savedSearches != null) {
+        try {
+          _savedSearches = [
+            for (final item in jsonDecode(savedSearches) as List)
+              if (item is String && item.isNotEmpty) item,
+          ];
+        } catch (_) {}
+      }
       _pageDivision =
           (store.getInt('${_prefix}pageDivision') ?? _pageDivision).clamp(0, 3);
       _menuHoldMs =
@@ -1191,6 +1201,28 @@ class PdfEditingPreferences extends ChangeNotifier
     if (v == _menuHoldMs) return;
     _menuHoldMs = v;
     _write((s) => s.setInt('${_prefix}menuHoldMs', v));
+    notifyListeners();
+  }
+
+  /// Le ricerche che l'utente ha salvato perche' le rifa' spesso: compaiono
+  /// sotto il campo Cerca. Persistono.
+  List<String> get savedSearches => List.unmodifiable(_savedSearches);
+
+  void saveSearch(String text) {
+    final t = text.trim();
+    if (t.isEmpty || _savedSearches.contains(t)) return;
+    _savedSearches = [..._savedSearches, t];
+    _write((s) => s.setString('${_prefix}savedSearches', jsonEncode(_savedSearches)));
+    notifyListeners();
+  }
+
+  void removeSavedSearch(String text) {
+    if (!_savedSearches.contains(text)) return;
+    _savedSearches = [
+      for (final item in _savedSearches)
+        if (item != text) item,
+    ];
+    _write((s) => s.setString('${_prefix}savedSearches', jsonEncode(_savedSearches)));
     notifyListeners();
   }
 

@@ -76,15 +76,137 @@ class PdfSearchField extends StatefulWidget {
 class _PdfSearchFieldState extends State<PdfSearchField> {
   TextEditingController? _ownField;
   Timer? _debounce;
+  FocusNode? _ownFocus;
+  late FocusNode _watchedFocus;
+  final LayerLink _link = LayerLink();
+  final OverlayPortalController _portal = OverlayPortalController();
+
+  // senza preferenze le ricerche salvate vivono solo finche' vive il campo
+  final List<String> _localSaved = [];
 
   TextEditingController get _field =>
       widget.searchController ?? (_ownField ??= TextEditingController());
 
+  FocusNode get _focus => widget.focusNode ?? (_ownFocus ??= FocusNode());
+
+  List<String> get _saved => widget.preferences?.savedSearches ?? _localSaved;
+
+  bool get _it => Localizations.localeOf(context).languageCode == 'it';
+
+  @override
+  void initState() {
+    super.initState();
+    _watchedFocus = _focus;
+    _watchedFocus.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _watchedFocus.removeListener(_onFocusChanged);
+    _ownFocus?.dispose();
     _debounce?.cancel();
     _ownField?.dispose();
     super.dispose();
+  }
+
+  void _saveCurrent() {
+    final text = _field.text.trim();
+    if (text.isEmpty) return;
+    final prefs = widget.preferences;
+    if (prefs != null) {
+      prefs.saveSearch(text);
+    } else if (!_localSaved.contains(text)) {
+      setState(() => _localSaved.add(text));
+    }
+  }
+
+  void _applySaved(String text) {
+    _debounce?.cancel();
+    _field.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    unawaited(widget.controller.search(text));
+  }
+
+  Future<void> _confirmDelete(String text) async {
+    final ok = await pdfPresentDialog<bool>(
+      context,
+      builder: (context) => AlertDialog(
+        title: Text(_it ? 'Eliminare la ricerca salvata?' : 'Delete saved search?'),
+        content: Text('"$text"'),
+        actions: [
+          TextButton(
+            key: const ValueKey('pdf-saved-search-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_it ? 'Annulla' : 'Cancel'),
+          ),
+          TextButton(
+            key: const ValueKey('pdf-saved-search-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(_it ? 'Elimina' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final prefs = widget.preferences;
+    if (prefs != null) {
+      prefs.removeSavedSearch(text);
+    } else {
+      setState(() => _localSaved.remove(text));
+    }
+  }
+
+  /// L'elenco delle ricerche salvate sotto il campo, mentre ci si scrive.
+  Widget _savedList() {
+    return TextFieldTapRegion(
+      child: SizedBox(
+        width: widget.width,
+        child: Material(
+          key: const ValueKey('pdf-saved-searches'),
+          elevation: 4,
+          borderRadius: BorderRadius.circular(8),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              children: [
+                for (final text in _saved)
+                  InkWell(
+                    key: ValueKey('pdf-saved-search-$text'),
+                    onTap: () => _applySaved(text),
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 12),
+                      child: Row(children: [
+                        const Icon(Icons.history, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(text,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        IconButton(
+                          key: ValueKey('pdf-saved-search-delete-$text'),
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: _it ? 'Elimina' : 'Delete',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => unawaited(_confirmDelete(text)),
+                        ),
+                      ]),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _onChanged(String text) {
@@ -124,16 +246,44 @@ class _PdfSearchFieldState extends State<PdfSearchField> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     return ListenableBuilder(
-      listenable: controller,
+      listenable: Listenable.merge([
+        controller,
+        _field,
+        if (widget.preferences != null) widget.preferences!,
+      ]),
       builder: (context, _) {
         final hasQuery = controller.query.isNotEmpty;
+        final typed = _field.text.trim();
+        final alreadySaved = _saved.contains(typed);
+        final wantList = _focus.hasFocus && _saved.isNotEmpty;
+        if (wantList != _portal.isShowing) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final want = _focus.hasFocus && _saved.isNotEmpty;
+            if (want && !_portal.isShowing) _portal.show();
+            if (!want && _portal.isShowing) _portal.hide();
+          });
+        }
         return Row(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
+          CompositedTransformTarget(
+            link: _link,
+            child: OverlayPortal(
+              controller: _portal,
+              overlayChildBuilder: (context) => CompositedTransformFollower(
+                link: _link,
+                targetAnchor: Alignment.bottomLeft,
+                followerAnchor: Alignment.topLeft,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: _savedList(),
+                ),
+              ),
+              child: SizedBox(
             width: widget.width,
             child: TextField(
               key: const ValueKey('pdf-search-field'),
               controller: _field,
-              focusNode: widget.focusNode,
+              focusNode: _focus,
               decoration: InputDecoration(
                 hintText: widget.hintText == 'Search'
                     ? pdfL10n(context).searchFieldHint
@@ -162,14 +312,27 @@ class _PdfSearchFieldState extends State<PdfSearchField> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
-                    : hasQuery
-                        ? IconButton(
-                            key: const ValueKey('pdf-search-clear'),
-                            icon: const Icon(Icons.close, size: 16),
-                            tooltip: pdfL10n(context).searchClearSearch,
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _clear,
-                          )
+                    : (hasQuery || typed.isNotEmpty)
+                        ? Row(mainAxisSize: MainAxisSize.min, children: [
+                            IconButton(
+                              key: const ValueKey('pdf-search-save'),
+                              icon: Icon(
+                                  alreadySaved ? Icons.save : Icons.save_outlined,
+                                  size: 18),
+                              tooltip: alreadySaved
+                                  ? (_it ? 'Ricerca salvata' : 'Search saved')
+                                  : (_it ? 'Salva ricerca' : 'Save search'),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: alreadySaved ? null : _saveCurrent,
+                            ),
+                            IconButton(
+                              key: const ValueKey('pdf-search-clear'),
+                              icon: const Icon(Icons.close, size: 16),
+                              tooltip: pdfL10n(context).searchClearSearch,
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _clear,
+                            ),
+                          ])
                         : null,
                 suffixIconConstraints:
                     const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -181,6 +344,8 @@ class _PdfSearchFieldState extends State<PdfSearchField> {
               onEditingComplete: () {},
               onChanged: _onChanged,
               onSubmitted: _onSubmitted, contextMenuBuilder: pdfTextContextMenu,
+            ),
+          ),
             ),
           ),
           if (widget.showOptions)
