@@ -19,6 +19,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_info.dart';
 import 'app_log.dart';
+import 'performance_screen.dart';
+import 'app_log_dialog.dart';
 import 'app_perf.dart';
 import 'autosave.dart';
 import 'measure_scale_setting.dart';
@@ -6665,21 +6667,22 @@ class _EditorScreenState extends State<EditorScreen>
         if (areaTitle != null) areaTitle,
         if (section != null && section.isNotEmpty) section,
       ];
-      final found = extra.isEmpty
-          ? command
-          : AppCommand(
-              id: command.id,
-              label: command.label,
-              icon: command.icon,
-              source: command.source,
-              run: command.run,
-              shortcut: command.shortcut,
-              subtitle: command.subtitle,
-              enabled: command.enabled,
-              disabledReason: command.disabledReason,
-              selected: command.selected,
-              searchTerms: [...command.searchTerms, ...extra],
-            );
+      // Il percorso nel menu, dalla macroarea al comando: nella ricerca si
+      // apre col + a destra di ogni risultato.
+      final found = AppCommand(
+        id: command.id,
+        label: command.label,
+        icon: command.icon,
+        source: command.source,
+        run: command.run,
+        shortcut: command.shortcut,
+        subtitle: command.subtitle,
+        enabled: command.enabled,
+        disabledReason: command.disabledReason,
+        selected: command.selected,
+        searchTerms: [...command.searchTerms, ...extra],
+        path: area == 'hidden' ? const [] : [...extra, command.label],
+      );
       entries.add((command: found, area: area, section: section, toggle: toggle));
     }
     AppCommand plain(
@@ -6723,6 +6726,19 @@ class _EditorScreenState extends State<EditorScreen>
       );
     }
 
+    add(
+      plain('menu-performance', Icons.speed_outlined, 'Prestazioni',
+          () => unawaited(showPerformance(context))),
+      'app',
+      section: 'Diagnostica',
+    );
+    add(
+      plain('menu-app-log', Icons.receipt_long_outlined, 'Log e problemi',
+          () => unawaited(showAppLog(context))),
+      'app',
+      section: 'Diagnostica',
+    );
+
     // Reachable from Settings > About rather than the menu itself, so it
     // names Settings as its source instead of claiming a menu row it has not
     // got.
@@ -6759,6 +6775,64 @@ class _EditorScreenState extends State<EditorScreen>
         section: 'Modalita\'',
         toggle: true,
       );
+    }
+
+    // Guide, griglia, righelli e foglio diviso: stanno nel menu e nella
+    // ricerca, non solo nel pulsante delle opzioni di vista.
+    if (session != null) {
+      final prefs = session.preferences;
+      void guide(String id, IconData icon, String label, bool on,
+              VoidCallback run, String section, {bool toggle = false}) =>
+          add(
+            AppCommand(
+              id: id,
+              label: label,
+              icon: icon,
+              source: l.paletteSourceMenu,
+              selected: on,
+              searchTerms: const ['guide', 'griglia', 'righello', 'metà', 'quarti'],
+              run: run,
+            ),
+            'view',
+            section: section,
+            toggle: toggle,
+          );
+      const guides = 'Guide e righelli';
+      guide('menu-guide-rulers', Icons.straighten, 'Righelli di pagina (mm)',
+          prefs.showPageRulers,
+          () => prefs.showPageRulers = !prefs.showPageRulers, guides,
+          toggle: true);
+      guide('menu-guide-grid', Icons.grid_on_outlined, 'Griglia a quadretti',
+          prefs.showSnapGrid,
+          () => prefs.showSnapGrid = !prefs.showSnapGrid, guides,
+          toggle: true);
+      guide('menu-guide-cursor-v', Icons.vertical_align_center,
+          'Linea verticale del cursore', prefs.showVerticalCursorGuide,
+          () => prefs.showVerticalCursorGuide = !prefs.showVerticalCursorGuide,
+          guides,
+          toggle: true);
+      guide('menu-guide-cursor-h', Icons.horizontal_rule,
+          'Linea orizzontale del cursore', prefs.showHorizontalCursorGuide,
+          () => prefs.showHorizontalCursorGuide =
+              !prefs.showHorizontalCursorGuide,
+          guides,
+          toggle: true);
+      const split = 'Foglio diviso';
+      for (final (value, icon, label) in const [
+        (0, Icons.crop_free, 'Foglio intero'),
+        (1, Icons.horizontal_split_outlined, 'Metà orizzontale (alto e basso)'),
+        (2, Icons.vertical_split_outlined, 'Metà verticale (sinistra e destra)'),
+        (3, Icons.grid_view_outlined, 'In 4 parti'),
+      ]) {
+        guide('menu-page-division-$value', icon, label,
+            prefs.pageDivision == value,
+            () => prefs.pageDivision = value, split);
+      }
+      guide('menu-guides-dialog', Icons.tune, 'Misura dei quadretti e altre guide…',
+          false,
+          () => unawaited(
+              showPdfEditingGuidesDialog(context, preferences: prefs)),
+          split);
     }
 
     // Le voci che altrove sono pulsanti o barre del telefono: gli strumenti,
@@ -7755,6 +7829,8 @@ class _EditorScreenState extends State<EditorScreen>
       'Barre',
       'Pannelli',
       'Opzioni di vista',
+      'Guide e righelli',
+      'Foglio diviso',
     ],
     'pages': [
       null,
@@ -7765,7 +7841,7 @@ class _EditorScreenState extends State<EditorScreen>
     'sign': [null, 'Firmare', 'Compilare moduli'],
     'export': [null, 'Immagini e testo', 'Word ed Excel', 'In un\'altra app'],
     'share': [null, 'Stampare', 'Inviare'],
-    'app': [null, 'Preferenze', 'Novita\''],
+    'app': [null, 'Preferenze', 'Novita\'', 'Diagnostica'],
   };
 
   /// Cosa apre ogni voce della barra in basso: Crea la schermata Crea,

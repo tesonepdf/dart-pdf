@@ -34,6 +34,7 @@ class AppCommand {
     this.disabledReason,
     this.selected = false,
     this.searchTerms = const [],
+    this.path = const [],
   });
 
   /// Stable identity - also the widget key suffix, so tests can find a row.
@@ -44,6 +45,11 @@ class AppCommand {
 
   /// Localized task words that can find this command without renaming it.
   final List<String> searchTerms;
+
+  /// Il percorso nel menu, dalla macroarea al comando ("Annota e modifica",
+  /// "Area di Modifica PDF", "Selezione area"). Vuoto se la voce non sta nel
+  /// menu.
+  final List<String> path;
 
   final IconData icon;
 
@@ -150,6 +156,9 @@ class _CommandPaletteState extends State<_CommandPalette> {
   );
   String _query = '';
   int _selected = 0;
+
+  /// Le voci di cui si vede tutto il percorso (il + a destra).
+  final Set<String> _expanded = {};
 
   @override
   void dispose() {
@@ -264,10 +273,14 @@ class _CommandPaletteState extends State<_CommandPalette> {
                       shrinkWrap: true,
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       itemCount: results.length,
-                      itemExtent: _paletteRowHeight,
                       itemBuilder: (context, i) => _CommandRow(
                         command: results[i],
                         selected: i == _selected,
+                        expanded: _expanded.contains(results[i].id),
+                        onToggleExpanded: () => setState(() {
+                          final id = results[i].id;
+                          if (!_expanded.remove(id)) _expanded.add(id);
+                        }),
                         onTap: () => _runAt(results, i),
                         onHover: () => setState(() => _selected = i),
                       ),
@@ -365,9 +378,13 @@ class _CommandRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onHover,
+    required this.expanded,
+    required this.onToggleExpanded,
   });
 
   final AppCommand command;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onHover;
@@ -391,8 +408,10 @@ class _CommandRow extends StatelessWidget {
           onTap: command.enabled ? onTap : null,
           child: Opacity(
             opacity: command.enabled ? 1 : 0.55,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: _paletteRowHeight),
+              child: Padding(
+              padding: const EdgeInsets.only(left: 18, right: 6),
               child: Row(
                 children: [
                   Icon(
@@ -412,6 +431,36 @@ class _CommandRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 15, color: fg),
                         ),
+                        if (expanded && command.path.length > 1)
+                          Padding(
+                            key: ValueKey('palette-path-${command.id}'),
+                            padding: const EdgeInsets.only(top: 2, bottom: 4),
+                            child: Text.rich(
+                              TextSpan(children: [
+                                for (var i = 0;
+                                    i < command.path.length;
+                                    i++) ...[
+                                  if (i > 0)
+                                    TextSpan(
+                                      text: '  ›  ',
+                                      style: TextStyle(
+                                          color: scheme.onSurfaceVariant),
+                                    ),
+                                  TextSpan(
+                                    text: command.path[i],
+                                    style: i == command.path.length - 1
+                                        ? TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: scheme.primary,
+                                          )
+                                        : TextStyle(
+                                            color: scheme.onSurfaceVariant),
+                                  ),
+                                ],
+                              ]),
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
                         if (command.subtitle != null)
                           MiddleEllipsisText(
                             command.subtitle!,
@@ -436,8 +485,19 @@ class _CommandRow extends StatelessWidget {
                           fontSize: 11.5, color: scheme.onSurfaceVariant),
                     ),
                   ],
+                  if (command.path.length > 1)
+                    IconButton(
+                      key: ValueKey('palette-path-toggle-${command.id}'),
+                      icon: Icon(expanded ? Icons.remove : Icons.add, size: 20),
+                      tooltip: expanded ? 'Nascondi il percorso' : 'Mostra il percorso',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onToggleExpanded,
+                    )
+                  else
+                    const SizedBox(width: 12),
                 ],
               ),
+            ),
             ),
           ),
         ),
