@@ -6806,6 +6806,31 @@ class _EditorScreenState extends State<EditorScreen>
       );
     }
 
+    // Copia del testo selezionato: su telefono e' anche un pulsante nella
+    // barra, su desktop c'e' Ctrl+C. Nel menu e nella ricerca c'e' su tutti i
+    // sistemi, allo stesso posto.
+    if (session != null && tab?.viewer != null) {
+      final viewer = tab!.viewer!;
+      add(
+        AppCommand(
+          id: 'menu-copy-selection',
+          label: 'Copia il testo selezionato',
+          icon: Icons.copy,
+          source: l.paletteSourceMenu,
+          enabled: viewer.hasSelection,
+          disabledReason: 'Seleziona prima del testo nella pagina',
+          shortcut: _menuShortcut('C'),
+          run: () async {
+            await viewer.copySelection();
+            if (!mounted) return;
+            _toast(appL10n(context).editorCopiedToClipboard);
+          },
+        ),
+        'tools',
+        section: 'Seleziona',
+      );
+    }
+
     // Guide, griglia, righelli e foglio diviso: stanno nel menu e nella
     // ricerca, non solo nel pulsante delle opzioni di vista.
     if (session != null) {
