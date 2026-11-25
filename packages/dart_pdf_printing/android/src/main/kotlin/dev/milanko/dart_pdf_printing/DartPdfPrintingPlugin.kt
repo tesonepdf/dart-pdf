@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.print.*
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -92,10 +94,21 @@ class DartPdfPrintingPlugin : FlutterPlugin, ActivityAware, MethodChannel.Method
         // CANCELED when they leave the print UI - before it finishes the
         // adapter, so onFinish reads the user's decision.
         val settle = {
-            val state = job.info?.state ?: PrintJobInfo.STATE_CANCELED
-            reply.success(state != PrintJobInfo.STATE_CANCELED &&
-                state != PrintJobInfo.STATE_CREATED)
-            settlePrint = null
+            // Su alcuni telefoni lo stato passa da CREATED a QUEUED un istante
+            // dopo la chiusura della finestra: se l'utente ha confermato, si
+            // aspetta (fino a 3 secondi) invece di darlo per annullato.
+            fun answer(attempt: Int) {
+                val state = job.info?.state ?: PrintJobInfo.STATE_CANCELED
+                if (state == PrintJobInfo.STATE_CREATED && attempt < 15) {
+                    Handler(Looper.getMainLooper())
+                        .postDelayed({ answer(attempt + 1) }, 200)
+                    return
+                }
+                reply.success(state != PrintJobInfo.STATE_CANCELED &&
+                    state != PrintJobInfo.STATE_CREATED)
+                settlePrint = null
+            }
+            answer(0)
         }
         settlePrint = settle
         adapter.onFinished = settle

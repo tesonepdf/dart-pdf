@@ -5251,6 +5251,10 @@ class _EditorScreenState extends State<EditorScreen>
           bytes: await _asSeenOnScreen(bytes),
           title: item.name,
           useDocumentPageSize: true);
+      // l'esito resta nel Log: se un gruppo non esce dalla coda si vede perche'
+      AppLog.instance.info('Stampa differita',
+          '${item.name}: esito ${result.name}'
+          '${result == PrintDialogResult.handedToSystem ? ', tolto dalla coda' : ', resta in coda'}');
       return result == PrintDialogResult.handedToSystem;
     } catch (error, stack) {
       AppLog.instance.error('Stampa differita', '$error', stack);
