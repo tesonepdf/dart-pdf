@@ -430,10 +430,18 @@ class _EncodingDevice implements PdfDevice {
   void drawImage(PdfImageRequest request) {
     final pixels = _images[request];
     if (pixels == null) return; // undecodable image - skip rather than blank
+    // Una maschera (/ImageMask) si decodifica in copertura *bianca*: il colore
+    // del riempimento lo applica chi disegna. Il flusso della stampa non ha un
+    // colore per le immagini, quindi lo si dipinge qui: senza, un disegno
+    // scansionato a strisce di maschera esce bianco su carta bianca.
+    final source = request.isStencil
+        ? tintVectorPrintStencil(
+            pixels, request.stencilColor, _flattenAlpha(request.alpha))
+        : pixels;
     // The image transform maps the unit square (image space, y-up) to page
     // space; fold in the page transform so the quad is in device points.
     final placed =
-        uprightVectorPrintImage(request.transform.concat(_toDevice), pixels);
+        uprightVectorPrintImage(request.transform.concat(_toDevice), source);
     _w.u8(_opImage);
     _w.matrix(placed.matrix);
     _w.u32(placed.pixels.width);
@@ -519,6 +527,29 @@ class VectorPrintImagePlacement {
   VectorPrintImagePlacement(this.matrix, this.pixels);
   final PdfMatrix matrix;
   final PdfDecodedPixels pixels;
+}
+
+/// La copertura [coverage] di una maschera dipinta del colore [color] con
+/// opacita' [alpha]: un buffer nuovo, mai quello in ingresso, perche' i
+/// decodificatori condividono un solo buffer tra i disegni della stessa
+/// immagine e due disegni possono avere colori diversi. Legge solo il canale
+/// alfa, quindi vale sia per il bianco diritto sia per quello premoltiplicato.
+PdfDecodedPixels tintVectorPrintStencil(
+    PdfDecodedPixels coverage, PdfColor color, double alpha) {
+  int channel(double v) => (v.clamp(0.0, 1.0) * 255).round();
+  final r = channel(color.red), g = channel(color.green);
+  final b = channel(color.blue), a = alpha.clamp(0.0, 1.0);
+  final src = coverage.rgba;
+  final out = Uint8List(src.length);
+  for (var i = 0; i + 3 < src.length; i += 4) {
+    final cover = src[i + 3];
+    if (cover == 0) continue; // trasparente, come lo producono i decodificatori
+    out[i] = r;
+    out[i + 1] = g;
+    out[i + 2] = b;
+    out[i + 3] = (cover * a).round();
+  }
+  return PdfDecodedPixels(out, coverage.width, coverage.height);
 }
 
 /// Rewrites an image placement whose unit-square->device [matrix] is a
