@@ -1666,6 +1666,12 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
   Offset? _autoScrollGlobal;
   Offset? _autoScrollLastLocal;
 
+  /// Lo scorrimento ai bordi tiene aperto il pan del visore, che blocca il
+  /// disegno delle pagine: quando si ferma, si esce dal bordo o l'overlay
+  /// sparisce va chiuso, altrimenti pagine e miniature restano ferme fino al
+  /// gesto successivo.
+  bool _autoScrollPanned = false;
+
   _Handle? _resizeHandle;
   Rect? _resizeFrom;
   Rect? _resizeRect;
@@ -3860,6 +3866,10 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     _activeStrokeRepaint.dispose();
     _cursorRepaint.dispose();
     _autoScrollTicker.dispose();
+    // il trascinamento che ha scorso non arriva alla sua fine: si chiude il
+    // pan dopo questo frame, senza toccare il visore mentre l'albero e'
+    // bloccato
+    _endAutoScrollPan(defer: true);
     _controller.setPlacementDraftUndo(this, null);
     if (_interaction.isActive &&
         _interaction.state.pageIndex == widget.pageIndex) {
@@ -6685,6 +6695,25 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
     if (_autoScrollTicker.isActive) _autoScrollTicker.stop();
     _autoScrollGlobal = null;
     _autoScrollLastLocal = null;
+    _endAutoScrollPan();
+  }
+
+  /// Chiude una volta il pan del visore se lo scorrimento ai bordi lo ha
+  /// aperto: cosi' il visore rilascia il blocco del disegno. In [dispose] si
+  /// passa [defer] perche' il rimbalzo del visore non tocchi la sua
+  /// trasformazione con l'albero bloccato.
+  void _endAutoScrollPan({bool defer = false}) {
+    if (!_autoScrollPanned) return;
+    _autoScrollPanned = false;
+    final endPan = _host.endViewportPan;
+    if (endPan == null) return;
+    if (defer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        endPan(Velocity.zero);
+      });
+    } else {
+      endPan(Velocity.zero);
+    }
   }
 
   void _onAutoScrollTick(Duration _) {
@@ -6705,9 +6734,16 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       _interaction.sample();
       _applyDragPosition(local);
     }
-    // Keep scrolling while the pointer rests in the viewport's edge band.
+    // Si continua a scorrere finche' il dito sta nella fascia del bordo;
+    // appena rientra si chiude il pan, cosi' le pagine scoperte si disegnano
+    // mentre si prende la mira.
     final delta = _host.edgeAutoScroll!(global);
-    if (delta != Offset.zero) _host.panViewport!(delta);
+    if (delta != Offset.zero) {
+      _autoScrollPanned = true;
+      _host.panViewport!(delta);
+    } else {
+      _endAutoScrollPan();
+    }
   }
 
   void _panEnd(DragEndDetails details) {
