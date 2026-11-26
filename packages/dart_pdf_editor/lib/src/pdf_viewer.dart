@@ -2107,6 +2107,14 @@ class _PdfViewerState extends State<PdfViewer>
   TapDownDetails? _doubleTapDetails;
   bool _zoomed = false;
 
+  /// La scala dello zoom (almeno 1) per cui e' dimensionato il margine dopo
+  /// l'ultima pagina, aggiornata quando una trasformazione si e' assestata.
+  /// Il margine sta nello spazio della lista, sotto la trasformazione dello
+  /// zoom: lo si divide per questa scala perche' sullo schermo resti della sua
+  /// misura. Altrimenti un documento ingrandito 5 volte finisce con uno spazio
+  /// vuoto 5 volte piu' lungo.
+  double _trailingScale = 1;
+
   /// Spostamento libero del foglio quando lo zoom e' sotto l'adattamento
   /// (`_layoutZoom` < 1): li' la pagina e' piu' piccola della vista e la
   /// lista da sola non la puo' muovere. E' in pixel dello schermo, sempre
@@ -3203,8 +3211,10 @@ class _PdfViewerState extends State<PdfViewer>
     // wheel zoom never fires onInteractionEnd, so the pan flag also settles
     // here
     final zoomed = target > 1.01;
+    final trailingScale = zoomed ? target : 1.0;
     setState(() {
       if (zoomed != _zoomed) _zoomed = zoomed;
+      _trailingScale = trailingScale;
       // NOTE: this quantization rule (max(1, scale), 10% dead band) is
       // mirrored by _PdfPageViewState._speculateStripPlan to anticipate the
       // settle's scale while a gesture quiesces - keep the two in sync or
@@ -3968,6 +3978,7 @@ class _PdfViewerState extends State<PdfViewer>
       _subFitOffset.value = Offset.zero;
       _appliedInitialFit = false;
       _zoomed = false;
+      _trailingScale = 1;
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scroll.hasClients) _jumpToPage(anchor);
       });
@@ -4737,6 +4748,12 @@ class _PdfViewerState extends State<PdfViewer>
   /// leading [PdfViewer.pageSpacing] belongs to every slot but the first.
   double _scrollExtentOf(int slot) =>
       _slotMain(slot) + (slot == 0 ? 0 : widget.pageSpacing);
+
+  /// Il margine dopo l'ultimo elemento, nello spazio della lista: la
+  /// distanza tra le pagine piu' il margine finale, divisi per lo zoom
+  /// assestato cosi' sullo schermo restano della loro misura.
+  double get _trailingExtent =>
+      (widget.pageSpacing + widget.trailingPadding) / _trailingScale;
 
   /// The list-space offset at which [slot] begins (its leading spacing
   /// included).
@@ -9564,11 +9581,9 @@ class _PdfViewerState extends State<PdfViewer>
           return page == null ? null : _slotOf(page);
         },
         padding: _horizontal
-            ? EdgeInsets.only(
-                right: widget.pageSpacing + widget.trailingPadding)
+            ? EdgeInsets.only(right: _trailingExtent)
             : EdgeInsets.only(
-                top: widget.leadingPadding,
-                bottom: widget.pageSpacing + widget.trailingPadding),
+                top: widget.leadingPadding, bottom: _trailingExtent),
         itemBuilder: (context, index) =>
             _facing ? spread(index) : continuous(index),
       );
