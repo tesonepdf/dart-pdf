@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_info.dart';
 import 'app_log.dart';
 import 'performance_screen.dart';
+import 'update_details.dart';
 import 'app_log_dialog.dart';
 import 'app_perf.dart';
 import 'autosave.dart';
@@ -889,6 +890,12 @@ class _EditorScreenState extends State<EditorScreen>
     // Rimandato: niente striscia in alto. Si cerca in Impostazioni.
     if (_updates.isDismissed) return;
     final l10n = appL10n(context);
+    // Le modifiche di ogni build che si salta e i pezzi da scaricare si
+    // leggono dalla release mentre la finestra e' gia' aperta.
+    final details = loadUpdateDetails(
+      release,
+      installedBuild: int.tryParse(AppInfo.buildNumber.trim()) ?? 0,
+    );
     unawaited(showPdfDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -896,22 +903,14 @@ class _EditorScreenState extends State<EditorScreen>
         key: const ValueKey('update-available-dialog'),
         icon: const Icon(Icons.system_update_alt),
         // Versione nuova e versione installata, cosi' si vede da dove si parte.
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.settingsUpdateAvailable(
-                release.displayVersion, AppInfo.displayVersion)),
-            // Cosa cambia e se e' patch o completo (dalle note della release).
-            if (release.updateSummary.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Text(release.updateSummary),
-                ),
-              ),
-            ],
-          ],
+        content: FutureBuilder<UpdateDetails>(
+          future: details,
+          builder: (context, snapshot) => _UpdateDialogBody(
+            headline: l10n.settingsUpdateAvailable(
+                release.displayVersion, AppInfo.displayVersion),
+            summary: release.updateSummary,
+            details: snapshot.data,
+          ),
         ),
         actions: [
           TextButton(
@@ -10783,6 +10782,83 @@ class _TesoneTitlePillState extends State<_TesoneTitlePill> {
             style: const TextStyle(color: Colors.white, fontSize: 15),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Il corpo della finestra di aggiornamento. Con piu' build da recuperare
+/// elenca, per ognuna, cosa e' cambiato; poi, se ci sono le patch, quanto si
+/// scarica per ogni passo. Senza lo storico mostra le note come prima.
+class _UpdateDialogBody extends StatelessWidget {
+  const _UpdateDialogBody({
+    required this.headline,
+    required this.summary,
+    required this.details,
+  });
+
+  final String headline;
+
+  /// Il testo delle note della release (cosa cambia dell'ultima build e tipo
+  /// di aggiornamento).
+  final String summary;
+  final UpdateDetails? details;
+
+  @override
+  Widget build(BuildContext context) {
+    final it = Localizations.localeOf(context).languageCode == 'it';
+    final bold = Theme.of(context)
+        .textTheme
+        .titleMedium
+        ?.copyWith(fontWeight: FontWeight.w700);
+    final builds = details?.builds ?? const <BuildChanges>[];
+    final steps = details?.steps ?? const <UpdateStep>[];
+    // "Aggiornamento: patch, circa 0.5 MB": l'unica riga delle note che lo
+    // storico per build non ha.
+    final kindLine = summary
+        .split('\n')
+        .where((line) => line.startsWith('Aggiornamento:'))
+        .join('\n');
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(headline),
+          if (builds.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(it ? 'Cosa cambia:' : 'What changes:'),
+            for (final build in builds) ...[
+              const SizedBox(height: 6),
+              Text('Build #${build.build}'),
+              for (final change in build.changes) Text('- $change'),
+            ],
+            if (kindLine.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(kindLine),
+            ],
+          ] else if (summary.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(summary),
+          ],
+          if (steps.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(it ? 'Da scaricare' : 'To download', style: bold),
+            const SizedBox(height: 6),
+            for (final step in steps)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(child: Text(step.label)),
+                    const SizedBox(width: 12),
+                    Text(formatMegabytes(step.bytes)),
+                  ],
+                ),
+              ),
+          ],
+        ],
       ),
     );
   }

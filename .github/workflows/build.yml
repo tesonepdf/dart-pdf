@@ -321,7 +321,7 @@ jobs:
 
       # Se il test non passa la release si ferma: le patch sbagliate non si pubblicano.
       - name: Prova dello strumento delle patch
-        run: cd tool && python3 -m unittest test_apk_patch
+        run: cd tool && python3 -m unittest test_apk_patch test_storico_build
 
       - name: Pubblica la Release
         env:
@@ -384,6 +384,16 @@ jobs:
             if [[ -z "$changes" ]]; then
               changes="- $(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//; s/ *\[completo\]//g')"
             fi
+            # Storico delle modifiche di ogni build (build-changes.json): chi
+            # salta qualche build vede cosa e' cambiato in ognuna.
+            mkdir -p prev
+            gh release download "$android_tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern build-changes.json --dir prev --clobber 2>/dev/null || true
+            printf '%s\n' "$changes" > changes.txt
+            python3 tool/storico_build.py --prev prev/build-changes.json \
+              --build "$NUMERO" --version "${VERSIONE}#${NUMERO}" \
+              --changes changes.txt --out build-changes.json
+            assets+=(build-changes.json)
             if [[ "$(jq -r .full plan/decision.json)" == "true" ]]; then
               kind="full"
               apk_mb="$(( $(stat -c %s DartPDF-Android.apk) / 1048576 ))"
@@ -417,7 +427,7 @@ jobs:
                 --repo "$GITHUB_REPOSITORY" --clobber
               android_release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$android_tag" --jq '.id')"
               old_asset_ids="$(gh api "repos/$GITHUB_REPOSITORY/releases/$android_release_id/assets" \
-                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "release-info.json" and .name != "patches.json" and (.name | test("^patch-.*\\.dpat$") | not)) | .id')"
+                --jq '.[] | select(.name != "DartPDF-Android.apk" and .name != "release-info.json" and .name != "patches.json" and .name != "build-changes.json" and (.name | test("^patch-.*\\.dpat$") | not)) | .id')"
               if [[ -n "$old_asset_ids" ]]; then
                 while IFS= read -r asset_id; do
                   gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"

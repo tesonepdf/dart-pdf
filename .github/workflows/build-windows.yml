@@ -149,6 +149,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0 # serve la storia per scrivere cosa cambia nelle note
 
       - uses: actions/download-artifact@v8
         with:
@@ -177,8 +178,16 @@ jobs:
           fi
 
           subject="$(git log -1 --format='%s' "$GITHUB_SHA" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//')"
+          # Cosa cambia: i messaggi di tutti i commit dalla build Windows
+          # precedente a questa, non solo l'ultimo.
+          prev_sha="$(gh release view "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' 2>/dev/null | sed -n 's/.*<!-- main-sha: \([0-9a-f]\{7,40\}\) -->.*/\1/p' | head -n1 || true)"
+          changes=""
+          if [[ -n "$prev_sha" ]]; then
+            changes="$(git log --format='%s' "$prev_sha..$GITHUB_SHA" 2>/dev/null | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)?#[0-9]+ +(— +)?//; s/ *\[completo\]//g' | head -n 15 | sed 's/^/- /' || true)"
+          fi
+          if [[ -z "$changes" ]]; then changes="- $subject"; fi
           title="DartPDF Windows ${VERSIONE}#${NUMERO}"
-          notes="$(printf 'Build #%s\nNuova versione Windows disponibile.\nCosa cambia:\n- %s\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$subject" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
+          notes="$(printf 'Build #%s\nNuova versione Windows disponibile.\nCosa cambia:\n%s\n<!-- main-sha: %s -->\n<!-- app-version: %s -->\n<!-- app-build: %s -->' "$NUMERO" "$changes" "$GITHUB_SHA" "$VERSIONE" "$NUMERO")"
 
           # 1) la release deve esistere (alla prima volta si crea con una nota
           #    provvisoria, senza il numero build: l'app la ignora finche' non
@@ -208,9 +217,17 @@ jobs:
             done
           fi
 
-          # 3) zip completo (prima installazione) ed elenco dei file
+          # 3) zip completo (prima installazione), elenco dei file e storico
+          #    delle modifiche di ogni build (per la finestra di aggiornamento)
+          mkdir -p prev
+          gh release download "$WINDOWS_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern build-changes.json --dir prev --clobber 2>/dev/null || true
+          printf '%s\n' "$changes" > changes.txt
+          python3 tool/storico_build.py --prev prev/build-changes.json \
+            --build "$NUMERO" --version "${VERSIONE}#${NUMERO}" \
+            --changes changes.txt --out build-changes.json
           gh release upload "$WINDOWS_TAG" windows-x64.zip windows-files.json \
-            --repo "$GITHUB_REPOSITORY" --clobber
+            build-changes.json --repo "$GITHUB_REPOSITORY" --clobber
 
           # 4) per ultimo titolo e note con il numero build: da qui l'app vede la
           #    build nuova, quando tutti i file ci sono gia'
