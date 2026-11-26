@@ -79,9 +79,17 @@ class PdfPageView extends StatefulWidget {
     this.transformChanges,
     this.tileRasterBackend = const PdfCanvasTileRasterBackend(),
     this.tileCacheNamespace,
+    this.viewportFraction,
   }) : assert(qualityPageCount >= 1);
 
   final PdfPage page;
+
+  /// La parte visibile della pagina nel visore, in coordinate normalizzate
+  /// della pagina mostrata (y verso il basso). Serve solo a decidere quali
+  /// tiles disegnare in primo piano: se la funzione dice null la pagina e'
+  /// fuori schermo; una pagina senza visore (da sola) tiene i limiti dello
+  /// schermo.
+  final Rect? Function()? viewportFraction;
 
   /// Stable owner identity for entries in the process-wide tile cache.
   ///
@@ -4768,7 +4776,7 @@ class _PdfPageViewState extends State<PdfPageView>
         PdfPageView.debugTileStoreOverride ?? PdfTileStore.instanceOrNull;
     final size = _renderPlan.pageSize(widget.page);
     final live = mounted && size.width > 0 && size.height > 0
-        ? _detailGeometryAt(widget.scale, inflation: _tileInflation)
+        ? _tileVisibleFraction()
         : null;
     Map<String, Object?>? coverage;
     final desired = _tileDesiredRatio;
@@ -4803,7 +4811,7 @@ class _PdfPageViewState extends State<PdfPageView>
         'tileFraction': cover(tileFraction),
         // The same tiles over where the page actually is on screen now - a
         // stale [_tileFraction] shows up as a difference between the two.
-        if (live != null) 'liveViewport': cover(live.visibleFraction),
+        if (live != null) 'liveViewport': cover(live),
       };
     }
     return {
@@ -4860,7 +4868,7 @@ class _PdfPageViewState extends State<PdfPageView>
         'lastOutcomeAt': _lastDetailOutcomeAt?.toIso8601String(),
         'outcomes': _detailOutcomes,
       },
-      'liveViewportFraction': _rectJson(live?.visibleFraction),
+      'liveViewportFraction': _rectJson(live),
       'tiles': {
         'pathStatus': _tilePathStatus,
         'layerMounted': !_awaitingExactDetailPaint &&
@@ -5155,6 +5163,21 @@ class _PdfPageViewState extends State<PdfPageView>
   /// the working set past the tile budget (issues #314/#360).
   static const _tileInflation = 0.0;
 
+  /// La parte della pagina per cui servono tiles in primo piano: quella che
+  /// sta sullo schermo, ristretta a quella che il visore mostra davvero (un
+  /// elemento della lista puo' sporgere dal visore). Null se non si vede.
+  Rect? _tileVisibleFraction() {
+    final screen =
+        _detailGeometryAt(widget.scale, inflation: _tileInflation)?.fraction;
+    if (screen == null) return null;
+    final viewport = widget.viewportFraction;
+    if (viewport == null) return screen;
+    final local = viewport();
+    if (local == null) return null;
+    final visible = screen.intersect(local);
+    return visible.isEmpty ? null : visible;
+  }
+
   /// Recomputes the tile layer's visible slice + desired ratio on a settle and
   /// reports whether the tile path is handling this view. Runs post-render
   /// (never during layout), so reading the render tree in [_detailGeometryAt]
@@ -5173,15 +5196,15 @@ class _PdfPageViewState extends State<PdfPageView>
     double? desired;
     var tiling = false;
     if (_useTilePath) {
-      final geom = _detailGeometryAt(widget.scale, inflation: _tileInflation);
+      final visible = _tileVisibleFraction();
       // Never replace a visible sharp rung with a coarser one merely because
       // the settle target dipped (rounding, a tiny zoom-out, or a worker image
       // detail landing). Keep the active resolution until tiling ends; a
       // later independent tile session may start at the then-current target.
       final requested = _desiredRatioAt(widget.scale);
       final candidate = math.max(requested, _tileDesiredRatio ?? 0);
-      if (geom != null && _tilesFitBudget(geom.fraction, candidate)) {
-        fraction = geom.fraction;
+      if (visible != null && _tilesFitBudget(visible, candidate)) {
+        fraction = visible;
         desired = candidate;
         tiling = true;
       }
