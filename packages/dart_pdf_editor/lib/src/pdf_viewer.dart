@@ -8685,7 +8685,35 @@ class _PdfViewerState extends State<PdfViewer>
   /// Cumulative scale of the touch pinch in progress.
   double _pinchScale = 1;
 
-  void _onPinchStart(ScaleStartDetails details) {
+  // Il riconoscitore sta dentro la trasformazione dello zoom, ma le sue
+  // posizioni locali non sono affidabili oltre il primo frame: Flutter instrada
+  // ogni movimento con la trasformazione che c'era quando il dito ha toccato, e
+  // un pizzico la cambia a ogni passo. Usarle ancorava lo zoom sul contenuto
+  // che *stava* sotto le dita e spostava di pixel dello zoom iniziale, cosi'
+  // la pagina scivolava via dalle dita in proporzione allo zoom. Il pizzico
+  // lavora quindi sul punto focale globale, portato nella vista da fuori della
+  // trasformazione ([_zoomViewportKey]) e nello spazio della lista con la
+  // matrice di adesso ([_sceneOf]).
+
+  /// Il punto focale globale del pizzico all'ultimo passo. Si tiene qui perche'
+  /// anche `focalPointDelta` e' nello stesso spazio locale non affidabile.
+  Offset _pinchFocal = Offset.zero;
+
+  /// Sull'InteractiveViewer: la sua casella e' la vista, fuori dalla
+  /// trasformazione, quindi porta i punti globali nello spazio della vista.
+  final GlobalKey _zoomViewportKey = GlobalKey();
+
+  /// Il punto della vista sotto [global], o null prima del layout.
+  Offset? _viewOf(Offset global) {
+    final box = _zoomViewportKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    return box.globalToLocal(global);
+  }
+
+  /// [origin] e' [_EagerPinchRecognizer.origin]: dov'era il punto medio delle
+  /// dita quando si e' formato l'insieme di dita attuale, cioe' il punto da cui
+  /// e' misurata la `scale`. `details.focalPoint` e' un movimento dopo.
+  void _onPinchStart(ScaleStartDetails details, Offset? origin) {
     pdfLogGesture(
         'eager-pinch START', () => 'pointers=${details.pointerCount}');
     _panFlinger.stop();
@@ -8696,6 +8724,7 @@ class _PdfViewerState extends State<PdfViewer>
     _work.beginMotion();
     _pinchScale = 1;
     _pinchStartZoom = _currentZoom;
+    _pinchFocal = origin ?? details.focalPoint;
   }
 
   /// Lo zoom all'inizio del pinch: a ogni passo lo zoom e' questo per la scala
@@ -8708,13 +8737,21 @@ class _PdfViewerState extends State<PdfViewer>
     // a lone finger left over after a pinch shouldn't keep panning; the
     // gesture stays claimed but goes quiet until lift-off
     if (details.pointerCount < 2) return;
+    // dov'era il punto medio delle dita all'ultimo passo e dov'e' ora, nello
+    // spazio della vista
+    final before = _viewOf(_pinchFocal);
+    final now = _viewOf(details.focalPoint);
+    _pinchFocal = details.focalPoint;
+    if (before == null || now == null) return;
+    // si fa lo zoom attorno al contenuto sotto il punto di prima (resta fermo)...
     if (details.scale > 0 && details.scale != _pinchScale) {
-      _zoomTo(_pinchStartZoom * details.scale, details.localFocalPoint);
+      _zoomTo(_pinchStartZoom * details.scale, _sceneOf(before));
       _pinchScale = details.scale;
     }
-    // focalPointDelta is local to the receiver, which sits inside the
-    // zoom transform - list-space pixels, exactly what _grabPanBy takes
-    final delta = details.focalPointDelta;
+    // ...e lo si porta al punto di adesso. _touchGrabPanBy vuole pixel dello
+    // spazio della lista, quindi si toglie lo zoom appena applicato.
+    final scale = _transform.value.getMaxScaleOnAxis();
+    final delta = (now - before) / (scale > 0 ? scale : 1);
     if (delta != Offset.zero) _touchGrabPanBy(delta);
   }
 
@@ -9677,6 +9714,7 @@ class _PdfViewerState extends State<PdfViewer>
                     builder: (_, __, child) =>
                         Transform.translate(offset: _subFitShift, child: child),
                     child: InteractiveViewer(
+                    key: _zoomViewportKey,
                     transformationController: _transform,
                     maxScale: _effectiveMaxZoom,
                     // wheel zoom is handled in _onPointerSignal; e^(-dy/∞) = 1
@@ -9738,7 +9776,8 @@ class _PdfViewerState extends State<PdfViewer>
                           () => _EagerPinchRecognizer(debugOwner: this),
                           (recognizer) => recognizer
                             ..gestureSettings = gestureSettings
-                            ..onStart = _onPinchStart
+                            ..onStart = ((details) =>
+                                _onPinchStart(details, recognizer.origin))
                             ..onUpdate = _onPinchUpdate
                             ..onEnd = _onPinchEnd,
                         ),
@@ -11556,8 +11595,30 @@ class _EagerPinchRecognizer extends ScaleGestureRecognizer {
 
   final Set<int> _pointers = {};
 
+  /// La posizione globale di ogni dito.
+  final Map<int, Offset> _positions = {};
+
+  /// Il punto medio globale delle dita all'ultima volta che un dito si e'
+  /// appoggiato o sollevato: da qui il riconoscitore base misura la `scale`
+  /// (la sua copia e' privata). `onStart` scatta solo al primo movimento dopo,
+  /// col punto focale di quel movimento: ancorare il pizzico li' perderebbe la
+  /// deriva del primo movimento, e lo zoom poi la moltiplicherebbe.
+  Offset? get origin => _origin;
+  Offset? _origin;
+
+  void _reorigin() {
+    if (_positions.isEmpty) return;
+    var sum = Offset.zero;
+    for (final position in _positions.values) {
+      sum += position;
+    }
+    _origin = sum / _positions.length.toDouble();
+  }
+
   @override
   void addAllowedPointer(PointerDownEvent event) {
+    _positions[event.pointer] = event.position;
+    _reorigin();
     super.addAllowedPointer(event);
     _pointers.add(event.pointer);
     if (_pointers.length == 2) resolve(GestureDisposition.accepted);
@@ -11580,6 +11641,10 @@ class _EagerPinchRecognizer extends ScaleGestureRecognizer {
   void handleEvent(PointerEvent event) {
     if (event is PointerUpEvent || event is PointerCancelEvent) {
       _pointers.remove(event.pointer);
+      if (_positions.remove(event.pointer) != null) _reorigin();
+    } else if (event is PointerMoveEvent &&
+        _positions.containsKey(event.pointer)) {
+      _positions[event.pointer] = event.position;
     }
     super.handleEvent(event);
   }
@@ -11587,6 +11652,7 @@ class _EagerPinchRecognizer extends ScaleGestureRecognizer {
   @override
   void rejectGesture(int pointer) {
     _pointers.remove(pointer);
+    _positions.remove(pointer);
     super.rejectGesture(pointer);
   }
 
