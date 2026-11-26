@@ -1818,6 +1818,14 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
 
   /// Overlay pixels per intended screen pixel for chrome metrics - the
   /// inverse of the viewer's transform zoom (see [EditingPageOverlay.zoom]).
+  /// Quanto deve muoversi una pressione per essere uno spostamento e non un
+  /// click: 2 pixel *sullo schermo*, convertiti nello spazio della vista. Con
+  /// lo zoom un pixel della vista vale piu' pixel dello schermo: una soglia
+  /// fissa in pixel della vista ingoiava spostamenti sempre piu' grandi
+  /// (a 5x, 2 pixel erano 10 sullo schermo) e un'annotazione spostata di poco
+  /// tornava dov'era.
+  double get _dragClickSlop => 2.0 * _chromeScale;
+
   double get _chromeScale {
     final zoom = widget.zoom;
     return zoom.isFinite && zoom > 0 ? 1 / zoom : 1.0;
@@ -2216,11 +2224,24 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
       final target = anchorRect.topLeft + delta;
       gridDelta = _snapPointToGrid(target) - target;
     }
-    return current +
+    final snapped = current +
         Offset(
           alignment.dx ?? gridDelta.dx,
           alignment.dy ?? gridDelta.dy,
         );
+    // Una selezione che sta gia' su una guida (il bordo di un vicino, il
+    // centro della pagina) e' nel campo magnetico di quella guida per i primi
+    // pixel di spostamento: la guida la riportava subito dov'era e il rilascio
+    // contava come un click. Se l'allineamento annullerebbe uno spostamento
+    // fatto davvero col dito, vince il dito; la guida riprende quando si e'
+    // usciti dal campo. La griglia, che si accende apposta, resta.
+    if ((alignment.dx != null || alignment.dy != null) &&
+        delta.distance >= _dragClickSlop &&
+        (snapped - start).distance < _dragClickSlop) {
+      _alignmentGuides = const [];
+      return current + gridDelta;
+    }
+    return snapped;
   }
 
   /// Snaps an unrotated resize handle to annotation/page alignments, with the
@@ -6952,7 +6973,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
             flipY: resizeFlipY);
       }
     } else if (elementMoveStart != null && elementMoveCurrent != null) {
-      if ((elementMoveCurrent - elementMoveStart).distance < 2) {
+      if ((elementMoveCurrent - elementMoveStart).distance < _dragClickSlop) {
         return; // a click: the press already selected what it landed on
       }
       // mapping both endpoints keeps the delta right on a rotated page
@@ -6990,7 +7011,7 @@ class _EditingPageOverlayState extends State<EditingPageOverlay>
                 : to.topLeft - from.topLeft);
       }
     } else if (moveStart != null && moveCurrent != null) {
-      if ((moveCurrent - moveStart).distance < 2) return; // a click
+      if ((moveCurrent - moveStart).distance < _dragClickSlop) return; // click
       // mapping both endpoints keeps the delta correct on rotated pages
       final (x0, y0) = _geometry.toPagePoint(moveStart);
       // a single-annotation move dropped over a *different* page re-homes
