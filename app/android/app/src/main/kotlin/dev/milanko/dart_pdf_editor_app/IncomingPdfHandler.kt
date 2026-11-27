@@ -55,10 +55,16 @@ internal class IncomingPdfHandler {
         deliver: (List<Map<String, Any>>) -> Unit,
     ) {
         if (intent?.action != Intent.ACTION_SEND_MULTIPLE) return
+        // Piu' PDF condivisi insieme: la condivisione stessa e' la richiesta di
+        // unirli, quindi si marcano "combine" e Dart chiede solo l'ordine.
+        val pdfBatch = intent.type?.contains("pdf", ignoreCase = true) == true
         val payloads = streamUris(intent).mapIndexedNotNull { index, uri ->
             readPayload(
                 uri, intent, resolver,
-                fallbackName = "foto-${index + 1}.jpg", shared = true,
+                fallbackName = if (pdfBatch) "documento-${index + 1}.pdf"
+                    else "foto-${index + 1}.jpg",
+                shared = true,
+                combine = pdfBatch,
             )
         }
         if (payloads.isEmpty()) return
@@ -72,6 +78,7 @@ internal class IncomingPdfHandler {
         resolver: ContentResolver,
         fallbackName: String? = null,
         shared: Boolean = false,
+        combine: Boolean = false,
     ): Map<String, Any>? {
         // Do not turn an externally supplied URI into a network request.
         if (uri.scheme != "content" && uri.scheme != "file") return null
@@ -113,8 +120,9 @@ internal class IncomingPdfHandler {
             ?: "document.pdf"
         // "shared" lets the Dart side tell a share (photos go onto a sheet) from
         // an "open with" of the same file.
-        return if (shared) mapOf("name" to finalName, "bytes" to bytes, "shared" to true)
+        val payload = if (shared) mapOf("name" to finalName, "bytes" to bytes, "shared" to true)
         else mapOf("name" to finalName, "bytes" to bytes)
+        return if (combine) payload + ("combine" to true) else payload
     }
 
     private fun streamUris(intent: Intent): List<Uri> {

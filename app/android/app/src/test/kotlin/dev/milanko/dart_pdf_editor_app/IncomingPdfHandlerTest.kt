@@ -50,7 +50,8 @@ class IncomingPdfHandlerTest {
         assertTrue(matches(Intent(Intent.ACTION_SEND).setType("application/pdf")))
         // Piu' foto condivise insieme dalla galleria.
         assertTrue(matches(Intent(Intent.ACTION_SEND_MULTIPLE).setType("image/jpeg")))
-        assertFalse(matches(Intent(Intent.ACTION_SEND_MULTIPLE).setType("application/pdf")))
+        // Piu' PDF condivisi insieme, per unirli.
+        assertTrue(matches(Intent(Intent.ACTION_SEND_MULTIPLE).setType("application/pdf")))
     }
 
     @Test fun coldOpenIsDrainedOnceAndWarmOpenDeliversBytesWithoutWritablePath() {
@@ -126,6 +127,37 @@ class IncomingPdfHandlerTest {
             listOf("foto-1.jpg", "foto-2.jpg"),
             handler.takeInitialFiles().map { it["name"] },
         )
+    }
+
+    @Test fun sendMultiplePdfsAreMarkedToCombine() {
+        val handler = IncomingPdfHandler()
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).setType("application/pdf")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(uri, uri2))
+        handler.handleMultiple(intent, true, context.contentResolver) { fail("cold open") }
+        val batch = handler.takeInitialFiles()
+        assertEquals(2, batch.size)
+        for (item in batch) {
+            assertEquals(true, item["combine"])
+            assertEquals(true, item["shared"])
+        }
+    }
+
+    @Test fun sendMultiplePdfsAreNamedAsDocumentsWhenTheProviderGivesNoName() {
+        provider.metadata = "empty"
+        val handler = IncomingPdfHandler()
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).setType("application/pdf")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, arrayListOf(uri, uri2))
+        handler.handleMultiple(intent, true, context.contentResolver) {}
+        assertEquals(
+            listOf("documento-1.pdf", "documento-2.pdf"),
+            handler.takeInitialFiles().map { it["name"] },
+        )
+    }
+
+    @Test fun sendMultiplePhotosAreNotMarkedToCombine() {
+        val handler = IncomingPdfHandler()
+        handler.handleMultiple(sendMultiple(), true, context.contentResolver) {}
+        for (item in handler.takeInitialFiles()) assertFalse(item.containsKey("combine"))
     }
 
     @Test fun sendMultipleIgnoresOtherActionsAndUnreadableFiles() {

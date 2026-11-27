@@ -180,6 +180,15 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="image/*"/>
             </intent-filter>
+            <!-- Piu' PDF selezionati in un'altra app (gestore file, posta,
+                 messaggi) e condivisi insieme: DartPDF compare tra le app di
+                 condivisione e li riceve tutti, per unirli in un solo PDF. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/pdf"/>
+                <data android:mimeType="application/x-pdf"/>
+            </intent-filter>
             <!-- Piu' foto condivise insieme dalla galleria: finiscono tutte sullo
                  stesso foglio PDF. -->
             <intent-filter>
