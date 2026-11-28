@@ -371,7 +371,7 @@ class PdfEditorCommands extends ChangeNotifier {
     }
     openGroupId = group.id;
     if (groupForTool(_controller.tool)?.id == group.id) return;
-    _controller.tool = group.defaultTool;
+    _controller.tool = toolOnOpen(group);
     if (_controller.tool != null) viewerController.clearSelection();
     // markup arms no tool, so its style scope is set explicitly (after the
     // tool reset above, which would otherwise clear it) - this is what lets
@@ -379,6 +379,57 @@ class PdfEditorCommands extends ChangeNotifier {
     if (group.kind == PdfEditToolGroup.markup) {
       _controller.useMarkupStyleScope();
     }
+  }
+
+  /// Lo strumento che si arma aprendo [group]: l'ultimo usato in quel gruppo
+  /// ([PdfEditingPreferences.lastToolInGroup], ricordato tra una sessione e
+  /// l'altra), altrimenti [PdfToolGroup.defaultTool].
+  ///
+  /// Quello ricordato si riarma solo se non serve nessuna richiesta e non
+  /// cambia niente nel documento: uno strumento di misura se c'e' una scala,
+  /// la firma se ne e' stata disegnata una; mai uno strumento che il gruppo non
+  /// elenca piu' o che [tools] esclude. I gruppi che aspettano un tocco
+  /// esplicito (Modifica, i cui strumenti cambiano il documento) non armano
+  /// niente; Misura si riarma, perche' aspetta solo per chiedere la scala.
+  PdfEditTool? toolOnOpen(PdfToolGroup group) {
+    final fallback = group.defaultTool;
+    final remembers =
+        fallback != null || group.kind == PdfEditToolGroup.measure;
+    if (!remembers) return fallback;
+    final last = _prefs.lastToolInGroup(group.id);
+    if (last == null ||
+        !(tools?.contains(last) ?? true) ||
+        !(features?.tools?.contains(last) ?? true) ||
+        !group.tools.any((entry) => entry.tool == last) ||
+        !_armsWithoutPrompt(last)) {
+      return fallback;
+    }
+    return last;
+  }
+
+  /// Se armare [tool] direttamente salta qualcosa che [toggleTool] chiederebbe
+  /// prima.
+  bool _armsWithoutPrompt(PdfEditTool tool) => switch (tool) {
+        PdfEditTool.measureDistance ||
+        PdfEditTool.measurePerimeter ||
+        PdfEditTool.measureArea ||
+        PdfEditTool.measureVolume ||
+        PdfEditTool.measureSlope ||
+        PdfEditTool.measureAngle ||
+        PdfEditTool.measureArc =>
+          _controller.hasMeasurementScale,
+        PdfEditTool.signature => _controller.activeSavedSignature != null,
+        PdfEditTool.calibrate => false,
+        _ => true,
+      };
+
+  /// Registra [tool] come l'ultimo del suo gruppo, comunque sia stato armato
+  /// (barra, scorciatoia, ricerca, chip degli strumenti recenti).
+  void _rememberGroupTool(PdfEditTool? tool) {
+    if (tool == null || tool == PdfEditTool.select) return;
+    final group = groupForTool(tool);
+    if (group == null || group.kind == PdfEditToolGroup.select) return;
+    _prefs.setLastToolInGroup(group.id, tool);
   }
 
   /// Hand mode: no tool, pages pan.
@@ -672,6 +723,7 @@ class PdfEditorCommands extends ChangeNotifier {
     final choice = activeTool;
     if (choice == _lastObservedTool) return;
     _lastObservedTool = choice;
+    _rememberGroupTool(choice.tool);
     // Null is Hand/reader mode rather than Select. Temporary null transitions
     // while changing tools must not displace genuine history.
     if (choice.tool == null && choice.markup == null) return;

@@ -16,6 +16,7 @@ import 'package:pdf_document/pdf_document.dart'
         kPdfFreeTextDefaultLineSpacing;
 
 import '../viewport.dart';
+import 'editing_controller.dart' show PdfEditTool;
 import 'line_style.dart';
 import 'models/color_format.dart';
 import 'models/custom_stamp.dart';
@@ -294,6 +295,13 @@ class PdfEditingPreferences extends ChangeNotifier
   /// [_maxViewports].
   final Map<String, PdfViewport> _viewports = {};
   bool _viewportsDirty = false;
+
+  /// L'ultimo strumento armato in ogni gruppo della barra, per [PdfToolGroup.id]
+  /// (vedi [lastToolInGroup]).
+  final Map<String, PdfEditTool> _groupTools = {};
+  bool _groupToolsDirty = false;
+
+  static const _groupToolsKey = '${_prefix}groupTools';
 
   /// How many documents' viewports to remember before evicting the
   /// oldest.
@@ -622,9 +630,15 @@ class PdfEditingPreferences extends ChangeNotifier
     for (final entry in _decodeViewports(store.getString(_viewportsKey))) {
       _viewports.putIfAbsent(entry.$1, () => entry.$2);
     }
+    // lo stesso per l'ultimo strumento di ogni gruppo: uno armato prima della
+    // lettura e' piu' recente di quello salvato
+    _decodeGroupTools(store.getString(_groupToolsKey)).forEach((group, tool) {
+      _groupTools.putIfAbsent(group, () => tool);
+    });
     _store = store;
     if (migratedLegacySignature) _writeSignatureLibrary();
     if (_viewportsDirty) _writeViewports();
+    if (_groupToolsDirty) _writeGroupTools();
     notifyListeners();
   }
 
@@ -646,6 +660,50 @@ class PdfEditingPreferences extends ChangeNotifier
       return const [];
     }
     return result;
+  }
+
+  static Map<String, PdfEditTool> _decodeGroupTools(String? source) {
+    if (source == null) return const {};
+    try {
+      final decoded = jsonDecode(source);
+      if (decoded is! Map) return const {};
+      final tools = PdfEditTool.values.asNameMap();
+      return {
+        for (final entry in decoded.entries)
+          if (entry.key is String && tools[entry.value] != null)
+            entry.key as String: tools[entry.value]!,
+      };
+    } catch (_) {
+      return const {}; // dato rovinato: ogni gruppo si apre sul suo strumento
+    }
+  }
+
+  void _writeGroupTools() {
+    final store = _store;
+    if (store == null) {
+      _groupToolsDirty = true; // si scrive appena l'archivio e' pronto
+      return;
+    }
+    _groupToolsDirty = false;
+    unawaited(store.setString(
+        _groupToolsKey,
+        jsonEncode(
+            {for (final e in _groupTools.entries) e.key: e.value.name})));
+  }
+
+  /// L'ultimo strumento armato nel gruppo [groupId] (un [PdfToolGroup.id]), o
+  /// null se non ne e' stato usato nessuno: aprendo il gruppo si arma questo
+  /// al posto di [PdfToolGroup.defaultTool], cosi' passando da Forme a Inserisci
+  /// e ritorno si trova lo strumento linea lasciato e non il rettangolo.
+  PdfEditTool? lastToolInGroup(String groupId) => _groupTools[groupId];
+
+  /// Registra [tool] come l'ultimo armato in [groupId]. Si salva ma non
+  /// avvisa nessuno, come [setViewport]: lo scrive a ogni cambio di strumento e
+  /// niente si ridisegna finche' il gruppo non si riapre.
+  void setLastToolInGroup(String groupId, PdfEditTool tool) {
+    if (_groupTools[groupId] == tool) return;
+    _groupTools[groupId] = tool;
+    _writeGroupTools();
   }
 
   void _writeViewports() {
